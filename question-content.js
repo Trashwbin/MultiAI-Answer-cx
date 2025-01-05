@@ -173,34 +173,203 @@ function showAnswersModal() {
   modal.style.display = 'block';
 }
 
-// 发送到单个AI
+// 添加从学习通提取题目的函数
+function extractQuestionsFromXXT() {
+  const questions = [];
+
+  // 获取所有题目容器
+  const questionDivs = document.querySelectorAll('.questionLi');
+
+  questionDivs.forEach((div, index) => {
+    // 获取题目类型和分数
+    const typeSpan = div.querySelector('.colorShallow');
+    const typeText = typeSpan ? typeSpan.textContent.match(/\((.*?)\)/) : null;
+    const type = typeText ? typeText[1] : '未知类型';
+
+    // 获取题目序号和内容
+    const titleDiv = div.querySelector('.mark_name');
+    const titleNumber = titleDiv ? titleDiv.firstChild.textContent.trim() : '';
+    const contentDiv = titleDiv ? titleDiv.querySelector('div') : null;
+    const content = contentDiv ? contentDiv.textContent.trim() : '';
+
+    // 获取选项(如果是选择题)
+    const options = [];
+    const optionDivs = div.querySelectorAll('.stem_answer .answerBg');
+    optionDivs.forEach(optDiv => {
+      const optLabel = optDiv.querySelector('.num_option').textContent;
+      const optContent = optDiv.querySelector('.answer_p').textContent;
+      options.push(`${optLabel}. ${optContent}`);
+    });
+
+    // 构建题目对象
+    const question = {
+      id: div.getAttribute('data'),
+      number: titleNumber,
+      type: type,
+      content: content,
+      options: options
+    };
+
+    questions.push(question);
+  });
+
+  return questions;
+}
+
+// 创建浮动按钮和面板
+function createFloatingPanel() {
+  // 创建浮动按钮
+  const floatingBtn = document.createElement('button');
+  floatingBtn.textContent = '展开AI助手';
+  floatingBtn.style.cssText = `
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    padding: 10px 20px;
+    background: #1976d2;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    z-index: 9999;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+  `;
+
+  // 创建操作面板(默认隐藏)
+  const panel = document.createElement('div');
+  panel.style.cssText = `
+    position: fixed;
+    bottom: 80px;
+    right: 20px;
+    width: 300px;
+    background: white;
+    border-radius: 8px;
+    padding: 15px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    z-index: 9999;
+    display: none;
+  `;
+
+  // 添加面板标题
+  const title = document.createElement('h3');
+  title.textContent = 'AI助手';
+  title.style.cssText = `
+    margin: 0 0 15px 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eee;
+  `;
+  panel.appendChild(title);
+
+  // 添加AI按钮
+  Object.entries(AI_CONFIG).forEach(([aiType, config]) => {
+    const button = document.createElement('button');
+    button.textContent = `发送到 ${config.name}`;
+    button.style.cssText = `
+      width: 100%;
+      padding: 8px;
+      margin: 5px 0;
+      background: ${config.color};
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    `;
+    button.addEventListener('click', () => sendToAI(aiType));
+    panel.appendChild(button);
+  });
+
+  // 添加一键发送按钮
+  const sendAllButton = document.createElement('button');
+  sendAllButton.textContent = '一键发送所有AI';
+  sendAllButton.style.cssText = `
+    width: 100%;
+    padding: 8px;
+    margin: 10px 0 5px;
+    background: #4caf50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+  `;
+  sendAllButton.addEventListener('click', sendToAllAIs);
+  panel.appendChild(sendAllButton);
+
+  // 添加预览题目按钮
+  const previewQuestionsButton = document.createElement('button');
+  previewQuestionsButton.textContent = '预览题目列表';
+  previewQuestionsButton.style.cssText = `
+    width: 100%;
+    padding: 8px;
+    margin: 5px 0;
+    background: #2196f3;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+  `;
+  previewQuestionsButton.addEventListener('click', showPreviewModal);
+  panel.appendChild(previewQuestionsButton);
+
+  // 添加查看答案按钮
+  const viewAnswersButton = document.createElement('button');
+  viewAnswersButton.textContent = '查看AI回答';
+  viewAnswersButton.style.cssText = `
+    width: 100%;
+    padding: 8px;
+    margin: 5px 0;
+    background: #ff9800;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+  `;
+  viewAnswersButton.addEventListener('click', showAnswersModal);
+  panel.appendChild(viewAnswersButton);
+
+  // 切换面板显示/隐藏
+  floatingBtn.addEventListener('click', () => {
+    if (panel.style.display === 'none') {
+      panel.style.display = 'block';
+      floatingBtn.textContent = '收起AI助手';
+    } else {
+      panel.style.display = 'none';
+      floatingBtn.textContent = '展开AI助手';
+    }
+  });
+
+  // 添加到页面
+  document.body.appendChild(floatingBtn);
+  document.body.appendChild(panel);
+}
+
+// 修改发送到AI的函数
 function sendToAI(type) {
-  console.log('发送到:', type);
-  loadingState.updateUI(type, true);
+  const questions = extractQuestionsFromXXT();
+  if (questions.length === 0) {
+    alert('未找到题目');
+    return;
+  }
 
-  // 获取所有问题卡片并合并
-  const questionCards = document.querySelectorAll('.question-card');
-  const allQuestions = Array.from(questionCards).map((card, index) => {
-    const title = card.querySelector('.question-title').textContent;
-    const content = card.querySelector('.question-content').textContent;
-    const options = Array.from(card.querySelectorAll('.option'))
-      .map(opt => opt.textContent)
-      .join('\n');
-
-    return `${title}\n${content}\n${options}`;
+  // 将题目转换为文本格式
+  const questionsText = questions.map(q => {
+    let text = `${q.number} ${q.type}\n${q.content}`;
+    if (q.options.length > 0) {
+      text += '\n' + q.options.join('\n');
+    }
+    return text;
   }).join('\n\n');
 
   // 生成带提示词的完整问题
-  const promptedQuestion = generatePrompt(allQuestions);
+  const promptedQuestion = generatePrompt(questionsText);
 
-  console.log('准备发送问题到:', type);
-  if (allQuestions) {
-    chrome.runtime.sendMessage({
-      type: 'GET_QUESTION',
-      question: promptedQuestion,
-      aiType: type
-    });
-  }
+  // 发送到AI
+  chrome.runtime.sendMessage({
+    type: 'GET_QUESTION',
+    question: promptedQuestion,
+    aiType: type
+  });
+
+  loadingState.updateUI(type, true);
 }
 
 // 一键发送到所有AI
@@ -378,19 +547,65 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 });
 
+// 题型分类配置
+const QUESTION_TYPES = {
+  'choice': {
+    name: '选择题',
+    subtypes: ['单选题', '多选题', '共用选项题']
+  },
+  'blank': {
+    name: '填空题',
+    subtypes: ['填空题', '选词填空']
+  },
+  'judge': {
+    name: '判断题',
+    subtypes: ['判断题']
+  },
+  'qa': {
+    name: '问答题',
+    subtypes: ['简答题', '名词解释', '论述题']
+  },
+  'calc': {
+    name: '计算题',
+    subtypes: ['计算题']
+  },
+  'sort': {
+    name: '排序题',
+    subtypes: ['排序题', '连线题']
+  },
+  'reading': {
+    name: '阅读题',
+    subtypes: ['阅读理解', '完型填空']
+  },
+  'oral': {
+    name: '口语题',
+    subtypes: ['口语题', '听力题']
+  },
+  'other': {
+    name: '其他',
+    subtypes: ['测评题', '选做题', '其它']
+  }
+};
+
 // 显示题目预览
 function showPreviewModal() {
+  // 如果已存在则移除旧的模态框
+  const existingModal = document.getElementById('questions-preview-modal');
+  if (existingModal) {
+    existingModal.remove();
+  }
+
   const modal = document.createElement('div');
   modal.id = 'questions-preview-modal';
   modal.style.cssText = `
-    display: none;
+    display: block;
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
     background: rgba(0, 0, 0, 0.5);
-    z-index: 9999;
+    z-index: 10000;
   `;
 
   const previewContent = document.createElement('div');
@@ -408,9 +623,316 @@ function showPreviewModal() {
     flex-direction: column;
   `;
 
+  // 创建左侧题目列表和右侧答题卡的容器
+  const contentWrapper = document.createElement('div');
+  contentWrapper.style.cssText = `
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  `;
+
+  // 左侧题目列表 - 只在这里声明一次
+  const previewQuestionsContainer = document.createElement('div');
+  previewQuestionsContainer.style.cssText = `
+    flex: 1;
+    padding: 20px 40px;
+    padding-right: 260px;
+    overflow-y: auto;
+  `;
+
+  // 右侧答题卡
+  const answerCard = document.createElement('div');
+  answerCard.className = 'answer-card';
+  answerCard.style.cssText = `
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 220px;
+    background: #f8f9fa;
+    border-left: 1px solid #e0e0e0;
+    padding: 20px 15px;
+    overflow-y: auto;
+    transition: transform 0.3s ease;
+    z-index: 1;
+  `;
+
+  // 优化答题卡折叠按钮
+  const collapseBtn = document.createElement('button');
+  collapseBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>';
+  collapseBtn.style.cssText = `
+    position: absolute;
+    left: -16px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 32px;
+    height: 32px;
+    border-radius: 16px;
+    border: 1px solid #e0e0e0;
+    background: white;
+    color: #666;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+  `;
+
+  let isCollapsed = false;
+  collapseBtn.onclick = () => {
+    if (isCollapsed) {
+      answerCard.style.transform = 'translateX(0)';
+      collapseBtn.style.transform = 'translateY(-50%) rotate(0deg)';
+    } else {
+      answerCard.style.transform = 'translateX(calc(100% - 16px))';
+      collapseBtn.style.transform = 'translateY(-50%) rotate(180deg)';
+    }
+    isCollapsed = !isCollapsed;
+  };
+
+  // 优化答题卡内容布局
+  const answerCardContent = document.createElement('div');
+  answerCardContent.style.cssText = `
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+  `;
+
+  // 添加答题卡标题
+  const cardTitle = document.createElement('div');
+  cardTitle.textContent = '答题卡';
+  cardTitle.style.cssText = `
+    font-size: 16px;
+    font-weight: bold;
+    color: #333;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #4caf50;
+    margin-bottom: 5px;
+  `;
+  answerCardContent.appendChild(cardTitle);
+
+  // 修改题型区域样式
+  Object.entries(QUESTION_TYPES).forEach(([type, config]) => {
+    const questions = categorizedQuestions[type];
+    if (questions.length === 0) return;
+
+    const typeCard = document.createElement('div');
+    typeCard.style.cssText = `
+      background: white;
+      border-radius: 8px;
+      padding: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    `;
+
+    const typeHeader = document.createElement('div');
+    typeHeader.style.cssText = `
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      color: #333;
+      font-weight: 500;
+    `;
+    typeHeader.innerHTML = `
+      <span>${config.name}</span>
+      <span class="question-count">${questions.length}题</span>
+    `;
+    typeCard.appendChild(typeHeader);
+
+    const buttonsGrid = document.createElement('div');
+    buttonsGrid.style.cssText = `
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 6px;
+    `;
+
+    questions.forEach((q, i) => {
+      const btn = document.createElement('button');
+      btn.textContent = i + 1;
+      btn.className = 'answer-card-btn';
+      btn.dataset.questionId = q.id;
+      btn.style.cssText = `
+        width: 28px;
+        height: 28px;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        background: white;
+        color: #666;
+        font-size: 13px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      `;
+
+      btn.addEventListener('mouseenter', () => {
+        if (!btn.classList.contains('selected')) {
+          btn.style.background = '#f5f5f5';
+        }
+      });
+
+      btn.addEventListener('mouseleave', () => {
+        if (!btn.classList.contains('selected')) {
+          btn.style.background = 'white';
+        }
+      });
+
+      btn.onclick = () => {
+        const target = document.querySelector(`[data-id="${q.id}"]`);
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          target.style.backgroundColor = '#e8f5e9';
+          setTimeout(() => {
+            target.style.backgroundColor = 'transparent';
+          }, 1500);
+        }
+      };
+
+      buttonsGrid.appendChild(btn);
+    });
+
+    typeCard.appendChild(buttonsGrid);
+    answerCardContent.appendChild(typeCard);
+  });
+
+  answerCard.appendChild(collapseBtn);
+  answerCard.appendChild(answerCardContent);
+
+  // 获取并分类题目
+  const questions = extractQuestionsFromXXT();
+  const categorizedQuestions = {};
+
+  // 初始化分类
+  Object.keys(QUESTION_TYPES).forEach(type => {
+    categorizedQuestions[type] = [];
+  });
+
+  // 对题目进行分类
+  questions.forEach((q, index) => {
+    const type = getQuestionType(q.type);
+    if (categorizedQuestions[type]) {
+      categorizedQuestions[type].push({ ...q, index });
+    } else {
+      categorizedQuestions.other.push({ ...q, index });
+    }
+  });
+
+  // 渲染题目和答题卡
+  Object.entries(QUESTION_TYPES).forEach(([type, config]) => {
+    const questions = categorizedQuestions[type];
+    if (questions.length === 0) return;
+
+    const typeSection = document.createElement('div');
+    typeSection.className = `question-type-section ${type}`;
+    typeSection.style.cssText = `
+      margin-bottom: 30px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      overflow: hidden;
+    `;
+
+    // 优化题型标题区域
+    const typeHeader = document.createElement('div');
+    typeHeader.style.cssText = `
+      display: flex;
+      align-items: center;
+      padding: 15px 20px;
+      background: #f8f9fa;
+      border-bottom: 1px solid #edf2f7;
+    `;
+
+    const typeCheckbox = document.createElement('input');
+    typeCheckbox.type = 'checkbox';
+    typeCheckbox.checked = true;
+    typeCheckbox.className = `type-checkbox-${type}`;
+    typeCheckbox.style.cssText = `
+      width: 18px;
+      height: 18px;
+      margin-right: 12px;
+      cursor: pointer;
+    `;
+
+    const typeTitle = document.createElement('span');
+    typeTitle.textContent = `${config.name} (${questions.length}题)`;
+    typeTitle.style.cssText = `
+      font-size: 16px;
+      font-weight: 500;
+      color: #2d3748;
+    `;
+
+    typeHeader.appendChild(typeCheckbox);
+    typeHeader.appendChild(typeTitle);
+    typeSection.appendChild(typeHeader);
+
+    // 添加题目列表
+    const questionsWrapper = document.createElement('div');
+    questionsWrapper.style.cssText = `
+      padding: 0 20px;
+    `;
+
+    questions.forEach(q => {
+      const questionDiv = createQuestionDiv(q);
+      questionsWrapper.appendChild(questionDiv);
+    });
+
+    typeSection.appendChild(questionsWrapper);
+    previewQuestionsContainer.appendChild(typeSection);
+  });
+
+  // 修改发送按钮事件处理
+  sendSelectedButton.onclick = () => {
+    const selectedQuestions = [];
+    document.querySelectorAll('.question-checkbox:checked').forEach(cb => {
+      const questionDiv = cb.closest('.question-item');
+      const questionId = questionDiv.dataset.id;
+      const question = questions.find(q => q.id === questionId);
+      if (question) {
+        selectedQuestions.push(question);
+      }
+    });
+
+    if (selectedQuestions.length === 0) {
+      alert('请至少选择一个题目');
+      return;
+    }
+
+    // 获取选中的模式提示词
+    const selectedMode = document.querySelector('input[name="answer-mode"]:checked');
+    const prompt = selectedMode.value;
+
+    // 组装完整问题
+    const questionsText = selectedQuestions.map(q => {
+      let text = `${q.number} ${q.type}\n${q.content}`;
+      if (q.options.length > 0) {
+        text += '\n' + q.options.join('\n');
+      }
+      return text;
+    }).join('\n\n');
+
+    const fullQuestion = prompt + '\n\n' + questionsText;
+
+    // 发送到所有AI
+    Object.keys(AI_CONFIG).forEach(aiType => {
+      chrome.runtime.sendMessage({
+        type: 'GET_QUESTION',
+        aiType: aiType,
+        question: fullQuestion
+      });
+      loadingState.updateUI(aiType, true);
+    });
+
+    modal.remove();
+  };
+
+  contentWrapper.appendChild(previewQuestionsContainer);
+  contentWrapper.appendChild(answerCard);
+  previewContent.appendChild(contentWrapper);
+
   // 创建头部区域
   const previewHeader = document.createElement('div');
-  previewHeader.className = 'preview-header';
   previewHeader.style.cssText = `
     display: flex;
     justify-content: space-between;
@@ -599,7 +1121,7 @@ x = 42
     border-radius: 4px;
     cursor: pointer;
   `;
-  closePreviewButton.onclick = () => modal.style.display = 'none';
+  closePreviewButton.onclick = () => modal.remove();
 
   const sendSelectedButton = document.createElement('button');
   sendSelectedButton.textContent = '发送选中题目';
@@ -616,100 +1138,95 @@ x = 42
   actionButtons.appendChild(closePreviewButton);
   actionButtons.appendChild(sendSelectedButton);
 
-  // 组装头部 (新的顺序)
+  // 组装头部
   previewHeader.appendChild(selectAllLabel);        // 左侧
   previewHeader.appendChild(modeSelection);         // 中间靠右
   previewHeader.appendChild(actionButtons);         // 最右侧
 
-  // 创建题目容器
-  const questionsContainer = document.createElement('div');
-  questionsContainer.id = 'preview-questions-container';
-  questionsContainer.style.cssText = `
-    flex: 1;
-    overflow-y: auto;
-    padding: 10px;
-  `;
-
-  // 获取所有问题并展示
-  const questionCards = document.querySelectorAll('.question-card');
-  questionsContainer.innerHTML = Array.from(questionCards).map((card, index) => {
-    const title = card.querySelector('.question-title').textContent;
-    const content = card.querySelector('.question-content').textContent;
-    const options = Array.from(card.querySelectorAll('.option'))
-      .map(opt => opt.textContent)
-      .join('\n');
-
-    return `
-      <div class="preview-question" style="
-        margin-bottom: 20px;
-        padding: 15px;
-        border: 1px solid #eee;
-        border-radius: 4px;
-      ">
-        <label style="display: flex; gap: 8px; margin-bottom: 10px;">
-          <input type="checkbox" class="question-checkbox" data-index="${index}" checked>
-          <span style="font-weight: bold;">${title}</span>
-        </label>
-        <div style="margin: 10px 0;">${content}</div>
-        <div style="margin-left: 20px; white-space: pre-wrap;">${options}</div>
-      </div>
-    `;
-  }).join('');
-
-  // 添加发送事件处理
-  sendSelectedButton.onclick = () => {
-    const selectedQuestions = Array.from(document.querySelectorAll('.question-checkbox:checked'))
-      .map(cb => {
-        const index = parseInt(cb.dataset.index);
-        const questionCard = document.querySelectorAll('.question-card')[index];
-        return {
-          title: questionCard.querySelector('.question-title').textContent,
-          content: questionCard.querySelector('.question-content').textContent,
-          options: Array.from(questionCard.querySelectorAll('.option'))
-            .map(opt => opt.textContent)
-            .join('\n')
-        };
-      });
-
-    if (selectedQuestions.length === 0) {
-      alert('请至少选择一个题目');
-      return;
-    }
-
-    // 获取选中的模式提示词
-    const selectedMode = document.querySelector('input[name="answer-mode"]:checked');
-    const prompt = selectedMode.value;
-
-    // 组装完整问题
-    const fullQuestion = prompt + '\n\n' + selectedQuestions.map((q, i) =>
-      `问题${i + 1}:
-${q.title}
-${q.content}
-${q.options}`
-    ).join('\n\n');
-
-    // 发送到所有选中的AI
-    Object.keys(AI_CONFIG).forEach(aiType => {
-      chrome.runtime.sendMessage({
-        type: 'GET_QUESTION',
-        aiType: aiType,
-        question: fullQuestion
-      }, response => {
-        if (response && response.success) {
-          loadingState.updateUI(aiType, true);
-        }
-      });
-    });
-
-    modal.style.display = 'none';
-  };
-
-  // 组装并显示模态框
   previewContent.appendChild(previewHeader);
-  previewContent.appendChild(questionsContainer);
   modal.appendChild(previewContent);
   document.body.appendChild(modal);
-  modal.style.display = 'block';
+}
+
+// 创建题目div
+function createQuestionDiv(question) {
+  const div = document.createElement('div');
+  div.className = 'question-item';
+  div.dataset.id = question.id;
+  div.style.cssText = `
+    padding: 15px;
+    border-bottom: 1px solid #eee;
+    transition: background-color 0.3s;
+  `;
+
+  // 添加复选框和标题
+  const titleLabel = document.createElement('label');
+  titleLabel.style.cssText = `
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+    align-items: flex-start;
+  `;
+
+  const checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.className = 'question-checkbox';
+  checkbox.dataset.index = question.index;
+  checkbox.checked = true;
+  checkbox.addEventListener('change', updateAnswerCard);
+
+  const titleSpan = document.createElement('span');
+  titleSpan.style.fontWeight = 'bold';
+  titleSpan.textContent = `${question.number} ${question.type}`;
+
+  titleLabel.appendChild(checkbox);
+  titleLabel.appendChild(titleSpan);
+  div.appendChild(titleLabel);
+
+  // 题目内容
+  const content = document.createElement('div');
+  content.style.margin = '10px 0';
+  content.textContent = question.content;
+  div.appendChild(content);
+
+  // 选项
+  if (question.options.length > 0) {
+    const options = document.createElement('div');
+    options.style.marginLeft = '20px';
+    options.style.whiteSpace = 'pre-wrap';
+    options.textContent = question.options.join('\n');
+    div.appendChild(options);
+  }
+
+  return div;
+}
+
+// 获取题目类型
+function getQuestionType(typeStr) {
+  for (const [type, config] of Object.entries(QUESTION_TYPES)) {
+    if (config.subtypes.some(subtype => typeStr.includes(subtype))) {
+      return type;
+    }
+  }
+  return 'other';
+}
+
+// 更新答题卡状态
+function updateAnswerCard() {
+  const buttons = document.querySelectorAll('.answer-card-btn');
+  buttons.forEach(btn => {
+    const questionId = btn.dataset.questionId;
+    const checkbox = document.querySelector(`[data-id="${questionId}"] .question-checkbox`);
+    if (checkbox && checkbox.checked) {
+      btn.style.background = '#4caf50';
+      btn.style.color = 'white';
+      btn.style.borderColor = '#4caf50';
+    } else {
+      btn.style.background = 'white';
+      btn.style.color = '#666';
+      btn.style.borderColor = '#ddd';
+    }
+  });
 }
 
 // 更新答案面板中的代码显示
@@ -822,4 +1339,121 @@ function copyCode(button) {
       button.textContent = originalText;
     }, 2000);
   });
-} 
+}
+
+// 创建题目展示卡片
+function createQuestionCard(question) {
+  const card = document.createElement('div');
+  card.className = 'question-card';
+  card.style.cssText = `
+    margin: 15px;
+    padding: 20px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    background: white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  `;
+
+  // 题目标题
+  const title = document.createElement('div');
+  title.className = 'question-title';
+  title.textContent = `${question.number} ${question.type}`;
+  title.style.cssText = `
+    font-weight: bold;
+    margin-bottom: 10px;
+    color: #333;
+  `;
+
+  // 题目内容
+  const content = document.createElement('div');
+  content.className = 'question-content';
+  content.textContent = question.content;
+  content.style.cssText = `
+    margin-bottom: 15px;
+    line-height: 1.5;
+  `;
+
+  // 选项列表(如果有)
+  const optionsList = document.createElement('div');
+  optionsList.className = 'options-list';
+  optionsList.style.cssText = `
+    margin-left: 20px;
+  `;
+
+  question.options.forEach(opt => {
+    const option = document.createElement('div');
+    option.className = 'option';
+    option.textContent = opt;
+    option.style.cssText = `
+      margin: 5px 0;
+      padding: 5px 10px;
+    `;
+    optionsList.appendChild(option);
+  });
+
+  // 组装卡片
+  card.appendChild(title);
+  card.appendChild(content);
+  if (question.options.length > 0) {
+    card.appendChild(optionsList);
+  }
+
+  return card;
+}
+
+// 初始化题目展示页面
+function initQuestionPage() {
+  // 提取题目
+  const questions = extractQuestionsFromXXT();
+
+  // 创建容器
+  const container = document.createElement('div');
+  container.id = 'questions-container';
+  container.style.cssText = `
+    max-width: 800px;
+    margin: 20px auto;
+    padding: 20px;
+  `;
+
+  // 创建操作按钮区
+  const actionBar = document.createElement('div');
+  actionBar.style.cssText = `
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 20px;
+  `;
+
+  // 添加预览按钮
+  const previewBtn = document.createElement('button');
+  previewBtn.textContent = '预览并发送';
+  previewBtn.onclick = showPreviewModal;
+  previewBtn.style.cssText = `
+    padding: 8px 16px;
+    background: #4caf50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+  `;
+
+  actionBar.appendChild(previewBtn);
+  container.appendChild(actionBar);
+
+  // 添加题目卡片
+  questions.forEach(q => {
+    const card = createQuestionCard(q);
+    container.appendChild(card);
+  });
+
+  // 清空并添加新内容
+  document.body.innerHTML = '';
+  document.body.appendChild(container);
+}
+
+// 在页面加载完成后初始化
+window.addEventListener('load', () => {
+  // 检查是否在学习通题目页面
+  if (document.querySelector('.questionLi')) {
+    createFloatingPanel();
+  }
+}); 

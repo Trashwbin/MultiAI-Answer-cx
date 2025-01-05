@@ -1,0 +1,9 @@
+@charset "utf-8";
+
+.sqp-emphasize-dot {
+    text-emphasis-position: under left;
+    text-emphasis: dot;
+    -webkit-text-emphasis-position: under;
+    -webkit-text-emphasis: dot;
+    font-style: inherit;
+}

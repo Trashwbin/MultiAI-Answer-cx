@@ -28,7 +28,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     });
 
     // 检查是否是题目页面
-    if (tab.url.includes('localhost')) {
+    if (tab.url.includes('mooc1.chaoxing.com')) {
       console.log('找到题目标签页:', tabId);
       questionTabId = tabId;
     }
@@ -63,17 +63,26 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     case 'ANSWER_READY':
       console.log('收到AI回答:', request.aiType, request.answer);
-      // 替换深色版本、浅色版本和复制按钮的文本
-      const processedAnswer = request.answer
-        .replace(/深色版本|浅色版本/g, ':')
-        .replace(/复制(?!代码)/g, ':');
+      console.log('当前题目页面 tabId:', questionTabId);
 
-      // 将处理后的答案发送回题目页面
-      chrome.tabs.sendMessage(questionTabId, {
-        type: 'SHOW_ANSWER',
-        answer: processedAnswer,
-        aiType: request.aiType
-      });
+      // 如果没有 questionTabId，尝试从 sender 获取
+      if (!questionTabId) {
+        chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+          if (tabs[0] && tabs[0].url.includes('mooc1.chaoxing.com')) {
+            questionTabId = tabs[0].id;
+          }
+        });
+      }
+
+      if (questionTabId) {
+        chrome.tabs.sendMessage(questionTabId, {
+          type: 'SHOW_ANSWER',
+          answer: request.answer,
+          aiType: request.aiType
+        });
+      } else {
+        console.error('未找到题目页面');
+      }
       return true;
   }
 });

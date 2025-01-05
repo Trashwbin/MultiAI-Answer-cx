@@ -1,0 +1,191 @@
+@font-face {
+  font-family: 'icomoon';
+  src:  url('fonts/icomoon.eot?idv05s');
+  src:  url('fonts/icomoon.eot?idv05s#iefix') format('embedded-opentype'),
+    url('fonts/icomoon.ttf?idv05s') format('truetype'),
+    url('fonts/icomoon.woff?idv05s') format('woff'),
+    url('fonts/icomoon.svg?idv05s#icomoon') format('svg');
+  font-weight: normal;
+  font-style: normal;
+}
+
+[class^="icon-"], [class*=" icon-"] {
+  /* use !important to prevent issues with browser extensions that change fonts */
+  font-family: 'icomoon' !important;
+  speak: none;
+  font-style: normal;
+  font-weight: normal;
+  font-variant: normal;
+  text-transform: none;
+  font-size:16px;
+vertical-align:middle;
+float:left;
+ margin-right: 6px;
+  /* Better Font Rendering =========== */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.icon-class:before {
+  content: "\e900";
+  color: #e1e1e5;
+   
+}
+
+.icon-time:before {
+  content: "\e90a";
+  color: #e1e1e5;
+}
+
+.icon-delete:before {
+  content: "\e907";
+  color: #acbfd9;
+  font-size:18px;display:inline-block;margin-top:-3px;margin-right:-3px;
+  
+}
+
+.icon-13:before {
+  content: "\e901";
+  color: #cad5e6;
+}
+.icon-blueIc:before {
+  content: "\e902";
+  color: #3a8bff;
+}
+.icon-ExportIc:before {
+  content: "\e902";
+  color: #cad5e6;
+}
+
+.icon-ExportIn:before {
+  content: "\e903";
+  color: #cad5e6;
+}
+.icon-ducu{float:inherit}
+.icon-ducu:before {
+  content: "\e904";
+  color: #cad5e6;
+}
+.icon-163:before {
+  content: "\e905";
+  color: #3a8bff;
+}
+.icon-setDown{float:inherit;font-size:12px;margin-left:5px;}
+.icon-setDown:before {
+  content: "\e906";
+  color: #cad5e6;
+}
+
+.icon-demandIc:before {
+  content: "\e908";
+  color: #e1e1e5;
+}
+.icon-8:before {
+  content: "\e909";
+  color: #3a8bff;
+}
+
+.icon-sandian:before {
+  content: "\e90b";
+  color: #d3dff0;
+  margin-right:-4px;
+}
+.icon-121:before {
+  content: "\e90c";
+  color: #cad5e6;
+}
+.icon-arrow-down{float:right}
+.icon-arrow-down:before {
+  content: "\e90d";
+  color: #cad5e6;
+  float:right
+}
+.icon-arrowRight:before {
+  content: "\e90e";
+  color: #cad5e6;
+  font-size:12px;
+}
+.icon-14:before {
+  content: "\e90f";
+  color: #cad5e6;
+}
+.icon-182:before {
+  content: "\e910";
+  color: #cad5e6;
+}
+.icon-RefreshIc{float:inherit; margin-top:-3px;
+    display: inline-block;
+    margin-left: 6px;}
+.icon-RefreshIc:before {
+  content: "\e911";
+  color: #3a8bff;
+font-size:14px;
+}
+.icon-167:before {
+  content: "\e912";
+  color: #e1e1e5;
+}
+.icon-backIc:before {
+  content: "\e913";
+  color: #91A0B5;
+  font-size:14px;
+}
+.icon-intotiku:before {
+  content: "\e915";
+  color: #cad3e6;
+}
+.icon-intotiku{float:inherit}
+.icon-BackIcon{ color: rgba(255,255,255,0.7);}
+.icon-BackIcon:before {
+  content: "\e914";
+ 
+}
+/*下载中心*/
+.icon-download{margin-right:0; text-align:center;line-height:40px;color: #3a8bff;}
+.icon-download:before {
+  content: "\e916";
+  
+}
+
+.icon-322:before {
+  content: "\e917";
+  color: #faaf43;
+}
+.icon-321:before {
+  content: "\e918";
+  color: #f33f34;
+}
+.icon-142:before {
+  content: "\e919";
+}
+.icon-32:before {
+  content: "\e91a";
+  color: #00b86e;
+}
+.icon-125:before {
+  content: "\e91b";
+  color: #cad5e6;
+}
+.icon-add:before {
+  content: "\e91c";
+  color: #3a8bff;
+  font-size:12px;
+}
+.icon-drag:before {
+  content: "\e91d";
+  color: #ACBFD9;
+  font-size:18px;
+}
+.icon-reset:before {
+  content: "\e91e";
+  color: #cad5e6;
+}
+
+
+
+
+
+
+
+
+

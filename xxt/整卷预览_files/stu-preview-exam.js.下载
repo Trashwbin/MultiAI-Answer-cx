@@ -1,0 +1,1375 @@
+function scrollToSaveButton(_this) {
+    //var dataid = $(_this).attr("dataid");
+     // $('html,body').animate({scrollTop:$("#sigleQuestionDiv_"+dataid).offset().top - 100}, 100);
+    $('html,body').animate({scrollTop:$(_this).parents(".sub_que_div").offset().top - 100}, 100);
+}
+
+function checkSubmitButton(btnIdStr) {
+	var submit = true;
+	var firstVisibleSaveBtn = $('.saveButtonClass:visible').first();
+	if (firstVisibleSaveBtn.length == 1) {
+		var isSelf = false;
+		if (btnIdStr) {
+			isSelf = checkUnSaveQuestion(btnIdStr);
+		}
+		if (!isSelf) {
+			$.toast({
+				type : 'notice',
+				content : I18N.saveTheAnswer
+			});
+			scrollToSaveButton(firstVisibleSaveBtn);
+			submit = false;
+		}
+	}
+	return submit;
+}
+
+
+function checkUnSaveQuestion(btnIdStr) {
+	var unSaveStr = window.UNSAVE_QUES;
+	if (!btnIdStr || !unSaveStr) {
+		return false;
+	}
+	return btnIdStr == unSaveStr ? true : false;
+}
+
+
+//function timeOverSubmitTest() {
+//    if(!window.OverTimeSubmitTimers){
+//        window.OverTimeSubmitTimers = [];
+//    }
+//    var overTimeSubmitTimers =  window.OverTimeSubmitTimers;
+//    for (var i = 0; i < 3; i++) {
+//        var overTimer = setTimeout(function() {
+//            submitForm(false);
+//        }, i * 5000);
+//        overTimeSubmitTimers.push(overTimer);
+//    }
+//}
+
+function saveFillinBlanks(dataId) {
+	var div = $("#sigleQuestionDiv_" + dataId);
+	var callBack = function(){
+		checkSubmitButton();
+		changeQuestionCardColor(dataId);
+	};
+	submitForm(true,div,callBack);
+}
+
+function saveBTypeSelect(obj,dataId) {
+    addChoiceByBType(obj);
+    var div = $("#sigleQuestionDiv_" + dataId);
+    var callBack = function(){
+        checkSubmitButton();
+        changeQuestionCardColor(dataId);
+    };
+    submitForm(true,div,callBack);
+}
+
+function saveSingleSelect(obj,dataId) {
+    var subObj = $(obj).find(".saveSingleSelect");
+    addChoice(subObj);
+    var div = $("#sigleQuestionDiv_"+dataId);
+    var callBack = function(){
+        checkSubmitButton();
+        changeQuestionCardColor(dataId);
+    }
+    submitForm(true,div,callBack);
+}
+
+// start: 无障碍定制 单选/多选/判断/填空/简答
+function tabSaveSingleSelect(obj,dataId) {
+	var subObj = $(obj).find(".saveSingleSelect");
+	tabAddChoice(subObj);
+	var div = $("#sigleQuestionDiv_"+dataId);
+	var callBack = function(){
+		checkSubmitButton();
+		changeQuestionCardColor(dataId);
+	}
+	submitForm(true,div,callBack);
+}
+
+function tabAddChoice(obj) {
+	var qid = $(obj).attr("qid");
+
+	if (event.keyCode == 13) {
+		event.preventDefault(); // 阻止默认的键盘点击事件
+		if($(obj).hasClass("check_answer")) {
+			$(obj).removeClass("check_answer");
+		} else {
+			$(".choice" + qid).removeClass("check_answer");
+			$(obj).addClass("check_answer");
+		}
+
+		var choiceContent = "";
+		$(".choice" + qid).each(function(index,ele){
+			if($(this).hasClass("check_answer")){
+				choiceContent = choiceContent + $(this).attr("data");
+				$(this).parent(".answerBg").attr("aria-checked","true");
+				$(this).parent(".answerBg").attr("aria-pressed","true");
+			} else {
+				$(this).parent(".answerBg").attr("aria-checked","false");
+				$(this).parent(".answerBg").attr("aria-pressed","false");
+			}
+		});
+
+		$("#answer" + qid).val(choiceContent);
+	} else if (event.keyCode == 32) { // 空格选中
+		event.preventDefault(); // 阻止默认的键盘点击事件
+		$(".choice" + qid).removeClass("check_answer");
+		$(obj).addClass("check_answer");
+
+		var choiceContent = "";
+		$(".choice" + qid).each(function(index,ele){
+			if($(this).hasClass("check_answer")){
+				choiceContent = choiceContent + $(this).attr("data");
+				$(this).parent(".answerBg").attr("aria-checked","true");
+				$(this).parent(".answerBg").attr("aria-pressed","true");
+			} else {
+				$(this).parent(".answerBg").attr("aria-checked","false");
+				$(this).parent(".answerBg").attr("aria-pressed","false");
+			}
+		});
+
+		$("#answer" + qid).val(choiceContent);
+	}
+}
+
+function tabSaveMultiSelect(obj,dataId) {
+	var subObj = $(obj).find(".saveMultiSelect");
+	tabAddMultipleChoice(subObj);
+	var div = $("#sigleQuestionDiv_"+dataId);
+	var callBack = function(){
+		checkSubmitButton();
+		changeQuestionCardColor(dataId);
+	}
+	submitForm(true,div,callBack);
+}
+
+function tabAddMultipleChoice(obj) {
+	var qid = $(obj).attr("qid");
+
+	if (event.keyCode == 13 || event.keyCode == 32) {
+		event.preventDefault(); // 阻止默认的键盘点击事件
+		if($(obj).hasClass("check_answer_dx")) {
+			$(obj).removeClass("check_answer_dx");
+			$(obj).attr("aria-checked","false");
+			$(obj).attr("aria-pressed","false");
+		} else {
+			$(obj).addClass("check_answer_dx");
+			$(obj).attr("aria-checked","true");
+			$(obj).attr("aria-pressed","true");
+		}
+
+		var choiceContent = "";
+		$(".choice" + qid).each(function(){
+			if($(this).hasClass("check_answer_dx")){
+				choiceContent = choiceContent + $(this).attr("data");
+			}
+		});
+		$("#answer" + qid).val(choiceContent);
+	}
+}
+
+// end: 无障碍定制 单选/多选/判断/填空/简答
+
+function saveMultiSelect(obj,dataId) {
+    var subObj = $(obj).find(".saveMultiSelect");
+    addMultipleChoice(subObj);
+    var div = $("#sigleQuestionDiv_"+dataId);
+    var callBack = function(){
+        checkSubmitButton();
+        changeQuestionCardColor(dataId);
+    }
+    submitForm(true,div,callBack);
+}
+
+function saveEvaluationSelect(obj,selectNum) {
+	var check = addEvaluationChoice(obj,selectNum);
+	if(!check){
+		return;
+	}
+	var dataId =  $(obj).find(".num_option_dx").attr("qid");
+	var div = $("#sigleQuestionDiv_"+dataId);
+	var callBack = function(){
+		checkSubmitButton();
+		changeQuestionCardColor(dataId);
+	}
+	submitForm(true,div,callBack);
+}
+
+
+function changeQuestionCardColor(dataId) {
+	var answerStatus = checkCurrentQuesAnswerStatus(dataId);
+    var questionCard = $("#answerSheet"+dataId);
+    if(answerStatus){
+    	questionCard.addClass("active");
+    }else{
+    	questionCard.removeClass("active");
+    }
+}
+
+//function saveComplexQuestion(dataId,itemId) {
+//    var saveDiv =  $("#save_"+dataId + itemId);
+//    submitComPlexQuestion(dataId,itemId,saveDiv);
+//}
+
+
+function saveQuestion(dataId,dataStr) {
+	var callBack = function (){
+	    $("#save_" + dataStr).hide();
+	    clearUnSaveBtn();
+	    checkSubmitButton();
+	    changeQuestionCardColor(dataId);
+        $(".sub_que_div").css("pointer-events","auto")
+    }
+    submitForm(true,$("#sigleQuestionDiv_" + dataId),callBack);
+}
+
+
+function registerUnSaveBtn(btnIdStr){
+	if(!window.UNSAVE_QUES){
+		window.UNSAVE_QUES = btnIdStr;
+	}
+}
+
+function clearUnSaveBtn(){
+	if(window.UNSAVE_QUES){
+		window.UNSAVE_QUES = undefined;
+	}
+}
+
+//function saveComplexQuestion(dataId,itemId,optionName) {
+//	var selectStr = "#save_" + dataId + itemId;
+//	if(optionName && optionName.length > 0){
+//		selectStr = selectStr + optionName;
+//	}
+//    var saveDiv = $(selectStr);
+//    saveDiv.hide();
+//    submitForm(true,$("#sigleQuestionDiv_"+dataId));
+//    checkSubmitButton();
+//    changeQuestionCardColor(dataId);
+//}
+
+//function saveComplexQuestionV3(dataId,itemId) {
+//    var saveDiv = $("#save_"+dataId + itemId);
+//    submitComPlexQuestion(dataId,itemId,saveDiv);
+//}
+
+//function submitComPlexQuestion(dataId,itemId,saveDiv) {
+//    saveDiv.hide();
+//    var div = $("#sigleQuestionDiv_"+dataId);
+//    submitForm(true,div);
+//    checkSubmitButton();
+//    changeQuestionCardColor(dataId);
+//}
+
+function addChoiceByBType(obj) {
+    var qid = $(obj).attr("qid");
+    var parentDiv = $(obj).parent();
+
+    if($(obj).hasClass("check_answer")) {
+        $(obj).removeClass("check_answer");
+    } else {
+        parentDiv.find(".choice" + qid).removeClass("check_answer");
+        $(obj).addClass("check_answer");
+    }
+
+    var answerPair=[];
+    $(".BType_"+qid).each(function () {
+        var name = $(this).attr("index");
+        var contentStr = "";
+        $(this).find(".choice" + qid).each(function(){
+            if($(this).hasClass("check_answer")){
+                contentStr = $(this).attr("choice_name");
+                return false;
+            }
+        });
+
+        var obj={};
+        obj.name =  parseInt(name);
+        obj.content = (contentStr);
+        answerPair.push(obj);
+    });
+
+    var answerStr=JSON.stringify(answerPair);
+    $("#answer" + qid).val(answerStr);
+}
+
+function addChoice(obj) {
+    var qid = $(obj).attr("qid");
+
+    if($(obj).hasClass("check_answer")) {
+        $(obj).removeClass("check_answer");
+    } else {
+        $(".choice" + qid).removeClass("check_answer");
+        $(obj).addClass("check_answer");
+    }
+
+    var choiceContent = "";
+    $(".choice" + qid).each(function(index,ele){
+        if($(this).hasClass("check_answer")){
+            choiceContent = choiceContent + $(this).attr("data");
+        }
+    });
+
+    $("#answer" + qid).val(choiceContent);
+}
+
+//提交答案日志
+//function answerRecordLog(answerData){
+//    var snapshotMonitor = $('#snapshotMonitor').val();
+//    if(snapshotMonitor != 1){
+//        return;
+//    }
+//    if(!answerData){
+//        return;
+//    }
+//    var eventType = 3;
+//    pushExamMonitorLog(eventType,answerData);
+//}
+
+function addMultipleChoice(obj) {
+    var qid = $(obj).attr("qid");
+
+    if($(obj).hasClass("check_answer_dx")) {
+        $(obj).removeClass("check_answer_dx");
+    } else {
+        $(obj).addClass("check_answer_dx");
+    }
+
+    var choiceContent = "";
+    $(".choice" + qid).each(function(){
+    	if($(this).hasClass("check_answer_dx")){
+            choiceContent = choiceContent + $(this).attr("data");
+        }
+    });
+    $("#answer" + qid).val(choiceContent);
+}
+
+
+/*
+
+function finalSubmitTest(tempSave,formEle,submitStyle,submitData){
+
+    function version(url){
+        var re = /&version=(\d+)/;
+        var version = 1;
+        if (re.test(url)) {
+            var arr = re.exec(url);
+            version += parseInt(arr[1]);
+            url = url.replace(re, '&version=' + version);
+        } else {
+            url = url + '&version=1';
+        }
+        return url;
+    }
+
+    var pos = "";
+    try{
+        pos = getEnc();
+    }catch(ex){}
+
+    var actionStr = version(formEle.attr('action'));
+    formEle.attr('action', actionStr);
+    var ajax_url  = actionStr + "&tempSave=" + tempSave + "&pos=" + pos;
+
+
+    var data = formEle.serialize();
+    if(typeof submitData != "undefined" && submitData != "") {
+        data += submitData;
+    }
+
+    $.ajax({
+        type : 'post',
+        url : ajax_url,
+        data : data,
+        dataType : 'json',
+        success : function(result) {
+            var status = result.status;
+            var msg = result.msg || I18N.subFailed;
+            if(!status || status != 'success'){
+                $.toast({type: 'failure', content: msg});
+                if(status == 'submitted' || status == 'forceSubmitted'){
+                    removeTimeOverSubmitTimers();
+                    closeMonitor();
+                    $.toast({type: 'success', content: I18N.subSucc});
+                    setTimeout(function() {
+                        jumpExamLook();
+                    }, 1000);
+                }
+
+                $("#submitConfirmPop").fullFadeOut();
+                return;
+            }
+
+            if(submitStyle == 4){
+                removeTimeOverSubmitTimers();
+            }
+            var data = {};
+            data.submitStyle = submitStyle;
+            finalSubmitExamLog(data);
+            
+            if(submitStyle == 4) {
+               $("#timeOverSubmitConfirmPop .confirmClose").attr('onclick','timOverconfirmCloseCallBack();');
+               $("#timeOverSubmitConfirmPop").fullFadeIn();
+               return;
+            }
+            
+            if(submitStyle == 5){
+				exitForceSubmitTip($('#exitCount').val() || 0);
+				return;
+			}
+					
+			if(submitStyle == 8){
+				switchScreenDurationLimitTip($('#switchScreenDurationLimit').val() || 0);
+				return;
+			}
+
+            $.toast({type: 'success', content: I18N.subSucc});
+            closeMonitor();
+            setTimeout(function() {
+                jumpExamLook();
+            }, 1000);
+
+            $("#submitConfirmPop").fullFadeOut();
+        },
+        error : function(result){
+            $.toast({type: 'failure', content: I18N.subFailed});
+
+            $("#submitConfirmPop").fullFadeOut();
+        }
+    });
+}
+
+*/
+
+//function pushExamMonitorLog(eventType,data) {
+//    try{
+//        var url = '/keeper/api/receiveExamLogs';
+//        var currentFaceId=data.currentFaceId;
+//        if(eventType == 0 && (typeof(currentFaceId) == "undefined" || currentFaceId == "")){
+//            var _version = data.version;
+//            if (typeof (_version) != "undefined" && _version !== -1) {
+//                url = '/keeper/api/receiveExamLogs?currentFaceId=false&eventType=' + eventType;
+//            }
+//        }
+//
+//        var courseId = $('#courseId').val();
+//        var examRelationId = $('#testPaperId').val();
+//        var answerId = $('#testUserRelationId').val();
+//        var clazzId = $('#classId').val();
+//        var personId = $('#cpi').val();
+//        var log = {
+//            "courseId":courseId,
+//            "clazzId": clazzId,
+//            "personId":personId,
+//            "examRelationId":examRelationId,
+//            "answerId":answerId,
+//            "eventType":eventType,
+//            "ip":ip,
+//            "data":data
+//        };
+//        var monitorEnc = $('#monitorEnc').val();
+//        $.ajax({
+//            type : 'post',
+//            dataType : 'json',
+//            url : url,
+//            data : {"log":JSON.stringify(log), "enc":monitorEnc},
+//            success : function(data) {
+//            }
+//        });
+//    }catch(err){}
+//}
+//
+////最终提交考试日志
+//function finalSubmitExamLog(data){
+//    var snapshotMonitor = $('#snapshotMonitor').val();
+//    if(snapshotMonitor !== 1){
+//        return;
+//    }
+//    var eventType = 2;
+//    pushExamMonitorLog(eventType,data);
+//}
+
+//function goExamList() {
+//    var qbanksystem =  $('#qbanksystem').val();
+//    var qbankbackurl =  $('#qbankbackurl').val();
+//    if(qbanksystem == 1 && qbankbackurl !== ''){
+//        qbankbackurl = decodeURIComponent(qbankbackurl);
+//        location.href = qbankbackurl;
+//        return;
+//    }
+//
+//    var courseId = $("#courseId").val();
+//    var classId = $("#classId").val();
+//    var cpi = $("#cpi").val();
+//    var openc = $("#openc").val() || '';
+//    if(typeof(cpi)=="undefined"){
+//        cpi = 0;
+//    }
+//    location.href =  _HOST_CP2_ + "/mooc2/exam/list?classId="+classId+"&courseId=" + courseId +"&cpi=" +cpi+ "&ut=s"+ "&openc=" + openc;
+//}
+
+
+//function unhtml(input) {
+//    if(!input || input.length == 0) {
+//        return input;
+//    }
+//    var newInput=input.replace(/[&<">']/g, function (a, b) {
+//        return {
+//            '<':'&lt;',
+//            '&':'&amp;',
+//            '"':'&quot;',
+//            '>':'&gt;',
+//            "'":'&#39;'
+//        }[a];
+//    }) ;
+//    return newInput;
+//}
+
+function check() {
+    var  nudo = $(".questionCardOption").find("span:not(.doComplete)");
+    var hasundo = nudo && nudo.size() > 0;
+    return !hasundo;
+}
+
+/*
+function getParamStr(tempSave) {
+    var testPaperId = $("#testPaperId").val();
+    var testUserRelationId = $("#testUserRelationId").val();
+    var courseId = $("#courseId").val();
+    var classId = $("#classId").val();
+    var cpi = $("#cpi").val();
+    if(typeof(cpi)=="undefined"){
+        cpi = 0;
+    }
+
+    return  "?classId=" + classId + "&courseId=" + courseId +"&cpi="+ cpi + "&testPaperId=" + testPaperId + "&testUserRelationId=" + testUserRelationId + "&tempSave=" + tempSave;
+}
+*/
+
+function answerModeParam(questionWrapEle){
+    var array = questionWrapEle.find('form').first().serializeArray();
+    return $.param(array);
+}
+
+//function removeTimeOverSubmitTimers(){
+//    var overTimeSubmitTimers = window.OverTimeSubmitTimers;
+//    if(!overTimeSubmitTimers || overTimeSubmitTimers.length == 0){
+//        return ;
+//    }
+//    for(var i = 0 ; i < overTimeSubmitTimers.length; i++){
+//        var overTimeSubmitTimer = overTimeSubmitTimers[i];
+//        if(overTimeSubmitTimer){
+//            clearTimeout(overTimeSubmitTimer);
+//        }
+//    }
+//}
+
+//function sortMultiAnswer(answer) {
+//    if ( !answer || answer.trim().length == 0) {
+//        return "";
+//    }
+//    var answerArray = answer.trim().split('');
+//    var sortedAnswerArray = answerArray.sort();
+//    return sortedAnswerArray.join('');
+//}
+
+/*
+function setStuAnswerOfSomeQues(quietSubmit){
+    var thisObj = $(quietSubmit);
+    var nowQuestionId= thisObj.find('input[name="questionId"]').val();
+    if(!nowQuestionId){
+        return;
+    }
+
+    var nowTypeQuestionId="type"+nowQuestionId;
+    var questionType= thisObj.find("input[name='"+nowTypeQuestionId+"']").val();
+    // 避免自动提交时简答题答案丢失
+    if (questionType == 4 || questionType == 5 || questionType == 6 || questionType == 7 || questionType == 8 || questionType ==17 || questionType == 18) {
+        var me = UE.getEditor('answer' + nowQuestionId);
+        me && me.sync();
+    }else if (questionType == 2 || questionType == 9 || questionType == 10) {
+		var blankStr = "answerEditor" + nowQuestionId;
+		var blankInputs = $("textarea[name^='" + blankStr + "']");
+		blankInputs.length > 0 && blankInputs.each(function () {
+			var blankEditorId = $(this).attr('id');
+			if(blankEditorId){
+			    var me = UE.getEditor(blankEditorId);
+			    me && me.sync();
+			}
+		});
+	}
+
+    if(questionType==11){
+        var answerPair=[];
+        thisObj.find(".line_answer").find(".select").each(function(index){
+            var checked=$(this).attr("value");
+            var obj={};
+            obj.name=(index+1);
+            obj.content=(checked);
+            answerPair.push(obj);
+        });
+        var answerStr=JSON.stringify(answerPair);
+        thisObj.find("input[name='answer"+nowQuestionId+"']").val(answerStr);
+    }else if(questionType == 13){
+        var answerStr="";
+        thisObj.find(".orderSelect").find(".select").each(function(){
+            var checked=$(this).attr("value");
+            answerStr=answerStr+checked;
+        });
+        thisObj.find("input[name='answer"+nowQuestionId+"']").val(answerStr);
+
+    }else if(questionType == 14){//新完型填空
+        var answerObj={};
+        thisObj.find(".filling_answer").each(function(){
+            var itemId=$(this).find("input[name='itemId']").val();
+            var checked=$(this).find(".answerClass").val();
+            if(checked == undefined){
+                checked="";
+            }
+            var info={};
+            info.answer=checked;
+            answerObj[itemId]=info;
+        });
+        var answer=[];
+        answer.push(answerObj);
+        var answerStr=JSON.stringify(answer);
+        thisObj.find("input[name='answer"+nowQuestionId+"']").val(answerStr);
+    } else if (questionType == 15 || questionType == 16 || questionType == 19) {// 新阅读理解、综合题
+        var answerObj={};
+        thisObj.find("input[name='readCompreHension-childType']").each(function(index){
+            var type=$(this).val();
+            var itemId=$(this).next().val();
+            var itemAnswer="";
+            switch(parseInt(type)){
+                case 0:
+                case 3:{
+                    itemAnswer= thisObj.find("input[name='answer" + nowQuestionId + itemId + "']").val();
+                    break;
+                }
+                case 1:{
+                    thisObj.find("input[name='answer" + nowQuestionId + itemId + "']").each(function() {
+                        itemAnswer +=$(this).val();
+                    });
+                    var randomOptions = $("#randomOptions").val();
+                    itemAnswer = randomOptions ? sortMultiAnswer(itemAnswer) : itemAnswer;
+                    break;
+                }
+                case 2:{
+                    var answerItem=[];
+                    var blankNum=thisObj.find("input[name='" + nowQuestionId + itemId + "blankNum']").val();
+                    for(var i=1;i<=blankNum;i++){
+                        var answerEditorId="answerEditor" + nowQuestionId + itemId;
+                        answerEditorId=answerEditorId + i;
+                        var answerItemStr=UE.getEditor(answerEditorId).getContent();
+                        var item={};
+                        item.content=answerItemStr;
+                        item.name=i.toString();
+                        answerItem.push(item);
+                    }
+                    itemAnswer=answerItem;
+                    break;
+                }
+                case 4:{
+                    var answerEditorId = "answer" + nowQuestionId + itemId;
+                    var answerEditorStr = UE.getEditor(answerEditorId).getContent();
+                    itemAnswer=answerEditorStr;
+                    break;
+                }
+                default: { }
+            }
+
+            var info={};
+            info.type=parseInt(type);
+
+            info.answer=(itemAnswer !== undefined ? itemAnswer: "");
+            answerObj[itemId]=info;
+        });
+        var answer=[];
+        answer.push(answerObj);
+        var answerStr=JSON.stringify(answer);
+        thisObj.find("input[name='answer"+nowQuestionId+"']").val(answerStr);
+    } else if (questionType == 17) {
+        var answer = [];
+        var thisDiv = "#procedural-" + nowQuestionId;
+        var currentEditor = UE.getEditor("answer"+nowQuestionId);
+        var language= thisObj.find(thisDiv +" .languageSelect").attr("value");
+        var richcode=currentEditor.getContent();
+        var code=currentEditor.getPlainTxt(); code=UE.utils.html(code);
+        var item={};
+        item.language=parseInt(language);
+        item.answer=richcode;
+        item.answerTxt=code;
+        answer[0]=item;
+        var answerStr = JSON.stringify(answer);
+        thisObj.find("input[name='answer" + nowQuestionId + "']").val(answerStr);
+    }else if(questionType == 1){
+        var randomOptions = $("#randomOptions").val();
+        var multipleChoiceInput=thisObj.find("input[name='answers" + nowQuestionId + "']");
+        var mulChoice=multipleChoiceInput.val();
+        mulChoice = randomOptions ? sortMultiAnswer(mulChoice) : mulChoice;
+        multipleChoiceInput.val(mulChoice);
+    }
+}
+
+submitAjaxHandle = null;
+
+function submitForm(tempSave,quietSubmit,callBack) {
+    if(tempSave){
+        submitAjaxHandle != null && submitAjaxHandle.abort();
+    }
+
+    if(!quietSubmit){
+        if(tempSave && window.submitOnce){
+            return;
+        } else if(tempSave){
+            window.submitOnce = true;
+        }
+    }
+
+
+    var timeOver = $("#timeOver").val();
+    $("#tempSave").val(tempSave);
+    
+	//答题页面还是预览页面
+	var answerMode = $('#answerMode').val() || 0;
+    
+    var submitStyle = 0;
+    var submitTest = $("#submitTest");
+
+    //最终提交
+    if(!tempSave && timeOver == "false") {
+    	var monitorforcesubmit = $('#monitorforcesubmit').val();
+    	if(monitorforcesubmit > 0){
+    		submitStyle = monitorforcesubmit;
+    	}
+        finalSubmitTest(tempSave,submitTest,submitStyle,undefined);
+    } else if(timeOver == "true"){
+        var submitData = "";
+        $(".saveButtonClass").each(function () {
+            if($(this).is(':visible')) {
+               var dataid = $(this).attr("dataid");
+               var div = $("#sigleQuestionDiv_" + dataid);
+
+                setStuAnswerOfSomeQues(div);
+                var thisQuestionParam = answerModeParam(div);
+                if(typeof thisQuestionParam != "undefined") {
+                    submitData += "&" + thisQuestionParam;
+                }
+            }
+        });
+
+        //时间到了自动提交
+      if(timeOver == "true"){
+            submitStyle = 4;
+        }
+        finalSubmitTest(tempSave,submitTest,submitStyle,submitData);
+    } else {
+        var pos = "";
+        try{
+            pos = getEnc();
+    		var qid = quietSubmit && (quietSubmit.find('input[name="questionId"]').val() || '');
+    		if(pos && qid){
+    			pos = pos.replace('qid=&', 'qid=' + qid + '&');
+    		}
+        }catch(ex){}
+
+        // 临时保存
+        var param = getParamStr(tempSave);
+        param = param + "&pos=" + pos + '&version=1';
+        var ajax_url = $("#saveUrl").val()  + param;
+        var ajax_type = "post";
+        var ajax_data = $("#submitTest").serialize();
+        if(quietSubmit){
+            //设置答案
+            setStuAnswerOfSomeQues(quietSubmit);
+            var thisQuestionParam = answerModeParam(quietSubmit);
+            if(thisQuestionParam){
+                ajax_data = ajax_data + '&'  + thisQuestionParam;
+            }
+        }
+
+        submitAjaxHandle = $.ajax({
+            type : ajax_type,
+            url : ajax_url,
+            data : ajax_data,
+            dataType : 'json',
+            success : function(data) {
+                var status = data.status;
+                var msg = data.msg ;
+
+                if(status == 'submitted' || status == 'forceSubmitted'){
+                	closeMonitor();
+                    removeTimeOverSubmitTimers();
+                }
+
+                if (status == "error" || status == 'submitted') {
+                    window.submitOnce = false;
+                    $.toast({type: 'failure', content: msg});
+                    if(status == 'submitted'){
+                    	 jumpExamLook();
+                    }
+                    return;
+                }else if(status == 'forceSubmitted'){
+                    window.submitOnce = false;
+                    clearInterval(timer);
+                    jumpExamLook();
+                    return;
+                }
+                
+                if(data.monitorparam){
+                    data.monitorparam.answerMode = answerMode;
+                }
+
+                answerRecordLog && answerRecordLog(data.monitorparam);
+                callBack && callBack();
+            },
+            error : function(result){
+                //提交失败
+            	$.toast({type: 'failure', content: '提交失败'});
+                window.submitOnce = false;
+            },
+            complete : function(){
+                submitAjaxHandle = null;
+            }
+        });
+    }
+}
+
+*/
+
+function finalSubmit(confirm){
+    if(!checkSubmitButton()) {
+        return;
+    }
+	if(!confirm){
+		  var tip = I18N.confirmSub;
+		  var unAnswerObj = checkUnAnswered();
+		  var unAnswerTypeName = unAnswerObj.unAnswerTypeName;
+		  if(unAnswerTypeName && unAnswerTypeName.length > 0){
+              tip = I18N.worksubmitTips1 +" "+ unAnswerTypeName +" "+ I18N.worksubmitTips2;
+		  }
+		  $("#submitConfirmPop .popWord").html(tip);
+		  $("#submitConfirmPop .confirm").attr('onclick','finalSubmit(1);');
+		  $("#submitConfirmPop").fullFadeIn();
+		  var isAccessibleCustomFid = $("#isAccessibleCustomFid").val()
+		  if (isAccessibleCustomFid && isAccessibleCustomFid == "1"){
+				$("#submitConfirmPop").focus();
+		   }
+		   scrollToUnAnswer(unAnswerObj.questionEle);
+          return;
+	}
+    submitForm(false);
+}
+
+function scrollToUnAnswer(ele){
+	try{
+		var markingH = $("#fanyaMarking").offset().top + 10;
+		$("html,body").animate({
+			scrollTop : ele.offset().top - markingH
+		}, 500);
+	}catch(err){}
+}
+
+var statusMsg = {
+    "1" : "Accepted（运行通过）",
+    "2" : "Wrong Answer（运行结果错误）",
+    "3" : "RunTime Error(程序运行出错)",
+    "4" : "Time Limit Exceeded（超时，程序没在规定时间内出答案）",
+    "5" : "Memory Limit Exceeded（超内存，程序没在规定空间内出答案）",
+    "6" : "Compile Error（编译出错）",
+    "7" : "presentation error（输出格式错）",
+    "8" : "server timeout（程序运行出错，请调试后重新运行）",
+    "9" : "server nonsupport（编译服务不支持该程序语言）"
+};
+
+function proceduralRun(qeustionId,paperLibraryId,courseId) {
+    var thisDiv = "#procedural-" + qeustionId;
+    var currentEditor = UE.getEditor("answer"+qeustionId);
+    var language = $(thisDiv + " .languageSelect").attr("value");
+    if(language == "-1"){
+        $.toast({type: 'failure', content: I18N.selectProgramLang + '!'});
+        return;
+    }
+    var pureTxt =  currentEditor.getContentTxt();
+    if(pureTxt.length == 0 || pureTxt == "") {
+        $.toast({type: 'failure', content: I18N.enterCode + '!'});
+        return;
+    }
+
+    if($("#runSignal_"+qeustionId).val() == "true") {
+        return;
+    }
+
+    $(thisDiv + " #runstatus").show();
+    $(thisDiv + " #runBtn").addClass("jb_btn_92_disable");
+    var code =  currentEditor.getPlainTxt();
+    code = UE.utils.html(code);
+    var type = "post";
+    var data = {};
+    data.type = 'exam';
+    data.language = language;
+    data.code = code;
+    data.paperId = paperLibraryId;
+    data.quesid = qeustionId;
+	try {
+		data.examRelationId = $("#testPaperId").val();
+		data.classId = $("#classId").val();
+		data.courseId = $("#courseId").val();
+	}catch (e) {}
+	var url = _HOST_CP2_ + "/exam/test/procedural-run?paperId=" + data.paperId + "&quesid=" + data.quesid
+		+ "&courseId=" + data.courseId + "&classId=" + data.classId
+		+ "&examRelationId=" + data.examRelationId + "&type=" + data.type;
+    $.ajax({
+        type: type,
+        url: url,
+        contentType:'application/x-www-form-urlencoded; charset=UTF-8',
+        dataType: 'json',
+        data: data,
+        success: function (result) {
+            if (result.status === false) {
+                $.toast({type: 'failure', content: '调用程序运行服务异常!'});
+                return;
+            }
+            var status = result.status;
+            var errors = result.errors;
+
+            var tip = statusMsg[status] || '';
+			if (status != 8) {
+				if(tip){
+					tip =  tip + '\n' + errors;
+				}else{
+					tip = errors;
+				}
+			}
+
+            $(thisDiv + " #runresult").show();
+            $(thisDiv + " #output").text(tip);
+			$(thisDiv + " #output").autoHeight({len:50});
+            $("#runSignal_"+qeustionId).val("true")
+            setCompilerLanguage(language,qeustionId,courseId);
+        },
+        error: function (data) {
+            $.toast({type: 'failure', content: '调用程序运行服务异常!'});
+        },
+        complete: function(){
+            $(thisDiv + " #runstatus").hide();
+        }
+    });
+}
+
+
+function setCompilerLanguage(language,qeustionId,courseId) {
+    if($("#changeLanguage_" + qeustionId).val() == "false"){
+        return false;
+    }
+    var url = _HOST_CP2_ + "/exam/test/compiler-setting?courseid="+courseId+"&language=" + language;
+    $.ajax({
+        type : "get",
+        url : url,
+        success : function(result) {
+            $("#changeLanguage_" + qeustionId).val("false");
+        }
+    });
+}
+
+function backList(courseId, classId, examRelationId, answerId, enc, cpi, openc) {
+	window.BeforeUnloadActive = false;
+	if (!checkSubmitButton()) {
+		return;
+	}
+	var url = _HOST_CP2_ + "/exam/test/reVersionTestStartNew?courseId=" + courseId
+			+ "&classId=" + classId + "&tId=" + examRelationId + "&id="
+			+ answerId + "&enc=" + enc + "&cpi=" + cpi + "&openc=" + openc
+			+ "&newMooc=true";
+	
+	var start = $('#lastStart').val() || 0;
+	url +=  '&start=' + start;
+	
+    var monitorStatus = $("#monitorStatus").val() || '';
+    var monitorOp = $("#monitorOp").val() || '';
+    url  += "&monitorStatus=" + monitorStatus + "&monitorOp=" + monitorOp;
+	
+    var webSnapshotMonitor = $("#webSnapshotMonitor").val() || 0;
+    if(webSnapshotMonitor == 1){
+    	url +=  '&webSnapshotMonitor=' + webSnapshotMonitor;
+    }
+    
+    if($("#isChaoxingExamPc").val() == 'true'){
+      url +=  '&sc=' + $('#screenAndCaptureCall').val();
+    }
+    
+    var examsystem = $("#examsystem").val() || 0;
+    if(examsystem == 1){
+	  url = url + "&examsystem=" + examsystem;
+    }
+    
+	var qbanksystem = $('#qbanksystem').val();
+	var qbankbackurl = $('#qbankbackurl').val();
+	if (qbanksystem == 1 && qbankbackurl != '') {
+		url = url + "&qbanksystem=" + qbanksystem + "&qbankbackurl=" + qbankbackurl;
+	}
+	window.location.href = url;
+}
+
+
+function checkCurrentQuesAnswerStatus(dataId) {
+	var questionWrap = $("#sigleQuestionDiv_"+dataId);
+	var answerObj = getEachAnswer(questionWrap);
+	var unAnsweredTypeNameStr = getUnAnsweredTypeName(questionWrap,answerObj);
+	if (unAnsweredTypeNameStr && unAnsweredTypeNameStr.length > 0) {
+		return false;
+	}
+	return true;
+}
+
+
+// function checkUnAnswered() {
+// 	var unAnswerTypeName = '';
+// 	var unAnswerObj = {};
+// 	$('.questionLi').each(function () {
+// 		var questionWrap = $(this);
+// 		var answerObj = getEachAnswer(questionWrap);
+// 		var unAnsweredTypeNameStr = getUnAnsweredTypeName(questionWrap,answerObj);
+// 		if (unAnsweredTypeNameStr && unAnsweredTypeNameStr.length > 0) {
+// 			unAnswerObj.unAnswerTypeName = unAnsweredTypeNameStr;
+// 			unAnswerObj.questionEle = questionWrap;
+// 			return false;
+// 		}
+// 	});
+// 	return unAnswerObj;
+// }
+//
+//
+// function getEachAnswer(questionWrap) {
+// 	var answerObj = {};
+// 	try {
+// 		var answer = '';
+// 		var quesId = questionWrap.find('input[name="questionId"]').val();
+// 		var type = questionWrap.find('input[name="type' + quesId + '"]').val();
+// 		var typeName = questionWrap.find('input[name="typeName' + quesId + '"]').val();
+// 		answerObj.type = type;
+// 		answerObj.typeName = typeName;
+// 		if (type == 0 || type == 3 || type == 11 || type == 13 || type == 14 || type == 15 || type == 17 || type == 19 || type == 20 || type == 25 || type == 24) {
+// 			answer = questionWrap.find('input[name="answer' + quesId + '"]').val();
+// 		} else if (type == 1 || type == 21) {
+// 			answer = questionWrap.find('input[name="answers' + quesId + '"]').val();
+// 		} else if (type == 2 || type == 9 || type == 10) {
+// 			var balnkAnswer = [];
+// 			questionWrap.find('textarea[name^="answerEditor' + quesId + '"]').each(function (index, obj) {
+// 				var item = {};
+// 				var itemAnswer = $(this).val();
+// 				item.name = index.toString();
+// 				item.content = itemAnswer;
+// 				balnkAnswer.push(item);
+// 			});
+// 			answer = JSON.stringify(balnkAnswer);
+// 		} else if (type == 4 || type == 5 || type == 6 || type == 7 || type == 8 || type == 18) {
+// 			answer = questionWrap.find('textarea[name="answer' + quesId + '"]').val()
+// 		} else if (type == 26) {
+// 			answer = questionWrap.find('input[name="answer' + quesId + '"]').val()
+// 		} else if (type == 12) {
+// 			answer = questionWrap.find('input[name="answer' + quesId + '"]').val() || questionWrap.find('input[name="answers' + quesId + '"]').val();
+// 		}
+// 		answerObj.answer = answer;
+// 	} catch (err) {}
+// 	return answerObj;
+// }
+//
+// function getUnAnsweredTypeName(questionWrap,answerObj) {
+// 	var unAnswerTypeName = '';
+// 	try {
+// 		if (!answerObj) {
+// 			return unAnswerTypeName;
+// 		}
+//
+// 		var type = answerObj.type;
+// 		if(type == 16){
+// 			return unAnswerTypeName;
+// 		}
+//
+// 		var answer = answerObj.answer || '';
+//
+// 		if (answer == '' || answer.length == 0) {
+// 			unAnswerTypeName = answerObj.typeName || '';
+// 			return unAnswerTypeName;
+// 		}
+//
+// 		var answerStatus = true;
+//
+// 		if (type == 0 || type == 1 || type == 3 || type == 4 || type == 5 || type == 6 || type == 7
+// 			 || type == 8 || type == 18 || type == 12 || type == 13 || type == 21) {
+//
+// 		} else if (type == 2 || type == 9 || type == 10 || type == 11 || type == 20 || type == 24) {
+// 			var blankAnswer = JSON.parse(answer);
+// 			var blankNum = blankAnswer.length;
+// 			var unAnswerNum = 0;
+// 			for (var i = 0; i < blankNum; i++) {
+// 				var item = blankAnswer[i];
+// 				if (item && (item.content == '' || item.content.length == 0)) {
+// 					unAnswerNum++;
+// 				}
+// 			}
+// 			if (unAnswerNum > 0) {
+// 				answerStatus = false;
+// 			}
+// 		} else if (type == 14) {
+// 			var clozetextNewAnswer = JSON.parse(answer);
+// 			if (jQuery.isArray(clozetextNewAnswer) && clozetextNewAnswer.length > 0) {
+// 				var itemObj = clozetextNewAnswer[0];
+// 				var unAnswerNum = 0;
+// 				for (var key in itemObj) {
+// 					var answerObjItem = itemObj[key];
+// 					if(typeof(answerObjItem) == 'string'){
+// 						answerObjItem = JSON.parse(answerObjItem);
+// 					}
+// 					if (answerObjItem && (answerObjItem.answer == '' || answerObjItem.answer.length == 0)) {
+// 						unAnswerNum++;
+// 					}
+// 				}
+// 				if (unAnswerNum > 0) {
+// 					answerStatus = false;
+// 				}
+// 			}
+// 		} else if (type == 15 || type == 19) {
+// 			var readComPrehensionNewAnswer = JSON.parse(answer);
+// 			if (jQuery.isArray(readComPrehensionNewAnswer) && readComPrehensionNewAnswer.length > 0) {
+// 				var itemObj = readComPrehensionNewAnswer[0];
+//
+// 				var itemIds = [];
+// 				questionWrap.find("input[name='readCompreHension-childType']").each(function(index){
+// 				     var itemId = $(this).next().val();
+// 				     itemIds.push(itemId);
+// 				 });
+//
+// 				for ( i = 0;  i < itemIds.length; i++) {
+//                     var key = itemIds[i];
+// 					var answerObjItem = itemObj[key];
+// 					if(typeof(answerObjItem) == 'string'){
+// 						answerObjItem = JSON.parse(answerObjItem);
+// 					}
+// 					var subType = answerObjItem.type;
+// 					var subAnswer = answerObjItem.answer;
+// 					if (subType == 0 || subType == 1 || subType == 3 || subType == 4) {
+// 						if (subType == 3) {
+// 							subAnswer = subAnswer.toString();
+// 						}
+// 						if (subAnswer == '' || subAnswer.length == 0) {
+// 							answerStatus = false;
+// 							break;
+// 						}
+// 					} else if (subType == 2) {
+// 						for (var j = 0; j < subAnswer.length; j++) {
+// 							var item = subAnswer[j];
+// 							if (item.content == '' || item.content.length == 0) {
+// 								answerStatus = false;
+// 								break;
+// 							}
+// 						}
+// 						if(!answerStatus){
+// 							break;
+// 						}
+// 					}
+// 				}
+// 				if(!answerStatus){
+// 					answerObj.typeName  = answerObj.typeName;
+// 				}
+// 			}
+// 		}else if (type == 25) {
+// 			var readComPrehensionNewAnswer = JSON.parse(answer);
+// 			if (jQuery.isArray(readComPrehensionNewAnswer) && readComPrehensionNewAnswer.length > 0) {
+// 				var itemObj = readComPrehensionNewAnswer[0];
+//
+// 				var itemIds = [];
+// 				questionWrap.find("input[name='readCompreHension-childType']").each(function(index){
+// 				     var itemId = $(this).next().val();
+// 				     itemIds.push(itemId);
+//				 });
+//
+// 				var optionalNum = questionWrap.find("input[name^='optionalNum']").val();
+// 				var smallQuesSum = itemIds.length;
+// 				var canUnAnswerNum = parseInt(smallQuesSum) - parseInt(optionalNum);
+//				var firstIndex = -1;
+//
+// 				for ( i = 0;  i < itemIds.length; i++) {
+//                     var key = itemIds[i];
+// 					var answerObjItem = itemObj[key];
+// 					if(typeof(answerObjItem) == 'string'){
+// 						answerObjItem = JSON.parse(answerObjItem);
+// 					}
+// 					var subType = answerObjItem.type;
+// 					var subAnswer = answerObjItem.answer;
+// 					var isAnswered = true;
+// 					if (subType == 0 || subType == 1 || subType == 3 || subType == 4) {
+// 						if (subType == 3) {
+// 							subAnswer = subAnswer.toString();
+// 						}
+// 						if (subAnswer == '' || subAnswer.length == 0) {
+// 							isAnswered = false;
+// 						}
+// 					} else if (subType == 2) {
+// 						for (var j = 0; j < subAnswer.length; j++) {
+// 							var item = subAnswer[j];
+// 							if (item.content == '' || item.content.length == 0) {
+// 								isAnswered = false;
+// 								break;
+// 							}
+// 						}
+// 					}
+// 					if(!isAnswered){
+// 						answerStatus = false;
+// 						if(firstIndex == -1){
+// 							firstIndex = i;
+// 						}
+// 						canUnAnswerNum--;
+// 					}
+// 				}
+// 				if(!answerStatus && canUnAnswerNum < 0){
+// 					answerObj.typeName  = answerObj.typeName;
+// 				}else{
+// 					answerStatus = true;
+// 				}
+// 			}
+// 		}else if (type == 17 || type == 26) {
+// 			var procedureAnswer = JSON.parse(answer);
+// 			if (jQuery.isArray(procedureAnswer) && procedureAnswer.length > 0) {
+// 				var itemObj = procedureAnswer[0];
+// 				if (itemObj.answer == '' || itemObj.answer.length == 0) {
+// 					answerStatus = false;
+// 				}
+// 			}
+// 		}
+// 		if (!answerStatus) {
+// 			unAnswerTypeName = answerObj.typeName || '';
+// 		}
+// 	} catch (err) {}
+// 	return unAnswerTypeName;
+// }
+
+$(document).on("click", ".selectBox ul", function() {
+    var p = $(this).parent().find("p").find("span");
+    var dataId = p.attr("dataId");
+    if(!dataId){
+    	return;
+    }
+    var div = $("#sigleQuestionDiv_"+dataId);
+    var callBack = function(){
+       checkSubmitButton();
+       changeQuestionCardColor(dataId);
+    }
+    submitForm(true,div,callBack);
+});
+
+// 总览页 选词填空
+$(function () {
+	previewFillinBlanksGetData();
+	var fillinBlanksContent = $('.fillBlanksChoose')
+	var fillinBlanksSource;
+	fillinBlanksContent.on("dragstart", function (e) {
+		fillinBlanksSource = e.target
+	});
+
+	fillinBlanksContent.on("dragover", function (e) {
+		e.preventDefault()
+	});
+
+	fillinBlanksContent.on("dragenter", function (e){
+		var dropNode = getFillinBlanksNode(e.target)
+		clearFillinBlanksStyle()
+		if (dropNode && dropNode.dataset.drop === 'copy' && fillinBlanksSource.dataset.qid == dropNode.dataset.qid) {
+			dropNode.classList.add('drop-over')
+		}
+	});
+
+	fillinBlanksContent.on("drop", function (e) {
+		var dropNode = getFillinBlanksNode(e.target)
+		if (typeof (dropNode) !="undefined" && dropNode != "" && fillinBlanksSource.dataset.qid == dropNode.dataset.qid) {
+			clearFillinBlanksStyle()
+		}
+		if (dropNode && dropNode.dataset.drop === 'copy' && dropNode.dataset.qid == fillinBlanksSource.dataset.qid) {
+			var sourceValue = fillinBlanksSource.childNodes[0].nodeValue;
+			sourceValue = sourceValue.replace(/[&<">']/g, function(a, b) {
+				return {
+					'<' : '&lt;',
+					'&' : '&amp;',
+					'"' : '&quot;',
+					'>' : '&gt;',
+					"'" : '&#39;'
+				}[a];
+			});
+			dropNode.innerHTML = sourceValue;
+			dropNode.classList.add('hasFill');
+			dropNode.dataset.chooseName = fillinBlanksSource.dataset.chooseName;
+			dropNode.draggable = true;
+		}
+		var flag = false;
+		if (fillinBlanksSource && fillinBlanksSource.dataset.drop == 'copy' && fillinBlanksSource !== dropNode) {
+			fillinBlanksSource.innerHTML = '';
+			fillinBlanksSource.classList.remove('hasFill');
+			fillinBlanksSource.dataset.chooseName = "";
+			fillinBlanksSource.draggable = false
+			flag = true
+		}
+		if ((typeof (dropNode) !="undefined" && dropNode != "" && fillinBlanksSource.dataset.qid == dropNode.dataset.qid) || flag) {
+			getFillinBlanksData(fillinBlanksSource.dataset.qid, true)
+		}
+	});
+})
+
+function getFillinBlanksData(questionId, saveAnswer) {
+	var fillBlankList = [];
+	var fillBlanks = [];
+	var index = 0;
+	for (var j = 0; j < $('.textTarget').length; j++) {
+		var ele = $('.textTarget')[j];
+		if (ele.dataset.qid == questionId) {
+			fillBlankList.push(ele.innerText)
+			var content = "";
+			if (typeof (ele.dataset.chooseName) != "undefined") {
+				content = ele.dataset.chooseName;
+			}
+			index = index + 1;
+			var fillBlank = { "name" : index, "content": content };
+			fillBlanks.push(fillBlank);
+		}
+	}
+	for (var i = 0; i < $('.blanksBox span').length; i++) {
+		var e = $('.blanksBox span')[i];
+		if (e.dataset.qid == questionId) {
+			var count = 0;
+			fillBlankList.forEach(function (item) {
+				if (item.trim() == e.childNodes[0].nodeValue.trim()) {
+					count++
+				}
+			})
+
+			var dropNodeVal = e.childNodes[0].nodeValue;
+			if (count == 0) {
+				e.innerText = dropNodeVal;
+			} else {
+				e.innerText = dropNodeVal;
+				var iEle = document.createElement("i");
+				iEle.innerText = count;
+				e.appendChild(iEle);
+			}
+		}
+	}
+	var answerStr=JSON.stringify(fillBlanks);
+	$("#answer" + questionId).val(answerStr)
+	if (saveAnswer) {
+		saveFillinBlanks(questionId);
+	}
+}
+
+function previewFillinBlanksGetData () {
+	$('.fillBlanksChoose').each(function () {
+		getFillinBlanksData($(this).attr("data"), false);
+	})
+
+}
+
+
+
+

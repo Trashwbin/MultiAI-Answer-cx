@@ -1,0 +1,123 @@
+.timeDiv{height:80px;border-bottom:1px solid #F2F2F2;padding:0 24px;line-height:80px;font-size:24px;color:#646873}
+.timeDiv i{display:inline-block;width:20px;height:20px;vertical-align:middle;margin-right:10px;margin-top:-6px;}
+.btn_92_disable{width:92px;height:36px;background:url(../../../../../mooc2/images/btn_disable.png)no-repeat;box-shadow:0 4px 11px 0 rgba(86,82,255,0.17);border-radius:20px;}
+body{background: #f2f4f7}
+
+.fellback_icon{display:inline-block;width: 115px;height: 50px;background: #FFFFFF;box-shadow: 0px 2px 10px rgba(31, 35, 41, 0.1);border-radius: 32px;color: #3A8BFF;font-size: 16px;text-align:center;line-height:50px;position:fixed;bottom:10px;left: 10px;}
+.fellback_icon i{display:inline-block;width:24px;height:24px;vertical-align:middle; margin:-2px 8px 0 0}
+.fellback_icon i img{display:block;width:100%;height:100%}
+.fellback_icon:hover i,.fellback_icon:hover span{opacity:0.7}
+.Textcontent{display:block;width:380px;margin:0 auto;margin:26px auto;max-height:180px;box-sizing:border-box;border-radius: 4px;height:80px;line-height: 22px;font-size: 16px;color: #181E33;outline: none;border:1px solid #F2F2F2;padding:6px;font-family:"微软雅黑"}
+.Textcontent:hover{border:1px solid #CCDEF3;}
+.Textcontent:focus{background: #FFFFFF;border: 1px solid #FFFFFF;box-shadow: 0 0 4px 0px #75BAFF;border-radius: 4px;}
+#rebackPop .Marking{left:50%;top:50%;margin-left:-220px;margin-top:-180px}
+
+
+.fillBlanks {
+    /*width: 900px;*/
+    margin: 0 auto;
+    user-select: none;
+}
+
+.fillBlanks .title {
+    font-size: 16px;
+    color: #131B26;
+    padding-top: 16px;
+    font-weight: bold;
+}
+
+.fillBlanks .textContent {
+    color: #131B26;
+    font-size: 14px;
+    line-height: 22px;
+    margin: 0 20px;
+}
+
+.fillBlanks .textContent .gray {
+    color: #8A8B99;
+}
+
+.fillBlanks .textContent .textTarget {
+    display: inline;
+    padding: 3px 20px;
+    margin: 0 3px;
+    border-bottom: solid 1px #131B26;
+}
+
+.fillBlanks .textContent .textTarget.hasFill {
+    padding: 0;
+    color: #3A8BFF;
+    border: none;
+    cursor: move;
+}
+
+.fillBlanks .textContent .textTarget.hasFill:hover {
+    border-bottom: solid 1px #3A8BFF;
+}
+
+.fillBlanks .tips {
+    color: #131B26;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 20px;
+    padding: 16px 0 10px 0;
+    margin: 0 20px;
+}
+
+.fillBlanks .blanksBox {
+    background: #F7F8FA;
+    border-radius: 4px;
+    padding: 14px 0 0 14px;
+    margin: 0 20px;
+}
+
+.fillBlanks .blanksBox span {
+    display: inline-block;
+    background: #fff;
+    border: solid 1px #DADFE5;
+    border-radius: 4px;
+    color: #3A8BFF;
+    line-height: 18px;
+    font-size: 12px;
+    padding: 6px 14px;
+    margin-bottom: 16px;
+    margin-right: 14px;
+    position: relative;
+    cursor: move;
+}
+
+.fillBlanks .blanksBox span:hover {
+    border: solid 1px #3A8BFF;
+}
+
+.fillBlanks .blanksBox span i {
+    min-width: 12px;
+    height: 12px;
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    font-size: 12px;
+    font-style: normal;
+    color: #ffffff;
+    background-color: #3A8BFF;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.fillBlanks .textContent .textTarget.drop-over {
+    border-bottom: 1px solid #3A8BFF;
+}
+
+.fillBlanks .blanksBox.drop-over {
+    background-color: rgba(0, 0, 0, 0.3);
+}
+
+.top-subNav {
+    pointer-events: none;
+}
+
+.top-subNav * {
+    pointer-events: initial;
+}

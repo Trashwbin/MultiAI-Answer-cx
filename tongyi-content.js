@@ -72,8 +72,29 @@ class TongyiChatAssistant {
                 let content = '';
 
                 if (contentDiv) {
+                  // 克隆节点以避免修改原始内容
+                  const clonedDiv = contentDiv.cloneNode(true);
+
+                  // 处理有序列表，添加序号和换行
+                  const orderedLists = clonedDiv.querySelectorAll('ol');
+                  orderedLists.forEach(ol => {
+                    const items = ol.querySelectorAll('li');
+                    items.forEach((li, index) => {
+                      li.textContent = `${index + 1}. ${li.textContent}\n`;  // 添加换行
+                    });
+                  });
+
+                  // 处理无序列表，添加符号和换行
+                  const unorderedLists = clonedDiv.querySelectorAll('ul');
+                  unorderedLists.forEach(ul => {
+                    const items = ul.querySelectorAll('li');
+                    items.forEach(li => {
+                      li.textContent = `• ${li.textContent}\n`;  // 添加换行
+                    });
+                  });
+
                   // 处理代码块
-                  const codeBlocks = contentDiv.querySelectorAll('pre code');
+                  const codeBlocks = clonedDiv.querySelectorAll('pre code');
                   Array.from(codeBlocks).forEach(block => {
                     const codeContent = block.cloneNode(true);
                     const actionDiv = codeContent.querySelector('.tongyi-design-highlighter-right-actions');
@@ -88,7 +109,7 @@ class TongyiChatAssistant {
                       .trim() + '\n';
                   });
 
-                  content = contentDiv.textContent;
+                  content = clonedDiv.textContent;
                 }
 
                 console.log('通义千问回答内容:', content);

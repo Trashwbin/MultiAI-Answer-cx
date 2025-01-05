@@ -2,6 +2,7 @@
   "manifest_version": 3,
   "name": "AI Chat Helper",
   "version": "1.0",
+  "type": "module",
   "permissions": [
     "tabs",
     "clipboardRead",
@@ -9,9 +10,9 @@
     "storage"
   ],
   "host_permissions": [
-    "file://*",
-    "http://localhost/*",
+    "https://mooc1.chaoxing.com/*",
     "https://chat.deepseek.com/*",
+    "https://kimi.moonshot.cn/*",
     "https://tongyi.aliyun.com/*"
   ],
   "background": {
@@ -44,11 +45,16 @@
     },
     {
       "matches": [
-        "file://*",
-        "http://localhost/*"
+        "https://mooc1.chaoxing.com/*"
       ],
       "js": [
-        "question-content.js"
+        "config.js",
+        "questionExtractor.js",
+        "aiConfigModal.js",
+        "uiComponents.js",
+        "previewModal.js",
+        "answerHandler.js",
+        "main.js"
       ]
     }
   ]

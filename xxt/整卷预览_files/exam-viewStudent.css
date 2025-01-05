@@ -1,0 +1,514 @@
+@charset "utf-8";
+/* CSS Document */
+@font-face
+{
+    font-family: din;
+    src: url(../../mooc2/css/fonts/D-DINExp.otf);
+}
+/*布局*/
+.fanyaMarking{ width:1200px; margin:30px auto 30px; position:relative;}
+.whiteBg{background:#FFFFFF;}
+.fanyaMarking_left{ width:900px; border-radius:8px; min-height:1000px; -webkit-box-shadow:0px 2px 10px 0px rgba(237,238,240,0.5); box-shadow:0px 2px 10px 0px rgba(237,238,240,0.5);}
+.fanyaMarking_right{ width:280px; background:#FFFFFF; border-radius:8px; position:fixed; top:30px; margin-left:920px; -webkit-box-shadow:0px 2px 10px 0px rgba(237,238,240,0.5); box-shadow:0px 2px 10px 0px rgba(237,238,240,0.5);}
+.fanyaMarkingBootm{ width:100%; height:70px; background:#FFF; position:fixed; bottom:0; z-index:999; -webkit-box-shadow:0px -1px 12px 0px rgba(1,39,78,0.06); box-shadow:0px -1px 12px 0px rgba(1,39,78,0.06);}
+.radius8{border-radius:8px;}
+/*public*/
+.inputBranch{ width:58px; height:24px; line-height:24px; background:#FFFFFF; border:solid #E1E1E5 1px; font-size:14px; color:#3A8BFF; border-radius:4px; margin:-2px 6px 0 0; vertical-align:middle; text-align:center;}
+.inputBranch:hover{ border: 1px solid #CCDEF3;}
+.inputBranch:focus { outline:none; border: 1px solid #CCDEF3;box-shadow: 0 0 4px 0 #75BAFF;}
+.marginLeft30{margin-left:30px;}
+.marginRight30{margin-right:30px;}
+.marginRight40{margin-right:40px;}
+.colorGreen{ color:#00B86E;}
+.colorRed{ color:#F33F34;}
+.fontWeight{ font-weight:600;}
+.bntHoverTips{ height:40px; line-height:40px; text-align:center; font-family:Microsoft YaHei; font-size:12px; color:#FFF; background:rgba(24,30,51,0.80); border-radius:4px; display:block; position:absolute; top:-48px; z-index:99;}
+.bntHoverTips i{ display:block; width:0px; height:0px; border:solid rgba(24,30,51,0.80) 4px; position:absolute; left:50%; margin-left:-4px; top:40px; top:auto; border-color:rgba(24,30,51,0.80) transparent transparent transparent;}
+.catalog_tishi80>.bntHoverTips{ width:80px; left:50%; margin-left:-40px; opacity:0; visibility:hidden;
+    -webkit-transition:opacity 0.3s .1s, visibility 0.3s .1s;
+    -moz-transition:opacity 0.3s .1s, visibility 0.3s .1s;
+    -ms-transition:opacity 0.3s .1s, visibility 0.3s .1s;
+    -o-transition:opacity 0.3s .1s, visibility 0.3s .1s;
+    transition:opacity 0.3s .1s, visibility 0.3s .1s;
+}
+.catalog_tishi80:hover>.bntHoverTips{ display:block; opacity:1; visibility:visible;}
+
+/*左侧内容*/
+.mark_title{ line-height:25px; padding:30px 40px 0; font-size:18px; color:#181E33; font-weight:bold;width:575px;}
+.mark_table{/*margin-top:24px; padding-bottom:40px;*/}
+.mark_item{ margin:0 20px; font-size:14px;}
+/*.mark_item+.mark_item{ margin-top:30px;}*/
+.mark_item{ margin-bottom:10px;overflow:hidden}
+/* line-height:20px;*/
+.mark_name{ margin:0 20px; font-size:14px;overflow-wrap:break-word;line-height:1.6;font-weight: 400;}
+.mark_name .numLine{ border-bottom:solid #181E33 1px; padding:0 10px;}
+/*line-height:20px;*/
+.mark_letter{ margin:0 20px;line-height:20px;}
+.mark_letter li{ margin-top:16px;}
+
+.topicNumber_checkbox{ padding:20px; height:20px; line-height:20px;}
+.topicNumber_checkbox .inputCheck{ margin:1px 10px 0 0; cursor:pointer;}
+.topicNumber_checkbox label{ cursor:pointer;}
+
+.topicNumber_list{ padding-left:23px;}
+.topicNumber_list li{ width:32px; height:32px; line-height:32px; margin:0 16px 20px 0; background:#FFFFFF; border:solid #3A8BFF 1px; font-size:14px; color:#3A8BFF; float:left; border-radius:5px; text-align:center; cursor:pointer;}
+.topicNumber_list li.active{ background-color:#BFDAFF; border-color:#3A8BFF; color:#6BA9FF;}
+.topicNumber_list li.current{ background-color:#3A8BFF; border-color:#3A8BFF; color:#FFFFFF;}
+.topicNumber_list li:hover{ opacity:.7;}
+.topicNumber_list li.current:hover{ opacity:1;}
+.topicNumber_list li.redBorder{border:1px solid #F3938D;color:#F33F34}
+
+
+/*12.18*/
+.detailsHead{position:relative}
+.borderBom{border-bottom:1px solid #F2F2F2}
+.padBom20{padding-bottom:20px}
+.infoHead{padding:10px 0 0 40px;overflow:hidden;line-height:16px;color:#A8A8B3;font-size:14px;}
+.infoHead span{display:inline-block;padding-right:20px;}
+.infoHead p{display:inline-block;/* border-left:1px solid #f2f2f2; */height:16px;line-height:16px;padding:0 14px;margin-left:-6px;;}
+.infoHead p em{display:inline-block;padding:0 8px;}
+.infoHead p.rightBord{border-right:1px solid #f2f2f2;}
+.resultNum{position:absolute;right:40px;top:40px;color:#F7704E;font-size:14px;}
+.resultNum i{font-size:24px;font-family: din;}
+.borderBox{width:790px;border:1px solid #F0F3F7;border-left:5px solid #e1e7f0;margin:0 auto;margin-top:20px;padding:10px 15px;}
+.tit{font-size:14px;color:#181E33;line-height:30px;font-weight:bold;}
+.pcon{font-size:14px;color:#181E33}
+.markingInfo{width:810px;margin:0 auto;text-align:center;margin-top:20px;}
+.markingInfo ul{border-left:1px solid #F0F3F7;overflow:hidden;}
+.markingInfo ul li{height:50px;width:88px;display: flex; justify-content: center; align-items: center;float:left;font-size:14px;color:#181E33;padding:0 6px; border:1px solid #F0F3F7;border-left:0;border-top:0}
+.markingInfo ul:last-child li{border-top:none}
+.markingInfo ul:first-child li{border-top:1px solid #F0F3F7;}
+.markingInfo ul li span{overflow: hidden;  text-overflow: ellipsis;  display: -webkit-box;  -webkit-line-clamp: 2;  -webkit-box-orient: vertical;min-height:18px;line-height:18px;}
+
+.markingInfo ul li.li_gray{background:#F8F9FA;color:#181E33;font-weight:bold}
+
+.type_tit{padding-left:20px;/*padding:30px 0 30px 20px;*/margin-bottom:30px;font-size:16px;color:#181E33;font-weight:bold}
+.analysisDiv{padding-top:16px;}
+.analysis{font-size:13px;color:#A8A8B3;padding-bottom:10px;overflow:hidden}
+.analysis i{font-weight:bold;display:inline-block;width:65px;float:left}
+.analysis p{display:inline-block;width:590px;float:left;}
+
+.pad0{padding:0}
+.piyu{padding-bottom:20px;}
+.redo{color:#3A8BFF;padding-left:12px;}
+.redo i{display:inline-block;width:14px;height:14px;background:url(../images/eidt.png) no-repeat;background-size:100%;vertical-align:middle;margin:-4px 6px 0 0;}
+.redo:hover{opacity:0.7}
+.numRight{font-size:12px;}
+.numRight i{font-size:16px;font-family: din;}
+.rightPosition{position:absolute;right:30px;top:0;width:215px;}
+.rightPosition .resultNum{position:static}
+.Finalresult{color:#F7704E;font-size:12px;text-align:right;padding-top:12px;}
+.Finalresult span{font-size:14px;}
+.Finalresult span i{font-size:24px;font-family: din;padding:0 5px;}
+.AnswerCard{width:215px;height:29px;background:rgba(251,251,251,1);border-radius:15px;border:1px solid #F4F5F6;margin-top:6px;}
+.AnswerCard span{color:#91A0B5;font-size:12px;text-align:center}
+.recordSpan{width:100px;height:18px;border-right:1px solid #F2F2F2;text-align:center;line-height:18px;margin-top:6px;display:inline-block}
+.recordSpan i{display:inline-block;width:16px;height:16px;background:url(../../mooc2/images/jl.png) no-repeat;background-size:100%;vertical-align:middle;margin:-2px 6px 0 0}
+.recordSpan a{color:#91A0B5;}
+.recordSpan:hover{opacity:0.7}
+.achievement{width:110px;text-align:center;display:inline-block}
+.achievement i{font-size:16px;font-family: din;padding:0 5px;}
+.ulTab{width:100%;height:60px;border-bottom:1px solid #F2F2F2;overflow:hidden;margin-top:20px;padding:0 15px;}
+.ulTab li{float:left;margin-left:55px;line-height:60px;position:relative}
+.ulTab li a{color:#646873;font-size:16px;}
+.ulTab li a span{display:inline-block;width:34px;height:4px;background:#3B90FF;border-radius:2px;position:absolute;bottom:0;left:50%;margin-left:-17px;display:none}
+.ulTab li.cur a{color:#181E33;font-weight:bold}
+.ulTab li.cur a span{display:block}
+
+/*作答页*/
+.Fail{display:inline-block;padding:0 12px;border-radius:12px;background:#F2F5F7;font-size:12px;color:#737B86;height:24px;line-height:24px;}
+.Fail i{display:inline-block;width:12px;height:12px;background:url(../images/tipIc.png) no-repeat;background-size:100%;vertical-align:middle;margin:-2px 6px 0 0}
+.Fail:hover{opacity:0.7}
+
+.padTop20{padding-top:20px;}
+
+.whiteDiv .borderBox{margin-top:12px;margin-left:20px;width:770px;}
+
+.padTop40{padding-top:40px;}
+.padTop60{padding-top:60px}
+.marTop30{margin-top:30px;}
+.marBom40{margin-bottom:40px;}
+.marBom50{margin-bottom:50px;}
+.marBom30{margin-bottom:30px;}
+.marBom60{margin-bottom:60px;}
+
+/* 查看页 */
+/* line-height:20px;*/
+.mark_answer{ min-height:20px; padding:16px 20px; margin-top:16px; border:solid #F0F3F7 1px; border-left:5px solid #e1e7f0; position:relative;margin-left:20px;line-height:20px;}
+.mark_key{ padding-right:212px;}
+.mark_answer_key{ padding:16px 20px 0;}
+.mark_score{ position:absolute; right:20px; top:14px;}
+.mark_score .totalScore{ line-height:26px;font-size:12px; color:#181E33;font-family: din;display:inline-block;text-align:right;width:90px}
+.mark_score .totalScore i{font-size:22px;padding:0 5px;display:inline-block}
+.mark_judge{ width:32px; height:32px; position:relative; margin-left:20px;}
+.mark_judge_name{ width:26px; height:26px; font-size:26px; cursor:pointer;}
+/*.mark_judge_name:hover{ opacity:.7;}*/
+.marking_dui{margin-top:5px;}
+.mark_judge_con{ width:72px; background:#FFFFFF; border-radius:6px; position:absolute; top:32px; left:50%; margin-left:-36px; z-index:9; -webkit-box-shadow:0px 2px 12px 0px rgba(175,187,204,0.75); box-shadow:0px 2px 12px 0px rgba(175,187,204,0.75);}
+.mark_judge_con ul{ padding:6px 0;}
+.mark_judge_con li{ padding:4px 0; height:32px; line-height:32px; font-size:32px; text-align:center; cursor:pointer;}
+.mark_judge_con li:hover{ background:#F7FAFC;}
+.mark_fill+.mark_fill{ margin-top:16px;}
+.mark_fill dd,.mark_matching dd,.mark_fill_matching dd,.mark_sort dd+dd,.program+.program{ margin-top:6px;}
+.mark_fill{ zoom:1; overflow:hidden;width:650px}
+
+.mark_answer_score{ height:26px; line-height:26px;}
+.mark_answer_score .totalScore{ line-height:26px;}
+.mark_answer_score>a{ color:#91A0B5;}
+.mark_answer_score>a:hover{ opacity:.7;}
+.mark_answer_score>span{ color:#E8E9EB; margin:0 14px;}
+
+.kark_comment{ margin-top:16px; min-height:40px;}
+.kark_comment_input{ background:#FFFFFF; border:solid #E1EAF4 1px; color:#181E33; border-radius:4px; cursor:pointer;}
+.kark_comment_text{ min-height:20px; line-height:20px; padding:9px 14px; outline:none;}
+.kark_comment_text:empty::before { content:attr(placeholder); color:#E1E1E5;}
+.kark_comment_edit{ -webkit-box-shadow:0px 0px 4px 0px rgba(54,123,255,0.5); box-shadow:0px 0px 4px 0px rgba(54,123,255,0.5);}
+
+.mark_matching{ width:45%;}
+.mark_matching+.mark_matching{ margin-left:10%;}
+.mark_matching dt{ font-size:12px; color:#A8A8B3;}
+.mark_matching .control_pic img{ max-width:504px !important;}
+.mark_matching .control_table{ padding:0 !important;}
+.mark_matching .control_middle{ width:400px\0  !important;}
+
+/*连线*/
+.mark_fill_matching{ margin-right:50px;}
+.mark_fill_matching dd{ position:relative; height:20px; color:#C7C8D4;}
+.mark_fill_matching dd .num{ position:absolute; left:0; top:0;}
+.mark_fill_matching dd .line{ display:block; width:20px; height:1px; padding-top:10px; border-bottom:solid #C7C8D4 1px; margin-left:20px; overflow:hidden;}
+.mark_fill_matching dd .letter{ position:absolute; left:50px; top:0;}
+.mark_fill_matching.colorDeep dd .letter{ color:#181E33;}
+.mark_fill_matching.colorGreen dd .letter{ color:#00B86E;}
+
+/*完形*/
+/* line-height:20px;*/
+.mark_gestalt{ margin:16px 20px 0;line-height:20px;}
+.gestalt_row+.gestalt_row{ margin-top:30px;}
+.gestalt_row{ position:relative; padding-left:32px;}
+.gestalt_row dt{ position:absolute; left:0; top:0;}
+.gestalt_row dd{ margin-top:16px;}
+.gestalt_max{ max-width:530px; padding-left:6px; margin:0 !important; display:table;}
+.gestalt_max .gestalt_fill{ width:53px; display:inline-block;}
+.gestalt_max .gestalt_fill:nth-child(n+11){ margin-top:6px;}
+
+/*组件*/
+.control_table{ padding:0 20px;}
+.controlTop{ margin-top:10px;}
+.control_pic img{ max-width:600px;}
+.control_file{ background:#F7F8FA; padding:14px 16px; max-width:572px; zoom:1; overflow:hidden; cursor:pointer; position:relative;}
+.control_file:hover{ background:#F5F7FC;}
+.control_file:hover dt{ color:#3A4B87;}
+.control_file:hover dd{ color:#C7C8D4;}
+.control_icon{ width:42px; height:42px; overflow:hidden; margin-right:14px;}
+.control_icon img{ width:42px; height:42px; display:block;}
+.control_radius4{ border-radius:4px;}
+.control_radius50{ border-radius:50%;}
+.control_text{ min-height:42px; display:table-cell; vertical-align:middle;
+    display:-webkit-box; -webkit-box-pack:center; -webkit-box-orient:vertical; display:-moz-box; -moz-box-pack:center; -moz-box-orient:vertical;/*兼容火狐*/
+}
+.control_middle{ -webkit-box-flex:1; width:510px\0;
+    display:-webkit-box; -webkit-box-pack:center; -webkit-box-orient:vertical; display:-moz-box; -moz-box-pack:center; -moz-box-orient:vertical;/*兼容火狐*/
+}
+.control_middle dt{ padding-right:72px; padding-right:0\9; font-size:14px; color:#181E33; line-height:20px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;}
+.control_middle dd{ padding-right:72px; padding-right:0\9; line-height:18px; margin-top:4px; font-size:12px; color:#A8A8B3; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;}
+.mark_suke_anme{ max-width:380px; display:inline-block; vertical-align:middle; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;}
+.mark_suke{ width:36px; height:20px; line-height:20px; margin-left:10px; background:#61A8FF; font-size:12px; color:#FFFFFF; border-radius:4px; display:inline-block; vertical-align:middle; text-align:center;}
+
+/*阅读理解--题*/
+.mark_read{ margin-top:20px;}
+.mark_read .mark_item{ margin:0;}
+
+/*程序题*/
+.program{ min-height:20px; position:relative;}
+.program_name{ position:absolute; left:0; top:0;}
+.program_con{ padding-left:38px;}
+
+
+.program_table{ background:#FFFFFF; padding-bottom:20px; border-radius:4px;}
+.program_table th,.program_table td{ line-height:20px; text-align:left; padding:10px 0 10px 20px; vertical-align: top;}
+.program_table th{ border-bottom:solid #F2F2F2 1px;}
+.program_table .fs12{ font-size:12px;}
+.program_table .fs14{ font-size:14px;}
+
+.controlDele{ width:14px; height:14px; background:url(../images/marking/controlDele.png) no-repeat center/14px; position:absolute; right:30px; top:50%; margin-top:-7px;}
+
+.mark_read .mark_letter,.mark_read .mark_answer_key,.mark_read .mark_gestalt{ padding-bottom:0;}
+.mark_read .mark_item{margin-bottom:40px;}
+
+.jb_btn_60{width:60px;height:28px;background:url(../images/jb_btn_60.png) no-repeat 0 0;background-size:100%;line-height:28px;}
+.jb_btn_60:hover{background-position:0 -28px;}
+.jb_btn_60:active{background-position:left -56px}
+.jb_btn_60_disable{width:60px;height:28px;background:url(../images/jb_disable.png) no-repeat;background-size:100% 100%;box-shadow: 0 4px 11px 0 rgba(86,82,255,0.17);
+    border-radius: 20px;}
+.mar30{margin-right:30px;}
+.mar50{margin-right:50px;}
+.mar60{margin-right:60px;}
+.mar35{margin-right:35px;}
+.mar85{margin-right:85px;}
+.mar90{margin-right:90px;}
+.mar100{margin-right:100px;}
+.jb_btn_60_disable:hover{background:url(../images/jb_disable.png) no-repeat;background-size:100% 100%;}
+.jb_btn_60_disable:active{background:url(../images/jb_disable.png) no-repeat;background-size:100% 100%;}
+
+/*2020.10.10B型题新加样式*/
+.B-info{font-size:14px;color:#A8A8B3;padding-top:16px;margin :0 20px;}
+.mark_sort p.B_daan{display:inline-block}
+.mark_sort p.B_daan span{display:inline-block;padding:0 13px;line-height:24px;}
+.B_piyu_div{border-top:1px solid #F2F2F2;padding:0 40px;}
+.B_piyu_div h3{font-size:14px;color:#181E33;font-weight:bold;line-height:44px;padding-top:8px;}
+.colorOrange{color:#F97047}
+.colorOrange .inputBranch{width:80px;height:32px;line-height:32px;font-size:24px;color:#F7704E}
+.colorOrange .inputBranch:focus{ border: 1px solid #E1E1E5 ;box-shadow:none;}
+.B_stem{padding:30px 20px 0 20px}
+.B_stem p{font-size:14px;color:#181E33;padding-bottom:16px;line-height:20px;display: inline-block;}
+.B-choice p{display: inline-block;}
+
+.spanYellow{color:#F28B24;padding:0 5px;}
+
+.ranktips{position:relative;margin-left:5px;display: inline-block;}
+.ranktips .tipsIc{display:inline-block;width: 14px;height: 14px;background:url(../../mooc2/images/rank.png) no-repeat;background-size:100%;}
+.ranktips .tipsCon{position:absolute;left:-40px;top:-42px;width:92px;height:37px;background: rgba(24,30,51,0.80);border-radius: 4px;opacity: 0; visibility: hidden;-webkit-transition: opacity 0.1s 1s, visibility 0s 0.3s;transition: opacity 0.1s 1s, visibility 0s 0.3s;text-align:center;line-height:37px;color:#fff;font-size:12px;}
+.ranktips .tipsCon i{ display:block; width:0px; height:0px; border:solid rgba(24,30,51,0.80) 4px; position:absolute; left:43px; top:37px; bottom:auto; border-color:rgba(24,30,51,0.80) transparent transparent transparent;}
+.ranktips .tipsCon i.active{ display:block; width:0px; height:0px; border:solid rgba(24,30,51,0.80) 4px; position:absolute; left:50%; margin-left:-4px; bottom:40px; top:auto; border-color:transparent transparent rgba(24,30,51,0.80) transparent;}
+.ranktips .tipsConHover{ display:block; opacity:1; visibility:visible; -webkit-transition:opacity 0.3s 0.1s, visibility 0.3s 0.1s; transition:opacity 0.3s 0.1s, visibility 0.3s 0.1s;}
+
+.questionLi img{max-width: 100%}
+
+.analysisCard{
+    height: 29px;
+    background: rgba(251,251,251,1);
+    border-radius: 15px;
+    border: 1px solid #F4F5F6;
+    padding: 0 18px;
+    text-align: center;
+    line-height: 29px;
+    margin-left: 20px;
+}
+.analysisCard a{
+    color: #91A0B5;
+}
+.analysisCard a i {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    background: url(../../mooc2/images/insight_gray.png) no-repeat;
+    background-size: 100%;
+    vertical-align: middle;
+    margin: -2px 6px 0 0;
+}
+.padBom50 {
+    padding-bottom: 50px;
+}
+.program_answer_font{font-weight:bold;font-size:14px;color:#181E33;min-width:42px;margin-right:4px}
+.program_answer p,.program_answer span{color: #00B86E!important;}
+.program_answer{padding-left: 30px;}
+
+.TiMu img{max-width: 100%}
+
+.element-invisible-hidden {
+    position: absolute !important;
+    clip: rect(1px 1px 1px 1px); /* IE6, IE7 */
+    clip: rect(1px, 1px, 1px, 1px);
+}
+
+/* 选词填空选项样式 */
+.fillBlanks .blanksBox {
+    background: #F7F8FA;
+    border-radius: 4px;
+    padding: 14px 0 0 14px;
+}
+
+.fillBlanks .blanksBox span {
+    display: inline-block;
+    background: #fff;
+    border: solid 1px #DADFE5;
+    border-radius: 4px;
+    color: #3A8BFF;
+    line-height: 18px;
+    font-size: 12px;
+    padding: 6px 14px;
+    margin-bottom: 16px;
+    margin-right: 14px;
+    position: relative;
+    cursor: auto;
+}
+
+
+
+.know-point .selfExamTopicName{display:inline-block;padding:0 14px;height: 20px;line-height: 20px;font-size: 12px;color: #8A8B99;border: 1px solid #DADFE6;border-radius: 4px;margin-right: 16px;margin-bottom: 10px;}
+
+.task_number_list{padding-left:20px; padding-top: 20px}
+.task_number_list .topicNumber_list{float:left !important;padding-left:0}
+
+.wrongPractise{
+  border-left: 1px solid #f2f2f2;
+  margin-left: 14px;
+  padding-left: 14px;
+}
+.analysisCard a.wrongPractise i {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    background: url(../../mooc2/images/practice.png) no-repeat;
+    background-size: 100%;
+    vertical-align: middle;
+    margin: -3px 6px 0 0;
+}
+
+/**2024.09.11-主页和右侧答题卡区增加显示分卷名称和说明**/
+.mark_table .volumeLootTitBx{margin-top:0}
+.volumeLootTitBx{margin: 30px;text-align:center}
+.volumeLootTitBx h3{font-size:18px;font-weight:600;line-height:25px}
+.volumeLootTitBx p{font-size:14px;color:#8A8B99;line-height:20px;margin-top:8px}
+
+.markingRight_paper{margin:20px 20px 0 20px}
+.markingRight_paper h3{line-height:20px;font-size:14px;font-weight:600;}
+.markingRight_paper h3 i{float:left;width:4px;height:20px;background:#3A8BFF;border-radius:1px;margin-right:10px;}
+.markingRight_paper p{font-size:12px;color:#8A8B99;line-height:17px;margin-top:8px}
+.ellisOne{white-space: nowrap; overflow: hidden;text-overflow: ellipsis;}
+
+.specil_paper{width:100%;overflow:hidden;margin:0 0 20px 0}
+
+.aiArea {
+    width: 100%;
+    padding-right: 110px;
+    position: relative;
+    box-sizing: border-box;
+}
+
+.aiAssistant {
+    display: inline-block;
+    width: 92px;
+    height: 36px;
+    text-align: center;
+    border-radius: 36px;
+    background: linear-gradient(125.5deg, rgba(30, 215, 252, 0.6) -24.6%, rgba(58, 107, 255, 0.6) 47.94%, rgba(201, 38, 255, 0.6) 126.23%);
+    line-height: 34px;
+    font-size: 14px;
+    color: #131B26;
+    position: absolute;
+    right: 0;
+    top: 0;
+    padding: 1px;
+    box-sizing: border-box;
+}
+.aiAssistant span{
+    display: inline-block;
+    width: 100%;
+    height: 100%;
+    background: #EAF0FF;
+    border-radius: 99px;
+}
+.aiAssistant span::before {
+    content: '';
+    width: 16px;
+    height: 16px;
+    background: url(../images/iconAI.png) no-repeat;
+    background-size: 100%;
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 4px;
+    margin-top: -2px;
+}
+.aiAssistant span  i{
+    background: linear-gradient(125.5deg, #1ED7FC -24.6%, #3A6BFF 47.94%, #C926FF 126.23%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.aiAssistant:hover span{
+    background:linear-gradient(125.5deg, #CEEEFF 0%, #DDDDFF 49.5%, #DDDDFF 100%)
+}
+
+
+/*2024.11.9日学生端查看教师批注*/
+
+.selectable-text .comment_border {
+    border-bottom: 2px solid #fc3;
+	cursor: pointer;
+}
+.selectable-text .comment_border:hover{
+	background-color: #faf1d1 !important;
+}
+.selectable-text .comment_clicked {
+    border-bottom: 2px solid #fc3 !important;
+    background-color: #faf1d1 !important;
+}
+.commentItem{
+    padding:14px;
+    background:#fff;
+    position:relative;
+    border-radius:3px;
+    cursor: pointer;
+    box-sizing: border-box;
+	border:1px solid #F0F3F7;
+	border-radius:3px;
+	margin-top:16px;
+}
+.commentItem::after{
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 5px;
+    height: 100%;
+ 	background: #FFD866;
+}
+.timuTit{
+    color:#8A8B99;
+    width:100%;
+    white-space:nowrap;text-overflow:ellipsis;-o-text-overflow:ellipsis; overflow: hidden;
+    margin-bottom:10px;
+}
+.comItemScore{
+    font-size:20px;
+    font-weight:700;
+    font-family: ddin;
+    line-height:24px;
+    margin-bottom:10px;
+}
+
+.comItemcont{
+    color:#131B26;
+    font-size:14px;
+    line-height:22px;
+  
+}
+.CurcommentItem{
+    background:#FEF8E5;
+}
+
+/*批注气泡*/
+.hoverPz{
+	width:240px;
+	padding:16px;
+	border-radius:4px;
+	background: rgba(24, 30, 51, 0.8);
+	color:#fff;
+	font-size:12px;
+	position:absolute;
+	z-index: 1001;
+	display:none;
+}
+.hoverPz .hoverpz-top{
+	font-size:14px;
+	font-weight:500;
+	line-height:18px;
+	margin-bottom:5px;
+}
+.hoverPz .hoverpz-top .hover-py-num{
+	font-family: din;
+	font-weight:700;
+	font-size:16px;
+}
+.hoverPz::after{
+	content: '';
+	position:absolute;
+	left:40px;
+	bottom:-6px;
+	width: 0;
+	height: 0;
+	border-style: solid;
+	border-width: 6px 5px 0  6px;
+	border-color: rgba(24, 30, 51, 0.8) transparent   transparent ;
+}
