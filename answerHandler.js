@@ -1162,39 +1162,11 @@ async function fillBlankAnswers(questionDiv, answers) {
         cancelable: true
       }));
 
-      // 5. 找到保存按钮并提取参数
+      // 5. 找到并点击保存按钮
       const saveBtn = answerDiv.querySelector('.savebtndiv .jb_btn');
       if (saveBtn) {
-        console.log('找到保存按钮');
-        const onclickAttr = saveBtn.getAttribute('onclick');
-        if (onclickAttr) {
-          // 提取函数参数
-          const match = onclickAttr.match(/saveQuestion\(['"](\d+)['"],\s*['"](\d+)['"]\)/);
-          if (match) {
-            const [_, qid, subId] = match;
-            console.log('提取到保存参数:', qid, subId);
-
-            // 创建一个新的按钮来触发保存
-            const tempBtn = document.createElement('button');
-            tempBtn.style.display = 'none';
-            tempBtn.addEventListener('click', () => {
-              try {
-                // 调用原页面的保存函数
-                const frameContent = document.querySelector('iframe[name="frame_content"]');
-                if (frameContent && frameContent.contentWindow.saveQuestion) {
-                  frameContent.contentWindow.saveQuestion(qid, subId);
-                  console.log('保存成功');
-                }
-              } catch (error) {
-                console.error('保存失败:', error);
-              }
-            });
-
-            document.body.appendChild(tempBtn);
-            tempBtn.click();
-            tempBtn.remove();
-          }
-        }
+        console.log('点击保存按钮');
+        saveBtn.click();
       } else {
         console.error('未找到保存按钮');
       }
@@ -1207,6 +1179,7 @@ async function fillBlankAnswers(questionDiv, answers) {
     }
   }
 }
+
 
 // 判断题处理器
 class JudgeHandler extends QuestionHandler {
@@ -1294,26 +1267,36 @@ class QAHandler extends QuestionHandler {
     const answer = this.getAnswer();
     if (!answer) return;
 
-    const questionDiv = document.querySelector(`[data="${this.questionNum}"]`);
-    if (!questionDiv) return;
+    // 先尝试使用题号查找
+    const questions = document.querySelectorAll('.questionLi');
+    const question = Array.from(questions).find(q => {
+      const titleNumber = q.querySelector('.mark_name')?.textContent?.trim()?.split('.')[0];
+      return titleNumber === this.questionNum.toString();
+    });
 
-    const editor = UE.getEditor(`answerEditor${this.questionNum}`);
-    if (editor) {
-      if (editor.isReady) {
-        editor.setContent(answer);
-        const saveBtn = questionDiv.querySelector(`#save_${this.questionNum}`);
-        if (saveBtn) saveBtn.click();
-      } else {
-        await new Promise(resolve => {
-          editor.addListener('ready', () => {
-            editor.setContent(answer);
-            const saveBtn = questionDiv.querySelector(`#save_${this.questionNum}`);
-            if (saveBtn) saveBtn.click();
-            resolve();
-          });
-        });
-      }
+    if (question) {
+      console.log('通过题号找到题目:', question);
+      await fillQAAnswers(question, answer);
+      return;
     }
+
+    // 如果通过题号找不到，再尝试使用 data 属性查找
+    const questionDiv = document.querySelector(`.questionLi[data="${this.questionNum}"]`);
+    if (questionDiv) {
+      console.log('通过 data 属性找到题目:', questionDiv);
+      await fillQAAnswers(questionDiv, answer);
+      return;
+    }
+
+    // 最后尝试使用 id 查找
+    const questionById = document.querySelector(`#sigleQuestionDiv_${this.questionNum}`);
+    if (questionById) {
+      console.log('通过 id 找到题目:', questionById);
+      await fillQAAnswers(questionById, answer);
+      return;
+    }
+
+    console.error('未找到题目:', this.questionNum);
   }
 }
 
@@ -1616,27 +1599,36 @@ async function autoFillJudge(questionNum, answer) {
 }
 
 async function autoFillQA(questionNum, answer) {
-  // 使用 data 属性查找题目
-  const questionDiv = document.querySelector(`.questionLi[data="${questionNum}"]`);
-  if (!questionDiv) {
-    // 尝试使用题号查找
-    const questions = document.querySelectorAll('.questionLi');
-    const question = Array.from(questions).find(q => {
-      const titleNumber = q.querySelector('.mark_name')?.firstChild?.textContent?.trim();
-      return titleNumber === `${questionNum}.`;
-    });
+  // 先尝试使用题号查找
+  const questions = document.querySelectorAll('.questionLi');
+  const question = Array.from(questions).find(q => {
+    const titleNumber = q.querySelector('.mark_name')?.textContent?.trim()?.split('.')[0];
+    return titleNumber === questionNum.toString();
+  });
 
-    if (!question) {
-      console.error('未找到原题目:', questionNum);
-      return;
-    }
-
+  if (question) {
     console.log('通过题号找到题目:', question);
     await fillQAAnswers(question, answer);
-  } else {
+    return;
+  }
+
+  // 如果通过题号找不到，再尝试使用 data 属性查找
+  const questionDiv = document.querySelector(`.questionLi[data="${questionNum}"]`);
+  if (questionDiv) {
     console.log('通过 data 属性找到题目:', questionDiv);
     await fillQAAnswers(questionDiv, answer);
+    return;
   }
+
+  // 最后尝试使用 id 查找
+  const questionById = document.querySelector(`#sigleQuestionDiv_${questionNum}`);
+  if (questionById) {
+    console.log('通过 id 找到题目:', questionById);
+    await fillQAAnswers(questionById, answer);
+    return;
+  }
+
+  console.error('未找到题目:', questionNum);
 }
 
 async function fillQAAnswers(questionDiv, answer) {
@@ -1676,18 +1668,7 @@ async function fillQAAnswers(questionDiv, answer) {
     const saveBtn = answerDiv.querySelector('.savebtndiv .jb_btn');
     if (saveBtn) {
       console.log('点击保存按钮');
-      // 从 onclick 属性中提取参数
-      const onclickAttr = saveBtn.getAttribute('onclick');
-      const match = onclickAttr.match(/saveQuestion\(['"](\d+)['"],\s*['"](\d+)['"]\)/);
-      if (match) {
-        const [_, qid, subId] = match;
-        // 创建并触发自定义事件
-        const saveEvent = new CustomEvent('saveAnswer', {
-          detail: { qid, subId }
-        });
-        saveBtn.dispatchEvent(saveEvent);
-        console.log('触发保存事件');
-      }
+      saveBtn.click();
     } else {
       console.error('未找到保存按钮');
     }
@@ -1699,18 +1680,3 @@ async function fillQAAnswers(questionDiv, answer) {
     console.error('填写答案失败:', error);
   }
 }
-
-// 添加事件监听器
-document.addEventListener('saveAnswer', (e) => {
-  const { qid, subId } = e.detail;
-  try {
-    // 获取原页面的 window 对象
-    const frameContent = document.querySelector('iframe[name="frame_content"]');
-    if (frameContent && frameContent.contentWindow) {
-      // 在原页面的上下文中调用保存函数
-      frameContent.contentWindow.eval(`saveQuestion('${qid}', '${subId}')`);
-    }
-  } catch (error) {
-    console.error('保存失败:', error);
-  }
-}); 
