@@ -49,4 +49,18 @@ function getQuestionType(typeStr) {
     }
   }
   return 'other';
-} 
+}
+
+function removeWatermarks() {
+  // 使用正则表达式匹配ID为 mask_div 后跟数字的元素
+  const watermarks = document.querySelectorAll('div[id^="mask_div"]');
+  watermarks.forEach(watermark => {
+    watermark.remove();
+  });
+}
+
+// 在页面加载完成后执行
+document.addEventListener('DOMContentLoaded', removeWatermarks);
+
+// 为了防止动态添加的水印，可以定期检查并删除
+setInterval(removeWatermarks, 2000); 
