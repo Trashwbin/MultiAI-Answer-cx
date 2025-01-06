@@ -63,29 +63,89 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     case 'ANSWER_READY':
       console.log('收到AI回答:', request.aiType, request.answer);
-      console.log('当前题目页面 tabId:', questionTabId);
+      handleAnswerReady(request);
+      return true;
 
-      // 如果没有 questionTabId，尝试从 sender 获取
-      if (!questionTabId) {
-        chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-          if (tabs[0] && tabs[0].url.includes('mooc1.chaoxing.com')) {
-            questionTabId = tabs[0].id;
-          }
-        });
-      }
-
-      if (questionTabId) {
-        chrome.tabs.sendMessage(questionTabId, {
-          type: 'SHOW_ANSWER',
-          answer: request.answer,
-          aiType: request.aiType
-        });
-      } else {
-        console.error('未找到题目页面');
-      }
+    case 'QUESTION_PAGE_READY':
+      console.log('题目页面已就绪:', sender.tab.id);
+      questionTabId = sender.tab.id;
       return true;
   }
 });
+
+// 处理AI回答准备就绪
+async function handleAnswerReady(request) {
+  console.log('当前题目页面 tabId:', questionTabId);
+
+  // 如果没有 questionTabId，尝试查找题目页面
+  if (!questionTabId) {
+    try {
+      const tabs = await chrome.tabs.query({});
+      for (const tab of tabs) {
+        if (tab.url && tab.url.includes('mooc1.chaoxing.com')) {
+          console.log('找到题目页面:', tab.id);
+          questionTabId = tab.id;
+          break;
+        }
+      }
+    } catch (error) {
+      console.error('查找题目页面失败:', error);
+    }
+  }
+
+  // 如果仍然没有找到题目页面，尝试重试几次
+  if (!questionTabId) {
+    let retryCount = 0;
+    const maxRetries = 3;
+    const retryInterval = 1000; // 1秒
+
+    const findQuestionTab = async () => {
+      try {
+        const tabs = await chrome.tabs.query({});
+        for (const tab of tabs) {
+          if (tab.url && tab.url.includes('mooc1.chaoxing.com')) {
+            console.log('重试成功，找到题目页面:', tab.id);
+            questionTabId = tab.id;
+            // 发送答案
+            chrome.tabs.sendMessage(questionTabId, {
+              type: 'SHOW_ANSWER',
+              answer: request.answer,
+              aiType: request.aiType
+            });
+            return true;
+          }
+        }
+        return false;
+      } catch (error) {
+        console.error('重试查找题目页面失败:', error);
+        return false;
+      }
+    };
+
+    const retry = async () => {
+      if (retryCount >= maxRetries) {
+        console.error('达到最大重试次数，未找到题目页面');
+        return;
+      }
+
+      retryCount++;
+      console.log(`第 ${retryCount} 次重试查找题目页面...`);
+
+      if (!await findQuestionTab()) {
+        setTimeout(retry, retryInterval);
+      }
+    };
+
+    retry();
+  } else {
+    // 直接发送答案
+    chrome.tabs.sendMessage(questionTabId, {
+      type: 'SHOW_ANSWER',
+      answer: request.answer,
+      aiType: request.aiType
+    });
+  }
+}
 
 // 处理问题发送
 async function handleQuestion(request, fromTabId, sendResponse) {

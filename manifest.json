@@ -10,7 +10,7 @@
     "storage"
   ],
   "host_permissions": [
-    "https://mooc1.chaoxing.com/*",
+    "https://*.chaoxing.com/*",
     "https://chat.deepseek.com/*",
     "https://kimi.moonshot.cn/*",
     "https://tongyi.aliyun.com/*"
@@ -19,6 +19,26 @@
     "service_worker": "background.js"
   },
   "content_scripts": [
+    {
+      "matches": [
+        "https://*.chaoxing.com/*/work*",
+        "https://*.chaoxing.com/*/mooc2/work*",
+        "https://*.chaoxing.com/*/exam*",
+        "https://*.chaoxing.com/*/mooc2/exam*",
+        "https://*.chaoxing.com/*/test*",
+        "https://*.chaoxing.com/*/mooc2/test*",
+        "https://*.chaoxing.com/mycourse/studentstudy*"
+      ],
+      "js": [
+        "config.js",
+        "questionExtractor.js",
+        "aiConfigModal.js",
+        "previewModal.js",
+        "answerHandler.js",
+        "main.js"
+      ],
+      "run_at": "document_end"
+    },
     {
       "matches": [
         "https://kimi.moonshot.cn/*"
@@ -41,20 +61,6 @@
       ],
       "js": [
         "tongyi-content.js"
-      ]
-    },
-    {
-      "matches": [
-        "https://mooc1.chaoxing.com/*"
-      ],
-      "js": [
-        "config.js",
-        "questionExtractor.js",
-        "aiConfigModal.js",
-        "uiComponents.js",
-        "previewModal.js",
-        "answerHandler.js",
-        "main.js"
       ]
     }
   ]

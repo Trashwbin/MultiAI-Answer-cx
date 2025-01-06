@@ -1,3 +1,7 @@
+// 主入口文件
+console.log('题目页面脚本开始加载...');
+
+// 加载状态管理
 const loadingState = {
   status: {},
   updateUI(aiType, isLoading) {
@@ -6,6 +10,7 @@ const loadingState = {
   }
 };
 
+// 更新加载状态UI
 function updateLoadingUI(aiType, isLoading) {
   const panel = document.querySelector('.ai-panel');
   if (!panel) return;
@@ -24,6 +29,7 @@ function updateLoadingUI(aiType, isLoading) {
   }
 }
 
+// 发送到AI
 function sendToAI(aiType, question = null) {
   // 如果没有传入问题，则获取当前选中的题目
   if (!question) {
@@ -71,9 +77,12 @@ function sendToAI(aiType, question = null) {
   });
 }
 
+// 发送到所有AI
 function sendToAllAIs() {
   Object.keys(AI_CONFIG).forEach(aiType => {
-    sendToAI(aiType);
+    if (AI_CONFIG[aiType].enabled) {
+      sendToAI(aiType);
+    }
   });
 }
 
@@ -140,117 +149,59 @@ function createFloatingPanel() {
 
   panel.appendChild(previewButton);
   panel.appendChild(showAnswersButton);
-
   document.body.appendChild(panel);
 }
 
-// 初始化
-function init() {
-  if (document.querySelector('.questionLi')) {
-    createFloatingPanel();
+// 初始化函数
+async function initialize() {
+  console.log('开始初始化...');
+
+  // 等待配置和工具加载
+  if (!window.QUESTION_TYPES || !window.AI_CONFIG) {
+    console.error('配置未加载，等待重试...');
+    setTimeout(initialize, 500);
+    return;
+  }
+
+  try {
+    // 监听来自background的消息
+    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+      console.log('题目页面收到消息:', request.type);
+
+      switch (request.type) {
+        case 'SHOW_ANSWER':
+          console.log('收到答案:', request.aiType, request.answer);
+          updateAnswerPanel(request.aiType, request.answer);
+          loadingState.updateUI(request.aiType, false);
+          break;
+      }
+    });
+
+    // 创建浮动面板
+    if (document.querySelector('.questionLi')) {
+      createFloatingPanel();
+    }
+
+    // 通知background.js题目页面已准备就绪
+    chrome.runtime.sendMessage({
+      type: 'QUESTION_PAGE_READY'
+    });
+
+    console.log('初始化完成');
+  } catch (error) {
+    console.error('初始化失败:', error);
   }
 }
 
-window.addEventListener('load', init);
+// 在页面加载完成后初始化
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initialize);
+} else {
+  initialize();
+}
 
-// 处理消息
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  console.log('main.js 收到消息:', request);
-  console.log('sender:', sender);
-
-  if (request.type === 'SHOW_ANSWER') {
-    console.log('显示答案:', request.aiType, request.answer);
-    try {
-      // 确保答案模态框存在
-      if (!document.getElementById('ai-answers-modal')) {
-        showAnswersModal();
-      }
-
-      // 等待模态框创建完成
-      setTimeout(() => {
-        loadingState.updateUI(request.aiType, false);
-        updateAnswerPanel(request.aiType, request.answer);
-      }, 100);
-
-    } catch (error) {
-      console.error('处理答案时出错:', error);
-    }
-  }
-  return true;
-});
-
-// 导出到全局
-window.loadingState = loadingState;
+// 导出需要的函数和对象
 window.sendToAI = sendToAI;
 window.sendToAllAIs = sendToAllAIs;
-
-// 修改答案面板的标题行，添加重发按钮
-function createAIColumn(aiType, config) {
-  const aiCol = document.createElement('div');
-  aiCol.className = `ai-answer-${aiType}`;
-  aiCol.style.cssText = `
-    flex: 1;
-    background: white;
-    border-radius: 8px;
-    padding: 15px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  `;
-
-  const header = document.createElement('div');
-  header.style.cssText = `
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 10px;
-  `;
-
-  const title = document.createElement('div');
-  title.style.cssText = `
-    font-weight: bold;
-    color: ${config.color};
-    font-size: 14px;
-  `;
-  title.textContent = config.name;
-
-  const retryBtn = document.createElement('button');
-  retryBtn.innerHTML = '↻';
-  retryBtn.title = '重新发送';
-  retryBtn.style.cssText = `
-    background: none;
-    border: none;
-    color: ${config.color};
-    cursor: pointer;
-    font-size: 16px;
-    padding: 4px;
-    border-radius: 4px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    opacity: 0.8;
-    transition: opacity 0.2s;
-  `;
-  retryBtn.onmouseover = () => retryBtn.style.opacity = '1';
-  retryBtn.onmouseout = () => retryBtn.style.opacity = '0.8';
-  retryBtn.onclick = () => {
-    const currentQuestion = document.querySelector('#ai-answers-modal').dataset.currentQuestion;
-    if (currentQuestion) {
-      sendToAI(aiType, currentQuestion);
-    }
-  };
-
-  header.appendChild(title);
-  header.appendChild(retryBtn);
-  aiCol.appendChild(header);
-
-  const answerContent = document.createElement('div');
-  answerContent.className = 'answer-content';
-  answerContent.style.cssText = `
-    white-space: pre-wrap;
-    font-family: monospace;
-    font-size: 14px;
-    line-height: 1.5;
-  `;
-  aiCol.appendChild(answerContent);
-
-  return aiCol;
-} 
+window.showPreviewModal = showPreviewModal;
+window.loadingState = loadingState; 

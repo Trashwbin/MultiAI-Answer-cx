@@ -80,13 +80,21 @@ class DeepSeekChatAssistant {
                   // 克隆节点以避免修改原始内容
                   const clonedDiv = contentDiv.cloneNode(true);
 
+                  // 处理 br 标签，将其替换为换行符
+                  const brTags = clonedDiv.querySelectorAll('br');
+                  brTags.forEach(br => {
+                    br.replaceWith('\n');
+                  });
+
                   // 处理有序列表，添加序号和换行
                   const orderedLists = clonedDiv.querySelectorAll('ol');
                   orderedLists.forEach(ol => {
                     const items = ol.querySelectorAll('li');
                     items.forEach((li, index) => {
-                      li.textContent = `${index + 1}. ${li.textContent}\n`;  // 添加换行
+                      li.textContent = `${index + 1}. ${li.textContent}\n`;
                     });
+                    // 在列表后添加空行
+                    ol.insertAdjacentHTML('afterend', '\n');
                   });
 
                   // 处理无序列表，添加符号和换行
@@ -94,8 +102,16 @@ class DeepSeekChatAssistant {
                   unorderedLists.forEach(ul => {
                     const items = ul.querySelectorAll('li');
                     items.forEach(li => {
-                      li.textContent = `• ${li.textContent}\n`;  // 添加换行
+                      li.textContent = `• ${li.textContent}\n`;
                     });
+                    // 在列表后添加空行
+                    ul.insertAdjacentHTML('afterend', '\n');
+                  });
+
+                  // 处理段落，在每个段落后添加空行
+                  const paragraphs = clonedDiv.querySelectorAll('p');
+                  paragraphs.forEach(p => {
+                    p.insertAdjacentHTML('afterend', '\n');
                   });
 
                   // 处理代码块
@@ -106,11 +122,23 @@ class DeepSeekChatAssistant {
                     if (actionDiv) {
                       actionDiv.remove();
                     }
-                    // 替换原始代码块为处理后的内容
+                    // 在代码块前后添加空行
                     block.innerHTML = '\n' + codeContent.textContent.trim() + '\n';
+                    block.insertAdjacentHTML('beforebegin', '\n');
+                    block.insertAdjacentHTML('afterend', '\n');
+                  });
+
+                  // 处理标题，在标题前后添加空行
+                  const headings = clonedDiv.querySelectorAll('h1, h2, h3, h4, h5, h6');
+                  headings.forEach(heading => {
+                    heading.insertAdjacentHTML('beforebegin', '\n');
+                    heading.insertAdjacentHTML('afterend', '\n');
                   });
 
                   content = clonedDiv.textContent;
+
+                  // 处理连续的多个空行，将其规范化为最多两个空行
+                  content = content.replace(/\n{3,}/g, '\n\n');
                 }
 
                 console.log('DeepSeek回答内容:', content);
