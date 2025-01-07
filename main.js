@@ -1,5 +1,20 @@
-// 主入口文件
-console.log('题目页面脚本开始加载...');
+// 监听来自 popup 的消息
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  try {
+    switch (message.action) {
+      case 'showQuestionList':
+        // 显示题目列表
+        showPreviewModal();
+        break;
+      case 'showAnswers':
+        // 显示 AI 答案
+        showAnswersModal();
+        break;
+    }
+  } catch (error) {
+    console.error('处理消息时出错:', error);
+  }
+});
 
 // 加载状态管理
 const loadingState = {
@@ -12,10 +27,10 @@ const loadingState = {
 
 // 更新加载状态UI
 function updateLoadingUI(aiType, isLoading) {
-  const panel = document.querySelector('.ai-panel');
-  if (!panel) return;
+  const modal = document.getElementById('ai-answers-modal');
+  if (!modal) return;
 
-  const button = panel.querySelector(`button[data-ai="${aiType}"]`);
+  const button = modal.querySelector(`button[data-ai="${aiType}"]`);
   if (!button) return;
 
   if (isLoading) {
@@ -86,72 +101,6 @@ function sendToAllAIs() {
   });
 }
 
-// 创建浮动面板
-function createFloatingPanel() {
-  const panel = document.createElement('div');
-  panel.className = 'ai-panel';
-  panel.style.cssText = `
-    position: fixed;
-    right: 20px;
-    top: 50%;
-    transform: translateY(-50%);
-    background: white;
-    border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    padding: 10px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    z-index: 9999;
-  `;
-
-  // 显示题目列表按钮
-  const previewButton = document.createElement('button');
-  previewButton.textContent = '显示题目列表';
-  previewButton.style.cssText = `
-    padding: 8px 16px;
-    background: #4caf50;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    white-space: nowrap;
-  `;
-  previewButton.onclick = () => {
-    // 如果答案模态框存在，先关闭它
-    const answersModal = document.getElementById('ai-answers-modal');
-    if (answersModal) {
-      answersModal.remove();
-    }
-    showPreviewModal();
-  };
-
-  // 显示AI答案按钮
-  const showAnswersButton = document.createElement('button');
-  showAnswersButton.textContent = '显示AI答案';
-  showAnswersButton.style.cssText = `
-    padding: 8px 16px;
-    background: #2196f3;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    white-space: nowrap;
-  `;
-  showAnswersButton.onclick = () => {
-    // 如果题目列表模态框存在，先关闭它
-    const previewModal = document.getElementById('questions-preview-modal');
-    if (previewModal) {
-      previewModal.remove();
-    }
-    showAnswersModal();
-  };
-
-  panel.appendChild(previewButton);
-  panel.appendChild(showAnswersButton);
-  document.body.appendChild(panel);
-}
-
 // 初始化函数
 async function initialize() {
   console.log('开始初始化...');
@@ -177,10 +126,9 @@ async function initialize() {
       }
     });
 
-    // 创建浮动面板
-    if (document.querySelector('.questionLi')) {
-      createFloatingPanel();
-    }
+    // 提取题目
+    window.extractedQuestions = extractQuestionsFromXXT();
+    console.log('提取的题目:', window.extractedQuestions);
 
     // 通知background.js题目页面已准备就绪
     chrome.runtime.sendMessage({

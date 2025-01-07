@@ -163,16 +163,13 @@ async function handleQuestion(request, fromTabId, sendResponse) {
   // 检查现有标签页是否可用
   if (targetTabId) {
     try {
-      // 尝试获取标签页信息
       const tab = await chrome.tabs.get(targetTabId);
-      // 检查标签页是否已加载完成且URL正确
       if (!tab || !tab.url || !tab.url.includes(new URL(config.url).hostname)) {
         console.log(`${aiType} 标签页状态异常，需要重新创建`);
         targetTabId = null;
         config.tabId = null;
       }
     } catch (error) {
-      // 如果获取标签页信息失败，说明标签页不存在
       console.log(`${aiType} 标签页不存在，需要重新创建`);
       targetTabId = null;
       config.tabId = null;
@@ -189,40 +186,72 @@ async function handleQuestion(request, fromTabId, sendResponse) {
     targetTabId = tab.id;
     config.tabId = tab.id;
 
-    // 等待页面加载完成
-    await new Promise(resolve => {
-      const listener = (tabId, changeInfo) => {
-        if (tabId === targetTabId && changeInfo.status === 'complete') {
-          chrome.tabs.onUpdated.removeListener(listener);
-          resolve();
+    // 等待页面完全加载和初始化
+    await new Promise((resolve) => {
+      const checkReady = async () => {
+        try {
+          const response = await chrome.tabs.sendMessage(targetTabId, { type: 'CHECK_READY' });
+          if (response && response.ready) {
+            resolve();
+          } else {
+            setTimeout(checkReady, 1000);
+          }
+        } catch (error) {
+          setTimeout(checkReady, 1000);
         }
       };
-      chrome.tabs.onUpdated.addListener(listener);
-    });
 
-    // 给页面一些额外时间初始化
-    await new Promise(resolve => setTimeout(resolve, 2000));
+      const listener = (tabId, changeInfo) => {
+        if (tabId === targetTabId && changeInfo.status === 'complete') {
+          setTimeout(checkReady, 1000); // 给页面一些额外的初始化时间
+        }
+      };
+
+      chrome.tabs.onUpdated.addListener(listener);
+
+      // 设置超时，避免无限等待
+      setTimeout(() => {
+        chrome.tabs.onUpdated.removeListener(listener);
+        resolve();
+      }, 30000);
+    });
   }
 
-  // 发送问题到AI页面
-  try {
-    chrome.tabs.sendMessage(targetTabId, {
-      type: 'ASK_QUESTION',
-      question: request.question
-    }, response => {
+  // 重试发送消息
+  let retryCount = 0;
+  const maxRetries = 3;
+
+  while (retryCount < maxRetries) {
+    try {
+      const response = await new Promise((resolve, reject) => {
+        chrome.tabs.sendMessage(targetTabId, {
+          type: 'ASK_QUESTION',
+          question: request.question
+        }, response => {
+          if (chrome.runtime.lastError) {
+            reject(chrome.runtime.lastError);
+          } else {
+            resolve(response);
+          }
+        });
+      });
+
       console.log('AI页面响应:', response);
       if (response && response.success) {
         sendResponse({ success: true });
-      } else {
-        // 如果页面没有响应，可能需要重新加载
-        console.log(`${aiType} 页面未响应，标记为需要重新创建`);
-        config.tabId = null;
-        sendResponse({ error: 'AI页面未响应' });
+        return;
       }
-    });
-  } catch (error) {
-    console.error(`发送消息到 ${aiType} 失败:`, error);
-    config.tabId = null;
-    sendResponse({ error: '发送消息失败' });
+    } catch (error) {
+      console.log(`第 ${retryCount + 1} 次发送失败:`, error);
+      retryCount++;
+      if (retryCount < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+    }
   }
+
+  // 如果所有重试都失败了
+  console.log(`${aiType} 页面未响应，标记为需要重新创建`);
+  config.tabId = null;
+  sendResponse({ error: 'AI页面未响应' });
 } 

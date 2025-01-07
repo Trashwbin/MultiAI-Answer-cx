@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body {
+      width: 200px;
+      padding: 16px;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+
+    .button-container {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    button {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 6px;
+      color: white;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+      text-align: left;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    button:hover {
+      opacity: 0.9;
+      transform: translateY(-1px);
+    }
+
+    .show-questions {
+      background: #4CAF50;
+    }
+
+    .show-answers {
+      background: #2196F3;
+    }
+
+    .icon {
+      font-size: 18px;
+    }
+
+    .title {
+      font-size: 16px;
+      font-weight: 500;
+      color: #333;
+      margin: 0 0 16px 0;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #eee;
+    }
+
+    .github-badge {
+      display: block;
+      text-align: center;
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid #eee;
+    }
+
+    .github-badge img {
+      display: inline-block;
+    }
+  </style>
+</head>
+
+<body>
+  <h1 class="title">AI 投票答题v1.0.1</h1>
+  <div class="button-container">
+    <button class="show-questions">
+      <span class="icon">📝</span>
+      显示题目列表
+    </button>
+    <button class="show-answers">
+      <span class="icon">🤖</span>
+      显示AI答案
+    </button>
+  </div>
+  <div class="github-badge">
+    <a href="https://github.com/trashwbin">
+      <img src="https://img.shields.io/badge/Trashwbin-C71D23?logo=github&color=%23181717">
+    </a>
+    <a href="https://gitee.com/trashwbin">
+      <img src="https://img.shields.io/badge/Trashwbin-C71D23?logo=gitee&color=%23C71D23">
+    </a>
+  </div>
+  <script src="popup.js"></script>
+</body>
+
+</html>

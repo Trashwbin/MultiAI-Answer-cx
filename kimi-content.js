@@ -2,7 +2,18 @@
 class KimiChatAssistant {
   constructor() {
     this.typing = false;
+    this.ready = false;
     this.listenForQuestions();
+    this.checkReady();
+  }
+
+  async checkReady() {
+    // 等待输入框加载
+    while (!document.querySelector('[data-testid="msh-chatinput-editor"]')) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    this.ready = true;
+    console.log('Kimi 页面已就绪');
   }
 
   async updateEditorContent(message) {
@@ -180,10 +191,20 @@ class KimiChatAssistant {
   // 接收来自background的消息
   listenForQuestions() {
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+      if (request.type === 'CHECK_READY') {
+        sendResponse({ ready: this.ready });
+        return true;
+      }
+
       if (request.type === 'ASK_QUESTION') {
-        this.sendMessage(request.question, true);
+        if (!this.ready) {
+          sendResponse({ success: false, error: 'Page not ready' });
+          return true;
+        }
+        this.sendMessage(request.question);
         sendResponse({ success: true });
       }
+      return true;
     });
   }
 }

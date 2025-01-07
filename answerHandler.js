@@ -163,8 +163,63 @@ function copyCode(button) {
 }
 
 // 获取启用的 AI 列表
-function getEnabledAIs() {
-  return Object.entries(window.AI_CONFIG).filter(([_, config]) => config.enabled);
+async function getEnabledAIs() {
+  try {
+    // 直接返回过滤后的数组，不需要额外的 Promise 包装
+    const enabledAIs = Object.entries(window.AI_CONFIG)
+      .filter(([_, config]) => config.enabled);
+    console.log('已启用的 AI 列表:', enabledAIs);
+    return enabledAIs;
+  } catch (error) {
+    console.error('获取已启用的 AI 列表失败:', error);
+    return [];
+  }
+}
+
+// 发送消息到 AI
+async function sendMessageToAI(aiType, message) {
+  return await retryOperation(async () => {
+    try {
+      // 设置超时时间为 5 分钟
+      const timeout = 300000;
+
+      const response = await Promise.race([
+        chrome.runtime.sendMessage({
+          type: 'ASK_QUESTION',
+          aiType: aiType,
+          question: message
+        }),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('请求超时')), timeout)
+        )
+      ]);
+
+      if (!response) {
+        throw new Error('未收到响应');
+      }
+
+      if (response.error) {
+        throw new Error(response.error);
+      }
+
+      return response;
+    } catch (error) {
+      if (error.message.includes('Extension context invalidated') ||
+        error.message.includes('message channel closed')) {
+        console.log('连接断开，尝试重新连接...');
+        // 等待一段时间后重试
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // 尝试重新建立连接
+        try {
+          await chrome.runtime.connect();
+        } catch (connectError) {
+          console.error('重新连接失败:', connectError);
+        }
+      }
+      throw error;
+    }
+  }, 5, 2000); // 最多重试5次，每次间隔2秒
 }
 
 // 将 enableButtons 函数移到全局作用域
@@ -200,12 +255,38 @@ function saveQuestionInfo(questionNum, type, content) {
 }
 
 // 获取题目信息
-function getQuestionInfo(questionNum) {
-  return questionInfoMap.get(questionNum.toString());
+function getQuestionInfo(questionId) {
+  const questions = window.extractedQuestions || [];
+
+  // 首先尝试直接通过 ID 查找
+  let question = questions.find(q => q.id === questionId);
+
+  if (!question) {
+    // 如果找不到，尝试通过题号查找
+    const numericId = questionId.toString().replace(/[^0-9]/g, '');
+    question = questions.find(q => {
+      // 移除非数字字符后比较
+      const qNum = q.number.replace(/[^0-9]/g, '');
+      return qNum === numericId;
+    });
+  }
+
+  if (!question) {
+    console.error('未找到题目信息:', questionId);
+    return null;
+  }
+
+  return {
+    id: question.id,
+    number: question.number,
+    type: question.questionType,
+    content: question.content,
+    options: question.options
+  };
 }
 
 // 更新答案面板
-function updateAnswerPanel(aiType, answer) {
+async function updateAnswerPanel(aiType, answer) {
   console.log('Updating answer panel:', { aiType, answer });
 
   const container = document.getElementById('answers-container');
@@ -214,77 +295,109 @@ function updateAnswerPanel(aiType, answer) {
     return;
   }
 
-  if (answer === 'loading') {
-    // 处理 loading 状态
-    const aiAnswers = container.querySelectorAll(`.ai-answer-${aiType} .answer-content`);
-    aiAnswers.forEach(answerCol => {
-      answerCol.innerHTML = createLoadingHTML(aiType);
-    });
-    return;
-  }
-
-  // 解析答案
-  const answers = [];
-  const regex = /问题\s*(\d+)\s*答案[:：]([^问]*?)(?=问题\s*\d+\s*答案[:：]|$)/gs;
-  let match;
-
-  while ((match = regex.exec(answer)) !== null) {
-    answers.push({
-      questionNum: match[1],
-      answer: match[2].trim()
-    });
-  }
-
-  console.log('解析出的答案:', answers);
-
-  // 获取启用的 AI 列表
-  const enabledAIs = getEnabledAIs();
-
-  answers.forEach(({ questionNum, answer }) => {
-    // 获取题目信息
-    const questionInfo = getQuestionInfo(questionNum);
-    if (!questionInfo) {
-      console.error('未找到题目信息:', questionNum);
+  try {
+    if (answer === 'loading') {
+      // 处理 loading 状态
+      const aiAnswers = container.querySelectorAll(`.ai-answer-${aiType} .answer-content`);
+      aiAnswers.forEach(answerCol => {
+        answerCol.innerHTML = createLoadingHTML(aiType);
+      });
       return;
     }
 
-    // 检查问题行是否存在，如果不存在则创建
-    let questionRow = container.querySelector(`.question-row-${questionNum}`);
-    if (!questionRow) {
-      questionRow = createQuestionRow(questionNum, questionInfo.type, enabledAIs);
-      container.appendChild(questionRow);
+    // 解析答案
+    const answers = [];
+    const regex = /问题\s*(\d+)\s*答案[:：]([^问]*?)(?=问题\s*\d+\s*答案[:：]|$)/gs;
+    let match;
+
+    while ((match = regex.exec(answer)) !== null) {
+      answers.push({
+        questionNum: match[1],
+        answer: match[2].trim()
+      });
     }
 
-    // 更新对应 AI 的答案
-    const answerCol = questionRow.querySelector(`.ai-answer-${aiType} .answer-content`);
-    if (answerCol) {
-      updateAnswerContent(answerCol, answer, questionInfo.type);
+    console.log('解析出的答案:', answers);
+
+    // 获取启用的 AI 列表
+    const enabledAIs = await getEnabledAIs();
+    if (!Array.isArray(enabledAIs)) {
+      throw new Error('无效的 AI 列表');
     }
 
-    // 更新最终答案
-    updateFinalAnswer(questionNum);
-  });
+    // 使用 Promise.all 等待所有答案更新完成
+    await Promise.all(answers.map(async ({ questionNum, answer }) => {
+      try {
+        // 获取题目信息
+        const questionInfo = getQuestionInfo(questionNum);
+        if (!questionInfo) {
+          console.error('未找到题目信息:', questionNum);
+          return;
+        }
+
+        // 检查问题行是否存在，如果不存在则创建
+        let questionRow = container.querySelector(`.question-row-${questionNum}`);
+        if (!questionRow) {
+          questionRow = createQuestionRow(questionNum, questionInfo.type, enabledAIs);
+          container.appendChild(questionRow);
+        }
+
+        // 更新对应 AI 的答案
+        const answerCol = questionRow.querySelector(`.ai-answer-${aiType} .answer-content`);
+        if (answerCol) {
+          updateAnswerContent(answerCol, answer, questionInfo.type);
+        }
+
+        // 更新最终答案
+        await updateFinalAnswer(questionNum);
+      } catch (error) {
+        console.error(`处理题目 ${questionNum} 时出错:`, error);
+        // 显示错误信息到界面
+        const errorMessage = `处理答案时出错: ${error.message}`;
+        const aiAnswers = container.querySelectorAll(`.ai-answer-${aiType} .answer-content`);
+        aiAnswers.forEach(answerCol => {
+          answerCol.innerHTML = `<div class="error-message">${errorMessage}</div>`;
+        });
+      }
+    }));
+  } catch (error) {
+    console.error('更新答案面板时出错:', error);
+    // 显示错误信息到界面
+    const errorMessage = `更新答案时出错: ${error.message}`;
+    const aiAnswers = container.querySelectorAll(`.ai-answer-${aiType} .answer-content`);
+    aiAnswers.forEach(answerCol => {
+      answerCol.innerHTML = `<div class="error-message">${errorMessage}</div>`;
+    });
+  }
 }
 
 // 创建问题行
 function createQuestionRow(questionNum, type, enabledAIs) {
   const row = document.createElement('div');
   row.className = `question-row-${questionNum}`;
+
+  // 添加题目 ID 作为 data 属性
+  const questionInfo = getQuestionInfo(questionNum);
+  if (questionInfo) {
+    row.dataset.id = questionInfo.id;
+    row.dataset.number = questionInfo.number;
+  }
+
   row.style.cssText = `
-        display: grid;
-        grid-template-columns: 60px repeat(${enabledAIs.length}, 1fr) 1fr;
-        gap: 20px;
-        padding: 10px 20px;
-        border-bottom: 1px solid #eee;
-      `;
+    display: grid;
+    grid-template-columns: 60px repeat(${enabledAIs.length}, 1fr) 1fr;
+    gap: 20px;
+    padding: 10px 20px;
+    border-bottom: 1px solid #eee;
+  `;
 
   // 添加题号列
   const questionNumCol = document.createElement('div');
   questionNumCol.style.cssText = `
-        font-weight: bold;
-        color: #333;
-      `;
-  questionNumCol.textContent = questionNum;
+    font-weight: bold;
+    color: #333;
+  `;
+  questionNumCol.textContent = questionInfo ? questionInfo.number : questionNum;
   row.appendChild(questionNumCol);
 
   // 为每个启用的 AI 创建答案列
@@ -352,15 +465,15 @@ function updateAnswerContent(answerCol, answer, type) {
 
     case window.QUESTION_TYPES.QA:
     case window.QUESTION_TYPES.WORD_DEFINITION:
-      // 在每个序号前添加一个空行（而不是两个）
+      // 保持原始格式，只处理空行
       answerCol.innerHTML = answer.split('\n')
         .map(line => {
           const trimmed = line.trim();
           if (!trimmed) return '';
           if (/^\d+\./.test(trimmed)) {
-            return `\n${trimmed}${trimmed.endsWith('.') ? '' : '.'}`;
+            return `\n${trimmed}`;
           }
-          return `${trimmed}${trimmed.endsWith('.') ? '' : '.'}`;
+          return trimmed;
         })
         .filter(Boolean)
         .join('\n');
@@ -372,20 +485,61 @@ function updateAnswerContent(answerCol, answer, type) {
 }
 
 // 创建 loading HTML
-function createLoadingHTML(aiType) {
+function createLoadingHTML(aiType, showTimeoutTip = false) {
+  const color = aiType ? window.AI_CONFIG[aiType].color : '#4a90e2';
   return `
-    <div class="ai-loading" style="color: ${window.AI_CONFIG[aiType].color}">
+    <div class="ai-loading" style="color: ${color}">
       <div class="loading-dots">
         <div></div>
         <div></div>
         <div></div>
       </div>
+      ${showTimeoutTip ? `
+        <div class="timeout-tips">
+          <p>等待响应时间较长</p>
+          <p>您可以点击上方重发按钮重试</p>
+        </div>
+      ` : ''}
     </div>
   `;
 }
 
+// 创建初始大 loading
+function createInitialLoading() {
+  const loadingContainer = document.createElement('div');
+  loadingContainer.id = 'initial-loading';
+  loadingContainer.style.cssText = `
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.9);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 1;
+  `;
+
+  loadingContainer.innerHTML = `
+    <div class="ai-loading" style="transform: scale(1.5);">
+      <div class="loading-dots">
+        <div></div>
+        <div></div>
+        <div></div>
+      </div>
+      <div style="margin-top: 20px; font-size: 16px; color: #666;">
+        正在等待 AI 响应...
+      </div>
+    </div>
+  `;
+
+  return loadingContainer;
+}
+
 // 添加最终答案计算函数
-function updateFinalAnswer(questionNum) {
+async function updateFinalAnswer(questionNum) {
   // 直接使用题号，不需要从文本中提取
   const num = questionNum.toString();
   console.log('题号:', num);
@@ -396,114 +550,149 @@ function updateFinalAnswer(questionNum) {
   const finalAnswerCol = questionRow.querySelector('.final-answer');
   if (!finalAnswerCol) return;
 
-  // 收集所有 AI 的答案
-  const answers = new Map();
-  getEnabledAIs().forEach(([aiType, config]) => {
-    const answerCol = questionRow.querySelector(`.ai-answer-${aiType} .answer-content`);
-    if (answerCol && !answerCol.querySelector('.ai-loading')) {
-      const answer = answerCol.textContent.trim();
-      if (answer) {
-        answers.set(aiType, {
-          answer,
-          weight: config.weight
-        });
+  try {
+    // 获取启用的 AI 列表
+    const enabledAIs = await getEnabledAIs();
+    if (!Array.isArray(enabledAIs) || enabledAIs.length === 0) {
+      throw new Error('无效的 AI 列表');
+    }
+
+    // 收集所有 AI 的答案
+    const answers = new Map();
+    for (const [aiType, config] of enabledAIs) {
+      const answerCol = questionRow.querySelector(`.ai-answer-${aiType} .answer-content`);
+      if (answerCol && !answerCol.querySelector('.ai-loading')) {
+        const answer = answerCol.textContent.trim();
+        if (answer) {
+          answers.set(aiType, {
+            answer,
+            weight: config.weight
+          });
+        }
       }
     }
-  });
 
-  // 如果没有足够的答案，返回
-  if (answers.size === 0) return;
+    // 如果没有足够的答案，返回
+    if (answers.size === 0) return;
 
-  // 统计答案（忽略大小写）
-  const answerCounts = new Map();
-  answers.forEach(({ answer, weight }) => {
-    // 转换为小写进行比较
-    const lowerAnswer = answer.toLowerCase();
-    const count = answerCounts.get(lowerAnswer) || {
-      count: 0,
-      weight: 0,
-      originalAnswers: new Map() // 保存原始答案及其出现次数
-    };
-    count.count++;
-    count.weight += weight;
-    // 记录原始答案
-    count.originalAnswers.set(answer, (count.originalAnswers.get(answer) || 0) + 1);
-    answerCounts.set(lowerAnswer, count);
-  });
-
-  // 找出最多的答案
-  let maxCount = 0;
-  let maxWeight = 0;
-  let finalAnswer = '';
-
-  answerCounts.forEach((value, lowerAnswer) => {
-    if (value.count > maxCount ||
-      (value.count === maxCount && value.weight > maxWeight)) {
-      maxCount = value.count;
-      maxWeight = value.weight;
-      // 在相同答案中选择出现次数最多的原始形式
-      let maxOriginalCount = 0;
-      value.originalAnswers.forEach((count, original) => {
-        if (count > maxOriginalCount) {
-          maxOriginalCount = count;
-          finalAnswer = original;
-        }
-      });
-    }
-  });
-
-  // 如果所有答案都只出现一次，使用权重最高的 AI 的答案
-  if (maxCount === 1) {
-    let highestWeightAnswer = '';
-    let highestWeight = 0;
-
+    // 统计答案（忽略大小写）
+    const answerCounts = new Map();
     answers.forEach(({ answer, weight }) => {
-      if (weight > highestWeight) {
-        highestWeight = weight;
-        highestWeightAnswer = answer;
+      // 转换为小写进行比较
+      const lowerAnswer = answer.toLowerCase();
+      const count = answerCounts.get(lowerAnswer) || {
+        count: 0,
+        weight: 0,
+        originalAnswers: new Map() // 保存原始答案及其出现次数
+      };
+      count.count++;
+      count.weight += weight;
+      // 记录原始答案
+      count.originalAnswers.set(answer, (count.originalAnswers.get(answer) || 0) + 1);
+      answerCounts.set(lowerAnswer, count);
+    });
+
+    // 找出最多的答案
+    let maxCount = 0;
+    let maxWeight = 0;
+    let finalAnswer = '';
+
+    answerCounts.forEach((value, lowerAnswer) => {
+      if (value.count > maxCount ||
+        (value.count === maxCount && value.weight > maxWeight)) {
+        maxCount = value.count;
+        maxWeight = value.weight;
+        // 在相同答案中选择出现次数最多的原始形式
+        let maxOriginalCount = 0;
+        value.originalAnswers.forEach((count, original) => {
+          if (count > maxOriginalCount) {
+            maxOriginalCount = count;
+            finalAnswer = original;
+          }
+        });
       }
     });
 
-    finalAnswer = highestWeightAnswer;
+    // 如果所有答案都只出现一次，使用权重最高的 AI 的答案
+    if (maxCount === 1) {
+      let highestWeightAnswer = '';
+      let highestWeight = 0;
+
+      answers.forEach(({ answer, weight }) => {
+        if (weight > highestWeight) {
+          highestWeight = weight;
+          highestWeightAnswer = answer;
+        }
+      });
+
+      finalAnswer = highestWeightAnswer;
+    }
+
+    // 获取题目类型
+    const questionType = getQuestionTypeFromNumber(num);
+    console.log('题目类型:', questionType);
+
+    // 创建可编辑的最终答案
+    const editableAnswer = createEditableFinalAnswer(questionType, finalAnswer, num);
+    finalAnswerCol.innerHTML = ''; // 清空原有内容
+    finalAnswerCol.appendChild(editableAnswer);
+  } catch (error) {
+    console.error('更新最终答案时出错:', error);
   }
-
-  // 获取题目类型
-  const questionType = getQuestionTypeFromNumber(num);
-  console.log('题目类型:', questionType);
-
-  // 创建可编辑的最终答案
-  const editableAnswer = createEditableFinalAnswer(questionType, finalAnswer, num);
-  finalAnswerCol.innerHTML = ''; // 清空原有内容
-  finalAnswerCol.appendChild(editableAnswer);
 }
 
 // 根据题号获取题目类型
 function getQuestionTypeFromNumber(questionNum) {
   // 从已保存的题目信息中获取类型
   const questionInfo = getQuestionInfo(questionNum);
-  if (questionInfo) {
+  if (questionInfo && questionInfo.type) {
+    console.log('从题目信息中获取到类型:', questionInfo.type);
     return questionInfo.type;
   }
 
-  // 如果没有找到已保存的信息，再从页面提取
-  const num = questionNum.toString().replace(/[^0-9.]/g, '');
-  console.log('提取的题号:', num);
-
-  const questions = extractQuestionsFromXXT();
+  // 如果没有找到已保存的信息，从页面提取
+  const questions = window.extractedQuestions || [];
   const question = questions.find(q => {
-    const qNum = q.number.replace(/[^0-9.]/g, '');
-    return qNum === num || qNum === num + '.';
+    // 移除非数字字符后比较
+    const qNum = q.number.replace(/[^0-9]/g, '');
+    const targetNum = questionNum.toString().replace(/[^0-9]/g, '');
+    return qNum === targetNum;
   });
 
   if (!question) {
-    console.error('未找到题目:', num);
+    console.error('未找到题目:', questionNum);
     return window.QUESTION_TYPES.OTHER;
   }
 
-  // 保存题目信息
+  // 获取题目类型
   const type = getQuestionTypeFromText(question.type);
-  saveQuestionInfo(num, type, question);
+  console.log('从页面提取的题目类型:', type);
+
+  // 保存题目信息
+  saveQuestionInfo(questionNum, type, question);
+
   return type;
+}
+
+// 根据题型文本判断类型
+function getQuestionTypeFromText(typeText) {
+  if (!typeText) return window.QUESTION_TYPES.OTHER;
+
+  const type = typeText.toLowerCase();
+  if (type.includes('多选题')) {
+    return window.QUESTION_TYPES.MULTIPLE_CHOICE;
+  } else if (type.includes('单选题')) {
+    return window.QUESTION_TYPES.SINGLE_CHOICE;
+  } else if (type.includes('填空题')) {
+    return window.QUESTION_TYPES.FILL_BLANK;
+  } else if (type.includes('判断题')) {
+    return window.QUESTION_TYPES.JUDGE;
+  } else if (type.includes('名词解释')) {
+    return window.QUESTION_TYPES.WORD_DEFINITION;
+  } else if (type.includes('简答题') || type.includes('问答题') || type.includes('论述题')) {
+    return window.QUESTION_TYPES.QA;
+  }
+  return window.QUESTION_TYPES.OTHER;
 }
 
 // 定义题型处理器基类
@@ -748,16 +937,9 @@ class QAHandler extends QuestionHandler {
     const textarea = container.querySelector('.answer-textarea');
     if (!textarea) return '';
 
-    // 确保每个序号前只有一个空行
+    // 移除自动添加句号的逻辑，直接返回每行内容
     return textarea.value.split('\n')
-      .map(line => {
-        const trimmed = line.trim();
-        if (!trimmed) return '';
-        if (/^\d+\./.test(trimmed)) {
-          return `\n${trimmed}${trimmed.endsWith('.') ? '' : '.'}`;
-        }
-        return `${trimmed}${trimmed.endsWith('.') ? '' : '.'}`;
-      })
+      .map(line => line.trim())
       .filter(Boolean)
       .join('\n');
   }
@@ -1060,141 +1242,219 @@ async function autoFillAnswers() {
   const questionRows = document.querySelectorAll('[class^="question-row-"]');
 
   for (const row of questionRows) {
-    const questionNum = row.className.match(/question-row-(\d+)/)[1];
-    const type = getQuestionTypeFromNumber(questionNum);
-    console.log(`处理第 ${questionNum} 题，题型:`, type);
+    try {
+      // 获取题目ID和类型
+      const questionId = row.dataset.id;
+      const questionNumber = row.dataset.number;
 
-    // 根据题型获取答案
-    let answer;
-    const finalAnswerCol = row.querySelector('.final-answer');
-    if (!finalAnswerCol) {
-      console.error('未找到最终答案列:', questionNum);
-      continue;
-    }
-
-    switch (type) {
-      case 'single':
-      case 'multiple':
-        // 选择题答案获取
-        const radioChecked = finalAnswerCol.querySelector('input[type="radio"]:checked');
-        if (radioChecked) {
-          answer = radioChecked.value;
-        } else {
-          const customInput = finalAnswerCol.querySelector('.custom-option-input');
-          answer = customInput?.value || '';
-        }
-        break;
-
-      case 'blank':
-        // 填空题答案获取
-        answer = Array.from(finalAnswerCol.querySelectorAll('.blank-input'))
-          .map(input => input.value);
-        break;
-
-      case 'judge':
-        // 判断题答案获取
-        const judgeChecked = finalAnswerCol.querySelector('input[type="radio"]:checked');
-        answer = judgeChecked ? judgeChecked.value : '';
-        break;
-
-      case 'qa':
-      case 'other':
-        // 问答题和计算题答案获取
-        answer = finalAnswerCol.querySelector('.answer-textarea')?.value || '';
-        break;
-
-      default:
-        console.log('未知题型:', type);
+      if (!questionId || !questionNumber) {
+        console.error('未找到题目ID或题号');
         continue;
-    }
+      }
 
-    if (!answer || (Array.isArray(answer) && answer.every(a => !a))) {
-      console.log(`第 ${questionNum} 题未选择答案`);
-      continue;
-    }
+      // 从保存的题目信息中获取类型
+      const questionInfo = getQuestionInfo(questionNumber);
+      if (!questionInfo) {
+        console.error('未找到题目信息:', questionNumber);
+        continue;
+      }
 
-    console.log(`第 ${questionNum} 题答案:`, answer);
+      const type = questionInfo.type;
+      console.log(`处理题目 ID: ${questionId}, 题号: ${questionNumber}, 题型:`, type);
 
-    // 添加随机延迟
-    const delay = Math.floor(Math.random() * 3000) + 2000;
-    console.log(`等待 ${delay}ms 后填写题目 ${questionNum}`);
-    await new Promise(resolve => setTimeout(resolve, delay));
+      // 根据题型获取答案
+      let answer;
+      const finalAnswerCol = row.querySelector('.final-answer');
+      if (!finalAnswerCol) {
+        console.error('未找到最终答案列:', questionId);
+        continue;
+      }
 
-    // 根据题型执行不同的填写逻辑
-    const handler = QuestionHandlerFactory.getHandler(type, questionNum, answer);
-    if (handler) {
-      await handler.autoFill();
+      switch (type) {
+        case window.QUESTION_TYPES.SINGLE_CHOICE:
+        case window.QUESTION_TYPES.MULTIPLE_CHOICE:
+          // 选择题答案获取
+          if (type === window.QUESTION_TYPES.MULTIPLE_CHOICE) {
+            const multiInput = finalAnswerCol.querySelector('.multiple-choice-input input');
+            answer = multiInput?.value || '';
+          } else {
+            const radioChecked = finalAnswerCol.querySelector('input[type="radio"]:checked');
+            if (radioChecked && radioChecked.value === 'other') {
+              const customInput = finalAnswerCol.querySelector('.custom-option-input');
+              answer = customInput?.value || '';
+            } else {
+              answer = radioChecked?.value || '';
+            }
+          }
+          break;
+
+        case window.QUESTION_TYPES.FILL_BLANK:
+          // 填空题答案获取
+          const blankInputs = finalAnswerCol.querySelectorAll('.blank-input');
+          answer = Array.from(blankInputs).map(input => input.value.trim());
+          break;
+
+        case window.QUESTION_TYPES.JUDGE:
+          // 判断题答案获取
+          const judgeChecked = finalAnswerCol.querySelector('input[type="radio"]:checked');
+          answer = judgeChecked?.value || '';
+          break;
+
+        case window.QUESTION_TYPES.QA:
+        case window.QUESTION_TYPES.WORD_DEFINITION:
+        case window.QUESTION_TYPES.OTHER:
+          // 问答题和其他题型答案获取
+          const textarea = finalAnswerCol.querySelector('.answer-textarea');
+          answer = textarea?.value || '';
+          break;
+
+        default:
+          console.log('未知题型:', type);
+          continue;
+      }
+
+      if (!answer || (Array.isArray(answer) && answer.every(a => !a))) {
+        console.log(`题目 ${questionId} 未选择答案`);
+        continue;
+      }
+
+      console.log(`题目 ${questionId} 答案:`, answer);
+
+      // 根据题型执行不同的填写逻辑
+      await autoFill(questionId, answer, type);
+    } catch (error) {
+      console.error('处理题目时出错:', error);
     }
   }
 }
 
 // 添加自动填写的具体实现函数
-async function autoFillChoice(questionNum, answer) {
-  // 先尝试使用题号查找
-  const questions = document.querySelectorAll('.questionLi');
-  const question = Array.from(questions).find(q => {
-    const titleNumber = q.querySelector('.mark_name')?.textContent?.trim()?.split('.')[0];
-    return titleNumber === questionNum.toString();
-  });
+async function autoFill(questionId, answer, type) {
+  console.log(`处理题目 ID: ${questionId}，题型: ${type}`);
 
-  if (question) {
-    console.log('通过题号找到题目:', question);
-    await fillChoiceAnswer(question, answer);
-    return;
-  }
+  // 找到题目元素
+  const questionDiv = document.querySelector(`#sigleQuestionDiv_${questionId}`) ||
+    document.querySelector(`.questionLi[data="${questionId}"]`);
 
-  // 如果通过题号找不到，再尝试使用 data 属性查找
-  const questionDiv = document.querySelector(`.questionLi[data="${questionNum}"]`);
   if (questionDiv) {
-    console.log('通过 data 属性找到题目:', questionDiv);
-    await fillChoiceAnswer(questionDiv, answer);
-    return;
-  }
+    // 滚动到题目位置，添加一些偏移以确保题目完全可见
+    questionDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-  // 最后尝试使用 id 查找
-  const questionById = document.querySelector(`#sigleQuestionDiv_${questionNum}`);
-  if (questionById) {
-    console.log('通过 id 找到题目:', questionById);
-    await fillChoiceAnswer(questionById, answer);
-    return;
-  }
+    // 等待滚动完成
+    await new Promise(resolve => setTimeout(resolve, 500));
+    // 添加随机延迟
+    const delay = Math.floor(Math.random() * 2000) + 1000;
+    console.log(`等待 ${delay}ms 后填写题目 ${questionId}`);
+    await new Promise(resolve => setTimeout(resolve, delay));
+    // 根据题型执行不同的填写逻辑
+    switch (type) {
+      case window.QUESTION_TYPES.SINGLE_CHOICE:
+      case window.QUESTION_TYPES.MULTIPLE_CHOICE:
+        await autoFillChoice(questionId, answer);
+        break;
 
-  console.error('未找到题目:', questionNum);
+      case window.QUESTION_TYPES.FILL_BLANK:
+        await autoFillBlank(questionId, answer);
+        break;
+
+      case window.QUESTION_TYPES.JUDGE:
+        await autoFillJudge(questionId, answer);
+        break;
+
+      case window.QUESTION_TYPES.QA:
+      case window.QUESTION_TYPES.WORD_DEFINITION:
+      case window.QUESTION_TYPES.OTHER:
+        await autoFillQA(questionId, answer);
+        break;
+
+      default:
+        console.log('未知题型:', type);
+    }
+  } else {
+    console.error('未找到题目:', questionId);
+  }
 }
 
-// 分离选择题答案的填写逻辑
-async function fillChoiceAnswer(questionDiv, answer) {
-  try {
-    console.log('开始填写答案:', answer);
-    const options = questionDiv.querySelectorAll('.answerBg');
-    let found = false;
+// 修改选择题填写函数
+async function autoFillChoice(questionId, answer) {
+  // 优先使用 data 属性查找
+  let questionDiv = document.querySelector(`.questionLi[data="${questionId}"]`);
 
+  // 如果找不到，尝试使用 id
+  if (!questionDiv) {
+    questionDiv = document.querySelector(`#sigleQuestionDiv_${questionId}`);
+  }
+
+  if (questionDiv) {
+    console.log('找到题目:', questionDiv);
+    await fillChoiceAnswer(questionDiv, answer);
+  } else {
+    console.error('未找到题目:', questionId);
+  }
+}
+
+// 修改填空题填写函数
+async function autoFillBlank(questionId, answers) {
+  // 优先使用 data 属性查找
+  let questionDiv = document.querySelector(`.questionLi[data="${questionId}"]`);
+
+  // 如果找不到，尝试使用 id
+  if (!questionDiv) {
+    questionDiv = document.querySelector(`#sigleQuestionDiv_${questionId}`);
+  }
+
+  if (questionDiv) {
+    console.log('找到题目:', questionDiv);
+    await fillBlankAnswers(questionDiv, answers);
+  } else {
+    console.error('未找到题目:', questionId);
+  }
+}
+
+// 修改判断题填写函数
+async function fillJudgeAnswers(questionDiv, answer) {
+  try {
+    console.log('开始填写判断题答案:', answer);
+
+    // 查找所有选项
+    const options = questionDiv.querySelectorAll('.answerBg');
+    if (!options || options.length === 0) {
+      console.error('未找到选项');
+      return;
+    }
+
+    // 处理答案格式
+    let processedAnswer = answer;
+    if (answer === 'A' || answer.includes('对') || answer.includes('√')) {
+      processedAnswer = 'true';
+    } else if (answer === 'B' || answer.includes('错') || answer.includes('×')) {
+      processedAnswer = 'false';
+    }
+
+    console.log('处理后的答案:', processedAnswer);
+
+    // 遍历选项找到匹配的
+    let found = false;
     options.forEach(option => {
       const optionSpan = option.querySelector('.num_option');
       if (!optionSpan) return;
 
-      const optionLabel = optionSpan.textContent.trim();
-      console.log('检查选项:', optionLabel);
+      const optionValue = optionSpan.getAttribute('data');
+      const isChecked = optionSpan.classList.contains('check_answer');
 
-      if (optionLabel === answer) {
+      if (optionValue === processedAnswer && !isChecked) {
         found = true;
-        console.log('找到匹配选项:', optionLabel);
-
+        console.log('选择选项:', optionValue);
         try {
-          // 使用原生点击事件
           option.click();
-          console.log('已点击选项');
         } catch (error) {
-          console.error('点击选项失败:', error);
-
-          // 尝试使用事件分发
+          console.error('点击选项失败，尝试使用事件分发:', error);
           try {
             option.dispatchEvent(new MouseEvent('click', {
               bubbles: true,
               cancelable: true,
               view: window
             }));
-            console.log('已分发点击事件');
           } catch (dispatchError) {
             console.error('分发点击事件失败:', dispatchError);
           }
@@ -1203,90 +1463,48 @@ async function fillChoiceAnswer(questionDiv, answer) {
     });
 
     if (!found) {
-      console.log('未找到匹配选项:', answer);
+      console.log('未找到需要选择的选项:', answer);
     }
+
   } catch (error) {
-    console.error('填写选择题答案失败:', error);
+    console.error('填写判断题答案失败:', error);
   }
 }
 
-async function autoFillBlank(questionNum, answers) {
-  // 使用 data 属性查找题目
-  const questionDiv = document.querySelector(`.questionLi[data="${questionNum}"]`);
+// 修改判断题自动填写函数
+async function autoFillJudge(questionId, answer) {
+  // 优先使用 data 属性查找
+  let questionDiv = document.querySelector(`.questionLi[data="${questionId}"]`);
+
+  // 如果找不到，尝试使用 id
   if (!questionDiv) {
-    // 尝试使用题号查找
-    const questions = document.querySelectorAll('.questionLi');
-    const question = Array.from(questions).find(q => {
-      const titleNumber = q.querySelector('.mark_name')?.firstChild?.textContent?.trim();
-      return titleNumber === `${questionNum}.`;
-    });
-
-    if (!question) {
-      console.error('未找到原题目:', questionNum);
-      return;
-    }
-
-    console.log('通过题号找到题目:', question);
-    await fillBlankAnswers(question, answers);
-  } else {
-    console.log('通过 data 属性找到题目:', questionDiv);
-    await fillBlankAnswers(questionDiv, answers);
-  }
-}
-
-async function autoFillJudge(questionNum, answer) {
-  const questionDiv = document.querySelector(`[data="${questionNum}"]`);
-  if (!questionDiv) return;
-
-  const options = questionDiv.querySelectorAll('.answerBg');
-  options.forEach(option => {
-    const optionText = option.textContent.trim();
-    if ((answer === '√' && optionText.includes('正确')) ||
-      (answer === '×' && optionText.includes('错误'))) {
-      try {
-        option.dispatchEvent(new MouseEvent('click', {
-          bubbles: true,
-          cancelable: true,
-          view: window
-        }));
-      } catch (error) {
-        console.error('触发点击事件失败:', error);
-      }
-    }
-  });
-}
-
-async function autoFillQA(questionNum, answer) {
-  // 先尝试使用题号查找
-  const questions = document.querySelectorAll('.questionLi');
-  const question = Array.from(questions).find(q => {
-    const titleNumber = q.querySelector('.mark_name')?.textContent?.trim()?.split('.')[0];
-    return titleNumber === questionNum.toString();
-  });
-
-  if (question) {
-    console.log('通过题号找到题目:', question);
-    await fillQAAnswers(question, answer);
-    return;
+    questionDiv = document.querySelector(`#sigleQuestionDiv_${questionId}`);
   }
 
-  // 如果通过题号找不到，再尝试使用 data 属性查找
-  const questionDiv = document.querySelector(`.questionLi[data="${questionNum}"]`);
   if (questionDiv) {
-    console.log('通过 data 属性找到题目:', questionDiv);
+    console.log('找到题目:', questionDiv);
+    await fillJudgeAnswers(questionDiv, answer);
+  } else {
+    console.error('未找到题目:', questionId);
+  }
+}
+
+// 修改问答题填写函数
+async function autoFillQA(questionId, answer) {
+  // 优先使用 data 属性查找
+  let questionDiv = document.querySelector(`.questionLi[data="${questionId}"]`);
+
+  // 如果找不到，尝试使用 id
+  if (!questionDiv) {
+    questionDiv = document.querySelector(`#sigleQuestionDiv_${questionId}`);
+  }
+
+  if (questionDiv) {
+    console.log('找到题目:', questionDiv);
     await fillQAAnswers(questionDiv, answer);
-    return;
+  } else {
+    console.error('未找到题目:', questionId);
   }
-
-  // 最后尝试使用 id 查找
-  const questionById = document.querySelector(`#sigleQuestionDiv_${questionNum}`);
-  if (questionById) {
-    console.log('通过 id 找到题目:', questionById);
-    await fillQAAnswers(questionById, answer);
-    return;
-  }
-
-  console.error('未找到题目:', questionNum);
 }
 
 async function fillQAAnswers(questionDiv, answer) {
@@ -1310,10 +1528,18 @@ async function fillQAAnswers(questionDiv, answer) {
     console.log('点击编辑区域');
     await new Promise(resolve => setTimeout(resolve, 100));
 
-    // 4. 在编辑器中输入内容
+    // 4. 在编辑器中输入内容，确保每个点都单独一行
     const editorDoc = editorFrame.contentDocument || editorFrame.contentWindow.document;
     const editorBody = editorDoc.body;
-    editorBody.innerHTML = `<p>${answer}</p>`;
+
+    // 处理答案，确保每个点都在新的一行
+    const formattedAnswer = answer.split('\n')
+      .map(line => line.trim())
+      .filter(Boolean)
+      .map(line => `<p>${line}</p>`)
+      .join('');
+
+    editorBody.innerHTML = formattedAnswer;
     console.log('设置答案内容');
 
     // 5. 触发编辑器的 input 事件
@@ -1339,71 +1565,205 @@ async function fillQAAnswers(questionDiv, answer) {
   }
 }
 
-// 根据题型调用对应的填写函数
-async function autoFill(questionNum, answer, type) {
-  console.log(`处理第 ${questionNum} 题，题型: ${type}`);
+// 添加填空题答案填写函数
+async function fillBlankAnswers(questionDiv, answers) {
+  try {
+    console.log('开始填写填空题答案:', answers);
 
-  switch (type) {
-    case 'single':
-    case 'multiple':
-      await autoFillChoice(questionNum, answer);
-      break;
+    // 确保答案数组格式正确
+    let processedAnswers = answers;
+    if (typeof answers === 'string') {
+      // 如果是字符串，尝试解析答案
+      processedAnswers = answers.split('\n')
+        .map(line => {
+          const match = line.match(/第(\d+)空[:：](.+)/);
+          return match ? match[2].trim() : null;
+        })
+        .filter(Boolean);
+    }
 
-    case 'blank':
-      await autoFillBlank(questionNum, answer);
-      break;
+    console.log('处理后的答案:', processedAnswers);
 
-    case 'judge':
-      await autoFillJudge(questionNum, answer);
-      break;
+    // 查找所有填空的编辑器区域
+    const answerDivs = questionDiv.querySelectorAll('.sub_que_div');
+    console.log('找到填空数量:', answerDivs.length);
 
-    case 'qa':
-    case 'other':
-      await autoFillQA(questionNum, answer);
-      break;
+    for (let i = 0; i < answerDivs.length; i++) {
+      const answerDiv = answerDivs[i];
+      const answer = processedAnswers[i];
+      if (!answer) continue;
 
-    default:
-      console.log('未知题型:', type);
+      // 添加随机延迟
+      const delay = Math.floor(Math.random() * 1000) + 500;
+      await new Promise(resolve => setTimeout(resolve, delay));
+
+      // 1. 找到答题区域
+      const examAnswerDiv = answerDiv.querySelector('.divText.examAnswer');
+      if (!examAnswerDiv) {
+        console.error('未找到答题区域');
+        continue;
+      }
+
+      // 2. 找到编辑器的 iframe
+      const editorFrame = examAnswerDiv.querySelector('.edui-editor-iframeholder iframe');
+      if (!editorFrame) {
+        console.error('未找到编辑器 iframe');
+        continue;
+      }
+
+      // 3. 点击编辑区域激活编辑器
+      editorFrame.click();
+      console.log('点击编辑区域');
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // 4. 在编辑器中输入内容
+      const editorDoc = editorFrame.contentDocument || editorFrame.contentWindow.document;
+      const editorBody = editorDoc.body;
+      editorBody.innerHTML = `<p>${answer}</p>`;
+      console.log(`设置第 ${i + 1} 空的答案:`, answer);
+
+      // 5. 触发编辑器的 input 事件
+      editorBody.dispatchEvent(new Event('input', {
+        bubbles: true,
+        cancelable: true
+      }));
+
+      // 6. 找到并点击保存按钮
+      const saveBtn = answerDiv.querySelector('.savebtndiv .jb_btn');
+      if (saveBtn) {
+        console.log('点击保存按钮');
+        saveBtn.click();
+      } else {
+        console.error('未找到保存按钮');
+      }
+
+      // 等待保存完成
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+
+  } catch (error) {
+    console.error('填写填空题答案失败:', error);
   }
 }
 
-// 导出需要的函数
+// 添加重试机制的工具函数
+async function retryOperation(operation, maxRetries = 3, delay = 1000) {
+  let lastError;
+  let retryCount = 0;
+
+  while (retryCount < maxRetries) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      retryCount++;
+
+      console.log(`操作失败，第 ${retryCount}/${maxRetries} 次重试:`, error);
+
+      // 如果是最后一次尝试，直接抛出错误
+      if (retryCount === maxRetries) {
+        break;
+      }
+
+      // 根据错误类型调整延迟时间
+      const retryDelay = error.message.includes('Extension context invalidated') ?
+        delay * 2 : delay;
+
+      await new Promise(resolve => setTimeout(resolve, retryDelay));
+    }
+  }
+
+  throw new Error(`操作失败 (已重试 ${maxRetries} 次): ${lastError.message}`);
+}
+
+// 添加选择题答案填写函数
+async function fillChoiceAnswer(questionDiv, answer) {
+  try {
+    console.log('开始填写选择题答案:', answer);
+    const options = questionDiv.querySelectorAll('.answerBg');
+    let found = false;
+
+    // 处理多选题答案
+    if (answer.includes(';') || answer.length > 1) {
+      // 将答案转换为大写字母数组
+      const selectedOptions = Array.isArray(answer) ? answer :
+        answer.replace(/[^A-Za-z]/g, '').toUpperCase().split('');
+      console.log('多选题选项:', selectedOptions);
+
+      // 先处理需要取消选择的选项
+      for (const option of options) {
+        const optionSpan = option.querySelector('.num_option_dx');
+        if (!optionSpan) continue;
+
+        const optionLabel = optionSpan.textContent.trim();
+        const isChecked = optionSpan.classList.contains('check_answer_dx');
+        const shouldBeSelected = selectedOptions.includes(optionLabel);
+
+        // 如果已选但不应该被选中，则取消选择
+        if (isChecked && !shouldBeSelected) {
+          console.log('取消选择选项:', optionLabel);
+          await clickWithDelay(option);
+          // 添加随机延迟
+          const delay = Math.floor(Math.random() * 1000) + 500;
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+
+      // 再处理需要选择的选项
+      for (const option of options) {
+        const optionSpan = option.querySelector('.num_option_dx');
+        if (!optionSpan) continue;
+
+        const optionLabel = optionSpan.textContent.trim();
+        const isChecked = optionSpan.classList.contains('check_answer_dx');
+
+        if (selectedOptions.includes(optionLabel) && !isChecked) {
+          found = true;
+          console.log('选择选项:', optionLabel);
+          await clickWithDelay(option);
+          // 添加随机延迟
+          const delay = Math.floor(Math.random() * 1000) + 500;
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    } else {
+      // 处理单选题答案
+      console.log('单选题答案:', answer);
+      for (const option of options) {
+        const optionSpan = option.querySelector('.num_option');
+        if (!optionSpan) continue;
+
+        const optionLabel = optionSpan.textContent.trim();
+        const isChecked = optionSpan.classList.contains('check_answer');
+
+        if (optionLabel === answer.toUpperCase() && !isChecked) {
+          found = true;
+          console.log('选择选项:', optionLabel);
+          await clickWithDelay(option);
+        }
+      }
+    }
+
+    if (!found) {
+      console.log('未找到需要选择的选项:', answer);
+    }
+  } catch (error) {
+    console.error('填写选择题答案失败:', error);
+  }
+}
+
+// 导出需要的函数到 window 对象
 window.showAnswersModal = showAnswersModal;
 window.updateAnswerPanel = updateAnswerPanel;
+window.autoFillAnswers = autoFillAnswers;
+window.createEditableFinalAnswer = createEditableFinalAnswer;
+window.getQuestionInfo = getQuestionInfo;
+window.saveQuestionInfo = saveQuestionInfo;
+window.formatAnswer = formatAnswer;
+window.copyCode = copyCode;
 
-// 定义题型常量
-const QUESTION_TYPES = window.QUESTION_TYPES_CONFIG;
-
-// 在发送题目到 AI 之前保存题目信息
-function saveQuestions(questions) {
-  questions.forEach(question => {
-    const num = question.number.replace(/[^0-9.]/g, '');
-    const type = getQuestionTypeFromText(question.type);
-    saveQuestionInfo(num, type, question);
-  });
-}
-
-// 根据题型文本判断类型
-function getQuestionTypeFromText(typeText) {
-  const type = typeText.toLowerCase();
-  if (type.includes('多选题')) {
-    return window.QUESTION_TYPES.MULTIPLE_CHOICE;
-  } else if (type.includes('单选题')) {
-    return window.QUESTION_TYPES.SINGLE_CHOICE;
-  } else if (type.includes('填空题')) {
-    return window.QUESTION_TYPES.FILL_BLANK;
-  } else if (type.includes('判断题')) {
-    return window.QUESTION_TYPES.JUDGE;
-  } else if (type.includes('名词解释')) {
-    return window.QUESTION_TYPES.WORD_DEFINITION;
-  } else if (type.includes('简答题') || type.includes('问答题') || type.includes('论述题')) {
-    return window.QUESTION_TYPES.QA;
-  }
-  return window.QUESTION_TYPES.OTHER;
-}
-
-// 修改 showAnswersModal 函数
-function showAnswersModal() {
+// 修改 showAnswersModal 函数为异步函数
+async function showAnswersModal() {
   console.log('Showing answers modal');
 
   // 检查是否已存在模态框
@@ -1413,354 +1773,429 @@ function showAnswersModal() {
     return;
   }
 
-  // 先保存题目信息
-  const questions = extractQuestionsFromXXT();
-  saveQuestions(questions);
+  try {
+    // 获取启用的 AI 列表
+    const enabledAIs = await getEnabledAIs();
+    console.log('启用的 AI:', enabledAIs);
 
-  // 获取启用的 AI 列表
-  const enabledAIs = getEnabledAIs();
-  console.log('启用的 AI:', enabledAIs);
-
-  // 创建模态框
-  const modal = document.createElement('div');
-  modal.id = 'ai-answers-modal';
-  modal.style.cssText = `
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 90%;
-    max-width: 1200px;
-    height: 90vh;
-    background: white;
-    border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    z-index: 10000;
-    display: flex;
-    flex-direction: column;
-  `;
-
-  // 创建头部
-  const header = document.createElement('div');
-  header.style.cssText = `
-    padding: 20px;
-    border-bottom: 1px solid #eee;
-  `;
-
-  // 创建标题行
-  const titleRow = document.createElement('div');
-  titleRow.style.cssText = `
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 15px;
-    cursor: move;
-  `;
-
-  const title = document.createElement('h3');
-  title.textContent = 'AI 回答对比';
-  title.style.cssText = `
-    margin: 0;
-    font-size: 18px;
-    color: #333;
-    flex: 1;
-    text-align: center;
-  `;
-
-  // 添加拖动图标
-  const dragIcon = document.createElement('div');
-  dragIcon.innerHTML = '⋮⋮';  // 使用点状图标
-  dragIcon.style.cssText = `
-    font-size: 18px;
-    color: #999;
-    padding: 0 15px;
-    cursor: move;
-    user-select: none;
-  `;
-
-  // 添加拖动功能
-  let isDragging = false;
-  let currentX;
-  let currentY;
-  let initialX;
-  let initialY;
-  let xOffset = 0;
-  let yOffset = 0;
-
-  function dragStart(e) {
-    if (e.type === "touchstart") {
-      initialX = e.touches[0].clientX - xOffset;
-      initialY = e.touches[0].clientY - yOffset;
-    } else {
-      initialX = e.clientX - xOffset;
-      initialY = e.clientY - yOffset;
+    if (!Array.isArray(enabledAIs) || enabledAIs.length === 0) {
+      throw new Error('没有启用的 AI');
     }
 
-    if (e.target === dragIcon || e.target === titleRow || e.target === title) {
-      isDragging = true;
-    }
-  }
+    // 创建模态框
+    const modal = document.createElement('div');
+    modal.id = 'ai-answers-modal';
+    modal.style.cssText = `
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 90%;
+      max-width: 1200px;
+      height: 90vh;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      z-index: 10000;
+      display: flex;
+      flex-direction: column;
+    `;
 
-  function dragEnd() {
-    isDragging = false;
-  }
+    // 创建头部
+    const header = document.createElement('div');
+    header.style.cssText = `
+      padding: 20px;
+      border-bottom: 1px solid #eee;
+    `;
 
-  function drag(e) {
-    if (isDragging) {
-      e.preventDefault();
-
-      if (e.type === "touchmove") {
-        currentX = e.touches[0].clientX - initialX;
-        currentY = e.touches[0].clientY - initialY;
-      } else {
-        currentX = e.clientX - initialX;
-        currentY = e.clientY - initialY;
-      }
-
-      xOffset = currentX;
-      yOffset = currentY;
-
-      const modal = document.getElementById('ai-answers-modal');
-      if (modal) {
-        modal.style.transform = `translate(calc(-50% + ${currentX}px), calc(-50% + ${currentY}px))`;
-      }
-    }
-  }
-
-  // 添加事件监听
-  titleRow.addEventListener('mousedown', dragStart);
-  titleRow.addEventListener('touchstart', dragStart);
-
-  document.addEventListener('mousemove', drag);
-  document.addEventListener('touchmove', drag);
-
-  document.addEventListener('mouseup', dragEnd);
-  document.addEventListener('touchend', dragEnd);
-
-  // 组装标题行
-  titleRow.appendChild(dragIcon);
-  titleRow.appendChild(title);
-
-  // 创建右侧按钮组
-  const rightGroup = document.createElement('div');
-  rightGroup.style.cssText = `
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  `;
-
-  // 收起AI回答按钮
-  collapseBtn = document.createElement('button');
-  collapseBtn.textContent = '收起AI回答';
-  collapseBtn.style.cssText = `
-    padding: 6px 12px;
-    background: #f8f9fa;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 14px;
-    color: #333;
-    transition: all 0.2s;
-  `;
-
-  collapseBtn.onmouseover = () => collapseBtn.style.background = '#e9ecef';
-  collapseBtn.onmouseout = () => collapseBtn.style.background = '#f8f9fa';
-
-  // 自动填写按钮
-  autoFillBtn = document.createElement('button');
-  autoFillBtn.textContent = '自动填写';
-  autoFillBtn.style.cssText = `
-    padding: 6px 12px;
-    background: #4caf50;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 14px;
-    transition: all 0.2s;
-  `;
-
-  autoFillBtn.onmouseover = () => autoFillBtn.style.background = '#45a049';
-  autoFillBtn.onmouseout = () => autoFillBtn.style.background = '#4caf50';
-
-  // 关闭按钮
-  const closeBtn = document.createElement('button');
-  closeBtn.innerHTML = '&times;'; // 使用 HTML 实体
-  closeBtn.style.cssText = `
-    width: 32px;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #f5f5f5;
-    border: none;
-    border-radius: 50%;
-    font-size: 24px;
-    cursor: pointer;
-    color: #666;
-    transition: all 0.2s;
-    margin-left: 10px;
-  `;
-
-  // 添加按钮悬停效果
-  closeBtn.onmouseover = () => {
-    closeBtn.style.background = '#e0e0e0';
-    closeBtn.style.color = '#333';
-  };
-  closeBtn.onmouseout = () => {
-    closeBtn.style.background = '#f5f5f5';
-    closeBtn.style.color = '#666';
-  };
-
-  // 添加关闭事件
-  closeBtn.onclick = () => {
-    const modal = document.getElementById('ai-answers-modal');
-    if (modal) {
-      modal.style.display = 'none';
-    }
-  };
-
-  // 组装按钮组
-  rightGroup.appendChild(collapseBtn);
-  rightGroup.appendChild(autoFillBtn);
-  rightGroup.appendChild(closeBtn);
-
-  titleRow.appendChild(rightGroup);
-
-  // 创建 AI 名称行
-  const aiNamesRow = document.createElement('div');
-  aiNamesRow.style.cssText = `
-    display: grid;
-    grid-template-columns: 60px repeat(${enabledAIs.length}, 1fr) 1fr;
-    gap: 20px;
-    padding: 0 20px;
-  `;
-
-  // 添加空白占位
-  const placeholder = document.createElement('div');
-  aiNamesRow.appendChild(placeholder);
-
-  // 只添加启用的 AI 名称
-  enabledAIs.forEach(([type, config]) => {
-    const aiName = document.createElement('div');
-    aiName.style.cssText = `
+    // 创建标题行
+    const titleRow = document.createElement('div');
+    titleRow.style.cssText = `
       display: flex;
       justify-content: space-between;
       align-items: center;
-      font-weight: bold;
-      color: ${config.color};
-      font-size: 16px;
-      text-align: center;
-      padding: 10px;
-      border-bottom: 3px solid ${config.color};
+      margin-bottom: 15px;
+      cursor: move;
     `;
 
-    // AI 名称
-    const nameSpan = document.createElement('span');
-    nameSpan.textContent = config.name;
-
-    // 重发按钮
-    const retryBtn = document.createElement('button');
-    retryBtn.innerHTML = '↻';
-    retryBtn.title = '重新发送';
-    retryBtn.style.cssText = `
-      background: none;
-      border: none;
-      color: ${config.color};
-      cursor: pointer;
+    const title = document.createElement('h3');
+    title.textContent = 'AI 回答对比';
+    title.style.cssText = `
+      margin: 0;
       font-size: 18px;
-      padding: 4px 8px;
+      color: #333;
+      flex: 1;
+      text-align: center;
+    `;
+
+    // 添加拖动图标
+    const dragIcon = document.createElement('div');
+    dragIcon.innerHTML = '⋮⋮';  // 使用点状图标
+    dragIcon.style.cssText = `
+      font-size: 18px;
+      color: #999;
+      padding: 0 15px;
+      cursor: move;
+      user-select: none;
+    `;
+
+    // 添加拖动功能
+    let isDragging = false;
+    let currentX;
+    let currentY;
+    let initialX;
+    let initialY;
+    let xOffset = 0;
+    let yOffset = 0;
+
+    function dragStart(e) {
+      if (e.type === "touchstart") {
+        initialX = e.touches[0].clientX - xOffset;
+        initialY = e.touches[0].clientY - yOffset;
+      } else {
+        initialX = e.clientX - xOffset;
+        initialY = e.clientY - yOffset;
+      }
+
+      if (e.target === dragIcon || e.target === titleRow || e.target === title) {
+        isDragging = true;
+      }
+    }
+
+    function dragEnd() {
+      isDragging = false;
+    }
+
+    function drag(e) {
+      if (isDragging) {
+        e.preventDefault();
+
+        if (e.type === "touchmove") {
+          currentX = e.touches[0].clientX - initialX;
+          currentY = e.touches[0].clientY - initialY;
+        } else {
+          currentX = e.clientX - initialX;
+          currentY = e.clientY - initialY;
+        }
+
+        xOffset = currentX;
+        yOffset = currentY;
+
+        const modal = document.getElementById('ai-answers-modal');
+        if (modal) {
+          modal.style.transform = `translate(calc(-50% + ${currentX}px), calc(-50% + ${currentY}px))`;
+        }
+      }
+    }
+
+    // 添加事件监听
+    titleRow.addEventListener('mousedown', dragStart);
+    titleRow.addEventListener('touchstart', dragStart);
+
+    document.addEventListener('mousemove', drag);
+    document.addEventListener('touchmove', drag);
+
+    document.addEventListener('mouseup', dragEnd);
+    document.addEventListener('touchend', dragEnd);
+
+    // 组装标题行
+    titleRow.appendChild(dragIcon);
+    titleRow.appendChild(title);
+
+    // 创建右侧按钮组
+    const rightGroup = document.createElement('div');
+    rightGroup.style.cssText = `
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    `;
+
+    // 收起AI回答按钮
+    collapseBtn = document.createElement('button');
+    collapseBtn.textContent = '收起AI回答';
+    collapseBtn.style.cssText = `
+      padding: 6px 12px;
+      background: #f8f9fa;
+      border: none;
       border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      color: #333;
+      transition: all 0.2s;
+    `;
+
+    collapseBtn.onmouseover = () => collapseBtn.style.background = '#e9ecef';
+    collapseBtn.onmouseout = () => collapseBtn.style.background = '#f8f9fa';
+
+    // 自动填写按钮
+    autoFillBtn = document.createElement('button');
+    autoFillBtn.textContent = '自动填写';
+    autoFillBtn.style.cssText = `
+      padding: 6px 12px;
+      background: #4caf50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+    `;
+
+    autoFillBtn.onmouseover = () => autoFillBtn.style.background = '#45a049';
+    autoFillBtn.onmouseout = () => autoFillBtn.style.background = '#4caf50';
+
+    // 关闭按钮
+    const closeBtn = document.createElement('button');
+    closeBtn.innerHTML = '&times;'; // 使用 HTML 实体
+    closeBtn.style.cssText = `
+      width: 32px;
+      height: 32px;
       display: flex;
       align-items: center;
       justify-content: center;
-      opacity: 0.8;
-      transition: opacity 0.2s;
+      background: #f5f5f5;
+      border: none;
+      border-radius: 50%;
+      font-size: 24px;
+      cursor: pointer;
+      color: #666;
+      transition: all 0.2s;
+      margin-left: 10px;
     `;
-    retryBtn.onmouseover = () => retryBtn.style.opacity = '1';
-    retryBtn.onmouseout = () => retryBtn.style.opacity = '0.8';
-    retryBtn.onclick = () => {
-      const currentQuestion = modal.dataset.currentQuestion;
-      if (currentQuestion) {
-        sendToAI(type, currentQuestion);
+
+    // 添加按钮悬停效果
+    closeBtn.onmouseover = () => {
+      closeBtn.style.background = '#e0e0e0';
+      closeBtn.style.color = '#333';
+    };
+    closeBtn.onmouseout = () => {
+      closeBtn.style.background = '#f5f5f5';
+      closeBtn.style.color = '#666';
+    };
+
+    // 添加关闭事件
+    closeBtn.onclick = () => {
+      const modal = document.getElementById('ai-answers-modal');
+      if (modal) {
+        modal.style.display = 'none';
       }
     };
 
-    aiName.appendChild(nameSpan);
-    aiName.appendChild(retryBtn);
-    aiNamesRow.appendChild(aiName);
-  });
+    // 组装按钮组
+    rightGroup.appendChild(collapseBtn);
+    rightGroup.appendChild(autoFillBtn);
+    rightGroup.appendChild(closeBtn);
 
-  // 添加最终答案列标题
-  const finalAnswerTitle = document.createElement('div');
-  finalAnswerTitle.style.cssText = `
-    font-weight: bold;
-    color: #333;
-    font-size: 16px;
-    text-align: center;
-    padding: 10px;
-    border-bottom: 3px solid #333;
-  `;
-  finalAnswerTitle.textContent = '最终答案';
-  aiNamesRow.appendChild(finalAnswerTitle);
+    titleRow.appendChild(rightGroup);
 
-  header.appendChild(titleRow);
-  header.appendChild(aiNamesRow);
+    // 创建 AI 名称行
+    const aiNamesRow = document.createElement('div');
+    aiNamesRow.style.cssText = `
+      display: grid;
+      grid-template-columns: 60px repeat(${enabledAIs.length}, 1fr) 1fr;
+      gap: 20px;
+      padding: 0 20px;
+    `;
 
-  // 创建答案容器
-  const answersContainer = document.createElement('div');
-  answersContainer.id = 'answers-container';
-  answersContainer.style.cssText = `
-    flex: 1;
-    overflow-y: auto;
-    padding: 20px;
-  `;
+    // 添加空白占位
+    const placeholder = document.createElement('div');
+    aiNamesRow.appendChild(placeholder);
 
-  modal.appendChild(header);
-  modal.appendChild(answersContainer);
+    // 添加启用的 AI 名称
+    for (const [type, config] of enabledAIs) {
+      const aiName = document.createElement('div');
+      aiName.style.cssText = `
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-weight: bold;
+        color: ${config.color};
+        font-size: 16px;
+        text-align: center;
+        padding: 10px;
+        border-bottom: 3px solid ${config.color};
+      `;
 
-  document.body.appendChild(modal);
+      // AI 名称
+      const nameSpan = document.createElement('span');
+      nameSpan.textContent = config.name;
 
-  console.log('Answers modal created');
+      // 重发按钮
+      const retryBtn = document.createElement('button');
+      retryBtn.innerHTML = '↻';
+      retryBtn.title = '重新发送';
+      retryBtn.style.cssText = `
+        background: none;
+        border: none;
+        color: ${config.color};
+        cursor: pointer;
+        font-size: 18px;
+        padding: 4px 8px;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0.8;
+        transition: opacity 0.2s;
+      `;
+      retryBtn.onmouseover = () => retryBtn.style.opacity = '1';
+      retryBtn.onmouseout = () => retryBtn.style.opacity = '0.8';
 
-  // 在 showAnswersModal 函数中修改收起按钮的事件处理
-  collapseBtn.onclick = () => {
-    const modal = document.getElementById('ai-answers-modal');
-    const container = document.getElementById('answers-container');
-    const aiNamesRow = modal.querySelector('div[style*="grid-template-columns"]');
-    const allQuestionRows = container.querySelectorAll('[class^="question-row-"]');
+      aiName.appendChild(nameSpan);
+      aiName.appendChild(retryBtn);
+      aiNamesRow.appendChild(aiName);
+    }
 
-    // 切换按钮文本
-    const isCollapsed = collapseBtn.textContent === '展开AI回答';
-    collapseBtn.textContent = isCollapsed ? '收起AI回答' : '展开AI回答';
+    // 添加最终答案列标题
+    const finalAnswerTitle = document.createElement('div');
+    finalAnswerTitle.style.cssText = `
+      font-weight: bold;
+      color: #333;
+      font-size: 16px;
+      text-align: center;
+      padding: 10px;
+      border-bottom: 3px solid #333;
+    `;
+    finalAnswerTitle.textContent = '最终答案';
+    aiNamesRow.appendChild(finalAnswerTitle);
 
-    if (isCollapsed) {
-      // 展开状态
-      modal.style.width = '90%';
-      modal.style.maxWidth = '1200px';
+    header.appendChild(titleRow);
+    header.appendChild(aiNamesRow);
 
-      // 恢复 AI 名称行的列数
-      const enabledAIs = getEnabledAIs();
-      aiNamesRow.style.gridTemplateColumns = `60px repeat(${enabledAIs.length}, 1fr) 1fr`;
+    // 添加初始大 loading
+    const initialLoading = createInitialLoading();
+    modal.appendChild(initialLoading);
 
-      // 显示所有 AI 答案列
-      allQuestionRows.forEach(row => {
-        row.style.gridTemplateColumns = aiNamesRow.style.gridTemplateColumns;
-        const aiCols = row.querySelectorAll('[class^="ai-answer-"]');
-        aiCols.forEach(col => col.style.display = 'block');
-      });
+    // 创建答案容器
+    const answersContainer = document.createElement('div');
+    answersContainer.id = 'answers-container';
+    answersContainer.style.cssText = `
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      position: relative;
+    `;
 
-      // 显示 AI 名称
-      const aiNames = aiNamesRow.querySelectorAll('div');
-      aiNames.forEach((div, index) => {
-        if (index > 0 && index < aiNames.length - 1) {
-          div.style.display = 'flex';
+    modal.appendChild(header);
+    modal.appendChild(answersContainer);
+
+    document.body.appendChild(modal);
+
+    console.log('Answers modal created');
+
+    // 为每个已启用的 AI 添加 loading 状态
+    const questions = window.extractedQuestions || [];
+    questions.forEach(question => {
+      const questionRow = createQuestionRow(question.number, question.questionType, enabledAIs);
+      answersContainer.appendChild(questionRow);
+    });
+
+    // 设置超时提示的定时器
+    const timeoutTips = new Map();
+    enabledAIs.forEach(([aiType, _]) => {
+      timeoutTips.set(aiType, setTimeout(() => {
+        const aiAnswers = document.querySelectorAll(`.ai-answer-${aiType} .answer-content`);
+        aiAnswers.forEach(answerCol => {
+          if (answerCol.querySelector('.ai-loading')) {
+            answerCol.innerHTML = createLoadingHTML(aiType, true);
+          }
+        });
+      }, 15000));
+    });
+
+    // 修改 updateAnswerPanel 函数的调用
+    let hasAnyResponse = false;
+    enabledAIs.forEach(([aiType, _]) => {
+      updateAnswerPanel(aiType, 'loading').then(() => {
+        // 清除对应 AI 的超时提示定时器
+        clearTimeout(timeoutTips.get(aiType));
+
+        if (!hasAnyResponse) {
+          hasAnyResponse = true;
+          // 移除初始大 loading
+          initialLoading.style.opacity = '0';
+          setTimeout(() => initialLoading.remove(), 300);
         }
       });
-    } else {
+    });
+
+    // 在 showAnswersModal 函数中修改收起按钮的事件处理
+    collapseBtn.onclick = async () => {
+      const modal = document.getElementById('ai-answers-modal');
+      const container = document.getElementById('answers-container');
+      const aiNamesRow = modal.querySelector('div[style*="grid-template-columns"]');
+      const allQuestionRows = container.querySelectorAll('[class^="question-row-"]');
+
+      // 切换按钮文本
+      const isCollapsed = collapseBtn.textContent === '展开AI回答';
+      collapseBtn.textContent = isCollapsed ? '收起AI回答' : '展开AI回答';
+
+      if (isCollapsed) {
+        // 展开状态
+        modal.style.width = '90%';
+        modal.style.maxWidth = '1200px';
+
+        // 恢复 AI 名称行的列数
+        const enabledAIs = await getEnabledAIs();
+        aiNamesRow.style.gridTemplateColumns = `60px repeat(${enabledAIs.length}, 1fr) 1fr`;
+
+        // 显示所有 AI 答案列
+        allQuestionRows.forEach(row => {
+          row.style.gridTemplateColumns = aiNamesRow.style.gridTemplateColumns;
+          const aiCols = row.querySelectorAll('[class^="ai-answer-"]');
+          aiCols.forEach(col => col.style.display = 'block');
+        });
+
+        // 显示 AI 名称
+        const aiNames = aiNamesRow.querySelectorAll('div');
+        aiNames.forEach((div, index) => {
+          if (index > 0 && index < aiNames.length - 1) {
+            div.style.display = 'flex';
+          }
+        });
+      } else {
+        // 收起状态
+        modal.style.width = '500px';
+        modal.style.maxWidth = '500px';
+
+        // 修改 AI 名称行的列数
+        aiNamesRow.style.gridTemplateColumns = '60px 1fr';
+
+        // 隐藏 AI 答案列
+        allQuestionRows.forEach(row => {
+          row.style.gridTemplateColumns = '60px 1fr';
+          const aiCols = row.querySelectorAll('[class^="ai-answer-"]');
+          aiCols.forEach(col => col.style.display = 'none');
+        });
+
+        // 隐藏 AI 名称
+        const aiNames = aiNamesRow.querySelectorAll('div');
+        aiNames.forEach((div, index) => {
+          if (index > 0 && index < aiNames.length - 1) {
+            div.style.display = 'none';
+          }
+        });
+      }
+    };
+
+    // 在 showAnswersModal 函数中修改自动填写按钮的事件处理
+    autoFillBtn.onclick = async () => {
+      // 先收起 AI 回答
+      const modal = document.getElementById('ai-answers-modal');
+      const container = document.getElementById('answers-container');
+      const aiNamesRow = modal.querySelector('div[style*="grid-template-columns"]');
+      const allQuestionRows = container.querySelectorAll('[class^="question-row-"]');
+
+      // 更新收起按钮文本
+      collapseBtn.textContent = '展开AI回答';
+
       // 收起状态
       modal.style.width = '500px';
       modal.style.maxWidth = '500px';
+      // 将模态框移动到右侧
+      modal.style.left = 'auto';
+      modal.style.right = '20px';
+      modal.style.transform = 'translateY(-50%)';
 
       // 修改 AI 名称行的列数
       aiNamesRow.style.gridTemplateColumns = '60px 1fr';
@@ -1779,11 +2214,86 @@ function showAnswersModal() {
           div.style.display = 'none';
         }
       });
-    }
-  };
 
-  // 在 showAnswersModal 函数中修改自动填写按钮的事件处理
-  autoFillBtn.onclick = async () => {
-    await autoFillAnswers();
-  };
+      // 开始自动填写
+      await autoFillAnswers();
+    };
+
+  } catch (error) {
+    console.error('显示答案模态框时出错:', error);
+    alert('显示答案模态框时出错: ' + error.message);
+  }
+}
+
+// 添加相关样式
+const loadingStyle = document.createElement('style');
+loadingStyle.textContent = `
+  .ai-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  
+  .loading-dots {
+    display: flex;
+    gap: 8px;
+  }
+  
+  .loading-dots div {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: dot-flashing 1s infinite linear alternate;
+  }
+  
+  .loading-dots div:nth-child(2) { animation-delay: 0.2s; }
+  .loading-dots div:nth-child(3) { animation-delay: 0.4s; }
+  
+  @keyframes dot-flashing {
+    0% { opacity: 0.2; transform: scale(0.8); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+
+  .timeout-tips {
+    margin-top: 15px;
+    text-align: center;
+    font-size: 12px;
+    color: #666;
+    opacity: 0.8;
+  }
+
+  .timeout-tips p {
+    margin: 4px 0;
+    line-height: 1.4;
+  }
+
+  #initial-loading {
+    transition: opacity 0.3s ease;
+  }
+`;
+document.head.appendChild(loadingStyle);
+
+// 添加点击延迟函数
+async function clickWithDelay(element) {
+  try {
+    // 尝试直接点击
+    element.click();
+  } catch (error) {
+    console.error('点击选项失败，尝试使用事件分发:', error);
+    try {
+      // 如果直接点击失败，尝试使用事件分发
+      element.dispatchEvent(new MouseEvent('click', {
+        bubbles: true,
+        cancelable: true,
+        view: window
+      }));
+    } catch (dispatchError) {
+      console.error('分发点击事件失败:', dispatchError);
+    }
+  }
+  // 添加点击后的延迟
+  await new Promise(resolve => setTimeout(resolve, 200));
 }

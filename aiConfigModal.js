@@ -128,23 +128,53 @@ function showAIConfigModal(callback) {
     color: white;
     cursor: pointer;
   `;
-  confirmBtn.onclick = () => {
-    // 检查是否至少选择了一个 AI
-    const hasEnabledAI = Object.values(AI_CONFIG).some(config => config.enabled);
-    if (!hasEnabledAI) {
-      alert('请至少选择一个 AI');
-      return;
-    }
 
-    // 检查是否选择了权重 AI
-    const hasWeightAI = Object.values(AI_CONFIG).some(config => config.weight > 1);
-    if (!hasWeightAI) {
-      alert('请选择一个权重 AI');
-      return;
-    }
+  // 添加保存配置函数
+  function saveConfig() {
+    try {
+      // 检查是否至少选择了一个 AI
+      const hasEnabledAI = Object.values(window.AI_CONFIG).some(config => config.enabled);
+      if (!hasEnabledAI) {
+        throw new Error('请至少选择一个 AI');
+      }
 
-    modal.remove();
-    if (callback) callback();
+      // 检查是否选择了权重 AI
+      const hasWeightAI = Object.values(window.AI_CONFIG).some(config => config.weight > 1);
+      if (!hasWeightAI) {
+        throw new Error('请选择一个权重 AI');
+      }
+
+      // 保存配置到 localStorage
+      localStorage.setItem('AI_CONFIG', JSON.stringify(window.AI_CONFIG));
+      console.log('AI 配置已保存:', window.AI_CONFIG);
+    } catch (error) {
+      console.error('保存配置失败:', error);
+      throw error;
+    }
+  }
+
+  // 修改确认按钮的点击事件处理
+  confirmBtn.onclick = async () => {
+    try {
+      // 保存配置
+      saveConfig();
+
+      // 关闭配置模态框
+      modal.style.display = 'none';
+
+      // 显示答案模态框
+      try {
+        await window.showAnswersModal();
+      } catch (error) {
+        console.error('显示答案模态框时出错:', error);
+        alert('显示答案时出错，请重试');
+      }
+
+      // 如果有回调函数，执行它
+      if (callback) callback();
+    } catch (error) {
+      alert(error.message);
+    }
   };
 
   buttons.appendChild(confirmBtn);

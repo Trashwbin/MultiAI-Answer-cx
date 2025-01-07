@@ -1,8 +1,22 @@
 {
   "manifest_version": 3,
-  "name": "AI Chat Helper",
-  "version": "1.0",
-  "type": "module",
+  "name": "AI投票做题",
+  "description": "一个智能的自动答题助手，支持多个 AI 模型，可以帮助您更高效地完成在线答题。",
+  "version": "1.0.1",
+  "icons": {
+    "16": "icons/icon.png",
+    "48": "icons/icon.png",
+    "128": "icons/icon.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon.png",
+      "48": "icons/icon.png",
+      "128": "icons/icon.png"
+    }
+  },
+  "author": "Trashwbin",
   "permissions": [
     "tabs",
     "clipboardRead",

@@ -2,7 +2,18 @@
 class DeepSeekChatAssistant {
   constructor() {
     this.typing = false;
+    this.ready = false;
     this.listenForQuestions();
+    this.checkReady();
+  }
+
+  async checkReady() {
+    // 等待输入框加载
+    while (!document.querySelector('#chat-input')) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    this.ready = true;
+    console.log('DeepSeek 页面已就绪');
   }
 
   async updateEditorContent(message) {
@@ -184,10 +195,20 @@ class DeepSeekChatAssistant {
 
   listenForQuestions() {
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+      if (request.type === 'CHECK_READY') {
+        sendResponse({ ready: this.ready });
+        return true;
+      }
+
       if (request.type === 'ASK_QUESTION') {
+        if (!this.ready) {
+          sendResponse({ success: false, error: 'Page not ready' });
+          return true;
+        }
         this.sendMessage(request.question);
         sendResponse({ success: true });
       }
+      return true;
     });
   }
 }

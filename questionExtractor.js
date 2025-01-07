@@ -60,11 +60,9 @@ function extractQuestionsFromXXT() {
   const questionDivs = document.querySelectorAll('.questionLi');
   console.log(`找到 ${questionDivs.length} 个题目`);
 
-  questionDivs.forEach((questionDiv, index) => {
-    console.log(`\n正在处理第 ${index + 1} 个题目...`);
-
+  questionDivs.forEach((div, index) => {
     // 获取题目基本信息
-    const titleElem = questionDiv.querySelector('.mark_name');
+    const titleElem = div.querySelector('.mark_name');
     if (!titleElem) {
       console.log('未找到题目标题元素，跳过');
       return;
@@ -81,7 +79,7 @@ function extractQuestionsFromXXT() {
     });
 
     // 获取题目内容
-    const contentDiv = questionDiv.querySelector('.mark_name div');
+    const contentDiv = titleElem.querySelector('div');
     const content = contentDiv?.textContent?.trim() || '';
     console.log('题目内容:', content);
 
@@ -90,19 +88,19 @@ function extractQuestionsFromXXT() {
     console.log('识别的题型:', questionType);
 
     // 获取选项
-    const options = extractOptionsFromQuestion(questionDiv, questionType);
+    const options = extractOptionsFromQuestion(div, questionType);
     console.log('提取的选项:', options);
 
     // 获取填空题空的数量
     let blankCount = 0;
     if (questionType === window.QUESTION_TYPES.FILL_BLANK) {
-      blankCount = getBlankCount(questionDiv);
+      blankCount = getBlankCount(div);
       console.log('填空数量:', blankCount);
     }
 
     // 创建题目对象
     const question = {
-      id: questionDiv.getAttribute('data'),
+      id: div.getAttribute('data'),
       number: globalQuestionNumber.toString(),
       originalNumber: number.trim() + '.',
       type: type,
@@ -120,6 +118,9 @@ function extractQuestionsFromXXT() {
 
   console.log('\n题目提取完成，总共提取到', questions.length, '个题目');
   console.log('完整题目列表:', questions);
+
+  // 保存到全局变量
+  window.extractedQuestions = questions;
 
   return questions;
 }
