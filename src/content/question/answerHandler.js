@@ -498,7 +498,7 @@ function createLoadingHTML(aiType) {
       <div class="timeout-tips">
         <div class="timeout-icon">⏳</div>
         <div class="timeout-text">
-          <p>若等待响应时间较长</p>
+          <p>若较长时间未响应</p>
           <p>您可点击上方<span class="highlight">↻</span>按钮</p>
         </div>
       </div>
@@ -2009,6 +2009,34 @@ async function showAnswersModal() {
       `;
       retryBtn.onmouseover = () => retryBtn.style.opacity = '1';
       retryBtn.onmouseout = () => retryBtn.style.opacity = '0.8';
+
+      // 添加点击事件处理
+      retryBtn.onclick = async () => {
+        try {
+          // 获取当前保存的问题
+          const answersModal = document.getElementById('ai-answers-modal');
+          const currentQuestion = answersModal?.dataset.currentQuestion;
+
+          if (!currentQuestion) {
+            console.error('未找到当前问题');
+            return;
+          }
+
+          // 更新对应 AI 的答案状态为 loading
+          await updateAnswerPanel(type, 'loading');
+
+          // 重新发送问题到对应的 AI
+          await sendToAI(type, currentQuestion);
+
+          // 切换到对应的标签页
+          chrome.runtime.sendMessage({
+            type: 'SWITCH_TAB',
+            aiType: type
+          });
+        } catch (error) {
+          console.error('重发请求失败:', error);
+        }
+      };
 
       aiName.appendChild(nameSpan);
       aiName.appendChild(retryBtn);

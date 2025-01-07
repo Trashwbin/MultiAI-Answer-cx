@@ -70,6 +70,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       console.log('题目页面已就绪:', sender.tab.id);
       questionTabId = sender.tab.id;
       return true;
+
+    case 'SWITCH_TAB':
+      handleSwitchTab(request.aiType);
+      return true;
   }
 });
 
@@ -254,4 +258,28 @@ async function handleQuestion(request, fromTabId, sendResponse) {
   console.log(`${aiType} 页面未响应，标记为需要重新创建`);
   config.tabId = null;
   sendResponse({ error: 'AI页面未响应' });
+}
+
+// 添加处理切换标签页的函数
+async function handleSwitchTab(aiType) {
+  const config = AI_CONFIG[aiType];
+  if (!config || !config.tabId) {
+    console.error('未找到对应的AI标签页:', aiType);
+    return;
+  }
+
+  try {
+    // 检查标签页是否存在
+    const tab = await chrome.tabs.get(config.tabId);
+    if (tab) {
+      // 激活标签页
+      await chrome.tabs.update(config.tabId, { active: true });
+      // 如果标签页在其他窗口，也需要激活那个窗口
+      await chrome.windows.update(tab.windowId, { focused: true });
+    }
+  } catch (error) {
+    console.error('切换标签页失败:', error);
+    // 如果标签页不存在，重置 tabId
+    config.tabId = null;
+  }
 } 
