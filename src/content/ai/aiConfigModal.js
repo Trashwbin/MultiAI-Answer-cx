@@ -146,9 +146,9 @@ function showAIConfigModal(callback) {
 
       // 保存配置到 localStorage
       localStorage.setItem('AI_CONFIG', JSON.stringify(window.AI_CONFIG));
-      console.log('AI 配置已保存:', window.AI_CONFIG);
+      //console.log('AI 配置已保存:', window.AI_CONFIG);
     } catch (error) {
-      console.error('保存配置失败:', error);
+      //console.error('保存配置失败:', error);
       throw error;
     }
   }
@@ -166,7 +166,7 @@ function showAIConfigModal(callback) {
       try {
         await window.showAnswersModal();
       } catch (error) {
-        console.error('显示答案模态框时出错:', error);
+        //console.error('显示答案模态框时出错:', error);
         alert('显示答案时出错，请重试');
       }
 

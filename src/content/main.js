@@ -12,7 +12,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         break;
     }
   } catch (error) {
-    console.error('处理消息时出错:', error);
+    //console.error('处理消息时出错:', error);
   }
 });
 
@@ -85,7 +85,7 @@ function sendToAI(aiType, question = null) {
     question: question
   }, response => {
     if (chrome.runtime.lastError) {
-      console.error('发送消息失败:', chrome.runtime.lastError);
+      //console.error('发送消息失败:', chrome.runtime.lastError);
       updateAnswerPanel(aiType, '发送失败，请点击重试按钮重新发送');
       loadingState.updateUI(aiType, false);
     }
@@ -103,11 +103,11 @@ function sendToAllAIs() {
 
 // 初始化函数
 async function initialize() {
-  console.log('开始初始化...');
+  //console.log('开始初始化...');
 
   // 等待配置和工具加载
   if (!window.QUESTION_TYPES || !window.AI_CONFIG) {
-    console.error('配置未加载，等待重试...');
+    //console.error('配置未加载，等待重试...');
     setTimeout(initialize, 500);
     return;
   }
@@ -115,11 +115,20 @@ async function initialize() {
   try {
     // 监听来自background的消息
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-      console.log('题目页面收到消息:', request.type);
+      //console.log('题目页面收到消息:', request.type);
 
       switch (request.type) {
         case 'SHOW_ANSWER':
-          console.log('收到答案:', request.aiType, request.answer);
+          //console.log('收到答案:', request.aiType, request.answer);
+          // 移除初始的整体 loading
+          const initialLoading = document.getElementById('initial-loading');
+          if (initialLoading) {
+            initialLoading.style.opacity = '0';
+            setTimeout(() => {
+              initialLoading.remove();
+            }, 300);
+          }
+          // 更新当前 AI 的答案
           updateAnswerPanel(request.aiType, request.answer);
           loadingState.updateUI(request.aiType, false);
           break;
@@ -128,16 +137,16 @@ async function initialize() {
 
     // 提取题目
     window.extractedQuestions = extractQuestionsFromXXT();
-    console.log('提取的题目:', window.extractedQuestions);
+    //console.log('提取的题目:', window.extractedQuestions);
 
     // 通知background.js题目页面已准备就绪
     chrome.runtime.sendMessage({
       type: 'QUESTION_PAGE_READY'
     });
 
-    console.log('初始化完成');
+    //console.log('初始化完成');
   } catch (error) {
-    console.error('初始化失败:', error);
+    //console.error('初始化失败:', error);
   }
 }
 

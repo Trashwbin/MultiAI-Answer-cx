@@ -2,7 +2,7 @@
 function createAnswerEditor(questionNum, answer = '', type) {
   const handler = QuestionHandlerFactory.getHandler(type, questionNum, answer);
   if (!handler) {
-    console.error('未找到对应的处理器:', type);
+    //console.error('未找到对应的处理器:', type);
     return document.createElement('div');
   }
   return handler.createEditor();
@@ -168,10 +168,10 @@ async function getEnabledAIs() {
     // 直接返回过滤后的数组，不需要额外的 Promise 包装
     const enabledAIs = Object.entries(window.AI_CONFIG)
       .filter(([_, config]) => config.enabled);
-    console.log('已启用的 AI 列表:', enabledAIs);
+    //console.log('已启用的 AI 列表:', enabledAIs);
     return enabledAIs;
   } catch (error) {
-    console.error('获取已启用的 AI 列表失败:', error);
+    //console.error('获取已启用的 AI 列表失败:', error);
     return [];
   }
 }
@@ -206,7 +206,7 @@ async function sendMessageToAI(aiType, message) {
     } catch (error) {
       if (error.message.includes('Extension context invalidated') ||
         error.message.includes('message channel closed')) {
-        console.log('连接断开，尝试重新连接...');
+        //console.log('连接断开，尝试重新连接...');
         // 等待一段时间后重试
         await new Promise(resolve => setTimeout(resolve, 2000));
 
@@ -214,7 +214,7 @@ async function sendMessageToAI(aiType, message) {
         try {
           await chrome.runtime.connect();
         } catch (connectError) {
-          console.error('重新连接失败:', connectError);
+          //console.error('重新连接失败:', connectError);
         }
       }
       throw error;
@@ -272,7 +272,7 @@ function getQuestionInfo(questionId) {
   }
 
   if (!question) {
-    console.error('未找到题目信息:', questionId);
+    //console.error('未找到题目信息:', questionId);
     return null;
   }
 
@@ -287,11 +287,11 @@ function getQuestionInfo(questionId) {
 
 // 更新答案面板
 async function updateAnswerPanel(aiType, answer) {
-  console.log('Updating answer panel:', { aiType, answer });
+  //console.log('Updating answer panel:', { aiType, answer });
 
   const container = document.getElementById('answers-container');
   if (!container) {
-    console.error('Answers container not found!');
+    //console.error('Answers container not found!');
     return;
   }
 
@@ -317,7 +317,7 @@ async function updateAnswerPanel(aiType, answer) {
       });
     }
 
-    console.log('解析出的答案:', answers);
+    //console.log('解析出的答案:', answers);
 
     // 获取启用的 AI 列表
     const enabledAIs = await getEnabledAIs();
@@ -331,7 +331,7 @@ async function updateAnswerPanel(aiType, answer) {
         // 获取题目信息
         const questionInfo = getQuestionInfo(questionNum);
         if (!questionInfo) {
-          console.error('未找到题目信息:', questionNum);
+          //console.error('未找到题目信息:', questionNum);
           return;
         }
 
@@ -351,7 +351,7 @@ async function updateAnswerPanel(aiType, answer) {
         // 更新最终答案
         await updateFinalAnswer(questionNum);
       } catch (error) {
-        console.error(`处理题目 ${questionNum} 时出错:`, error);
+        //console.error(`处理题目 ${questionNum} 时出错:`, error);
         // 显示错误信息到界面
         const errorMessage = `处理答案时出错: ${error.message}`;
         const aiAnswers = container.querySelectorAll(`.ai-answer-${aiType} .answer-content`);
@@ -361,7 +361,7 @@ async function updateAnswerPanel(aiType, answer) {
       }
     }));
   } catch (error) {
-    console.error('更新答案面板时出错:', error);
+    //console.error('更新答案面板时出错:', error);
     // 显示错误信息到界面
     const errorMessage = `更新答案时出错: ${error.message}`;
     const aiAnswers = container.querySelectorAll(`.ai-answer-${aiType} .answer-content`);
@@ -385,7 +385,7 @@ function createQuestionRow(questionNum, type, enabledAIs) {
 
   row.style.cssText = `
     display: grid;
-    grid-template-columns: 60px repeat(${enabledAIs.length}, 1fr) 1fr;
+    grid-template-columns: 200px repeat(${enabledAIs.length}, 1fr) 1fr;
     gap: 20px;
     padding: 10px 20px;
     border-bottom: 1px solid #eee;
@@ -396,8 +396,39 @@ function createQuestionRow(questionNum, type, enabledAIs) {
   questionNumCol.style.cssText = `
     font-weight: bold;
     color: #333;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
   `;
-  questionNumCol.textContent = questionInfo ? questionInfo.number : questionNum;
+
+  // 添加题号
+  const numberDiv = document.createElement('div');
+  numberDiv.textContent = questionInfo ? questionInfo.number : questionNum;
+  numberDiv.style.cssText = `
+    font-size: 14px;
+    color: #666;
+  `;
+  questionNumCol.appendChild(numberDiv);
+
+  // 添加简短题目内容
+  if (questionInfo && questionInfo.content) {
+    const contentDiv = document.createElement('div');
+    contentDiv.style.cssText = `
+      font-size: 13px;
+      color: #333;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      line-height: 1.3;
+      font-weight: normal;
+    `;
+    contentDiv.title = questionInfo.content; // 添加完整内容作为提示
+    contentDiv.textContent = questionInfo.content;
+    questionNumCol.appendChild(contentDiv);
+  }
+
   row.appendChild(questionNumCol);
 
   // 为每个启用的 AI 创建答案列
@@ -430,6 +461,9 @@ function createAIAnswerColumn(aiType, config) {
           white-space: pre-wrap;
           word-break: break-word;
         `;
+
+  // 添加 loading 状态
+  content.innerHTML = createLoadingHTML(aiType);
 
   col.appendChild(content);
   return col;
@@ -498,11 +532,10 @@ function createLoadingHTML(aiType) {
       <div class="timeout-tips">
         <div class="timeout-icon">⏳</div>
         <div class="timeout-text">
-          <p>若较长时间未响应</p>
-          <p>您可点击上方<span class="highlight">↻</span>按钮</p>
+          <p>正在等待 AI 响应</p>
+          <p>您可点击上方<span class="highlight">↻</span>按钮重试</p>
         </div>
       </div>
-      
     </div>
   `;
 }
@@ -511,7 +544,7 @@ function createLoadingHTML(aiType) {
 async function updateFinalAnswer(questionNum) {
   // 直接使用题号，不需要从文本中提取
   const num = questionNum.toString();
-  console.log('题号:', num);
+  //console.log('题号:', num);
 
   const questionRow = document.querySelector(`.question-row-${questionNum}`);
   if (!questionRow) return;
@@ -599,14 +632,14 @@ async function updateFinalAnswer(questionNum) {
 
     // 获取题目类型
     const questionType = getQuestionTypeFromNumber(num);
-    console.log('题目类型:', questionType);
+    //console.log('题目类型:', questionType);
 
     // 创建可编辑的最终答案
     const editableAnswer = createEditableFinalAnswer(questionType, finalAnswer, num);
     finalAnswerCol.innerHTML = ''; // 清空原有内容
     finalAnswerCol.appendChild(editableAnswer);
   } catch (error) {
-    console.error('更新最终答案时出错:', error);
+    //console.error('更新最终答案时出错:', error);
   }
 }
 
@@ -615,7 +648,7 @@ function getQuestionTypeFromNumber(questionNum) {
   // 从已保存的题目信息中获取类型
   const questionInfo = getQuestionInfo(questionNum);
   if (questionInfo && questionInfo.type) {
-    console.log('从题目信息中获取到类型:', questionInfo.type);
+    //console.log('从题目信息中获取到类型:', questionInfo.type);
     return questionInfo.type;
   }
 
@@ -629,13 +662,13 @@ function getQuestionTypeFromNumber(questionNum) {
   });
 
   if (!question) {
-    console.error('未找到题目:', questionNum);
+    //console.error('未找到题目:', questionNum);
     return window.QUESTION_TYPES.OTHER;
   }
 
   // 获取题目类型
   const type = getQuestionTypeFromText(question.type);
-  console.log('从页面提取的题目类型:', type);
+  //console.log('从页面提取的题目类型:', type);
 
   // 保存题目信息
   saveQuestionInfo(questionNum, type, question);
@@ -933,7 +966,7 @@ const QuestionHandlerFactory = {
     // 获取题目信息
     const questionInfo = getQuestionInfo(questionNum);
     if (!questionInfo) {
-      console.error('未找到题目信息:', questionNum);
+      //console.error('未找到题目信息:', questionNum);
       return null;
     }
 
@@ -944,7 +977,7 @@ const QuestionHandlerFactory = {
 
     const Handler = this.handlers[type];
     if (!Handler) {
-      console.error('未知题型:', type);
+      //console.error('未知题型:', type);
       return new this.handlers[window.QUESTION_TYPES.OTHER](questionNum, answer);
     }
     return new Handler(questionNum, answer);
@@ -1217,25 +1250,25 @@ async function autoFillAnswers() {
       const questionNumber = row.dataset.number;
 
       if (!questionId || !questionNumber) {
-        console.error('未找到题目ID或题号');
+        //console.error('未找到题目ID或题号');
         continue;
       }
 
       // 从保存的题目信息中获取类型
       const questionInfo = getQuestionInfo(questionNumber);
       if (!questionInfo) {
-        console.error('未找到题目信息:', questionNumber);
+        //console.error('未找到题目信息:', questionNumber);
         continue;
       }
 
       const type = questionInfo.type;
-      console.log(`处理题目 ID: ${questionId}, 题号: ${questionNumber}, 题型:`, type);
+      //console.log(`处理题目 ID: ${questionId}, 题号: ${questionNumber}, 题型:`, type);
 
       // 根据题型获取答案
       let answer;
       const finalAnswerCol = row.querySelector('.final-answer');
       if (!finalAnswerCol) {
-        console.error('未找到最终答案列:', questionId);
+        //console.error('未找到最终答案列:', questionId);
         continue;
       }
 
@@ -1278,28 +1311,28 @@ async function autoFillAnswers() {
           break;
 
         default:
-          console.log('未知题型:', type);
+          //console.log('未知题型:', type);
           continue;
       }
 
       if (!answer || (Array.isArray(answer) && answer.every(a => !a))) {
-        console.log(`题目 ${questionId} 未选择答案`);
+        //console.log(`题目 ${questionId} 未选择答案`);
         continue;
       }
 
-      console.log(`题目 ${questionId} 答案:`, answer);
+      //console.log(`题目 ${questionId} 答案:`, answer);
 
       // 根据题型执行不同的填写逻辑
       await autoFill(questionId, answer, type);
     } catch (error) {
-      console.error('处理题目时出错:', error);
+      //console.error('处理题目时出错:', error);
     }
   }
 }
 
 // 添加自动填写的具体实现函数
 async function autoFill(questionId, answer, type) {
-  console.log(`处理题目 ID: ${questionId}，题型: ${type}`);
+  //console.log(`处理题目 ID: ${questionId}，题型: ${type}`);
 
   // 找到题目元素
   const questionDiv = document.querySelector(`#sigleQuestionDiv_${questionId}`) ||
@@ -1313,7 +1346,7 @@ async function autoFill(questionId, answer, type) {
     await new Promise(resolve => setTimeout(resolve, 500));
     // 添加随机延迟
     const delay = Math.floor(Math.random() * 2000) + 1000;
-    console.log(`等待 ${delay}ms 后填写题目 ${questionId}`);
+    //console.log(`等待 ${delay}ms 后填写题目 ${questionId}`);
     await new Promise(resolve => setTimeout(resolve, delay));
     // 根据题型执行不同的填写逻辑
     switch (type) {
@@ -1337,10 +1370,10 @@ async function autoFill(questionId, answer, type) {
         break;
 
       default:
-        console.log('未知题型:', type);
+      //console.log('未知题型:', type);
     }
   } else {
-    console.error('未找到题目:', questionId);
+    //console.error('未找到题目:', questionId);
   }
 }
 
@@ -1355,10 +1388,10 @@ async function autoFillChoice(questionId, answer) {
   }
 
   if (questionDiv) {
-    console.log('找到题目:', questionDiv);
+    //console.log('找到题目:', questionDiv);
     await fillChoiceAnswer(questionDiv, answer);
   } else {
-    console.error('未找到题目:', questionId);
+    //console.error('未找到题目:', questionId);
   }
 }
 
@@ -1373,22 +1406,22 @@ async function autoFillBlank(questionId, answers) {
   }
 
   if (questionDiv) {
-    console.log('找到题目:', questionDiv);
+    //console.log('找到题目:', questionDiv);
     await fillBlankAnswers(questionDiv, answers);
   } else {
-    console.error('未找到题目:', questionId);
+    //console.error('未找到题目:', questionId);
   }
 }
 
 // 修改判断题填写函数
 async function fillJudgeAnswers(questionDiv, answer) {
   try {
-    console.log('开始填写判断题答案:', answer);
+    //console.log('开始填写判断题答案:', answer);
 
     // 查找所有选项
     const options = questionDiv.querySelectorAll('.answerBg');
     if (!options || options.length === 0) {
-      console.error('未找到选项');
+      //console.error('未找到选项');
       return;
     }
 
@@ -1400,7 +1433,7 @@ async function fillJudgeAnswers(questionDiv, answer) {
       processedAnswer = 'false';
     }
 
-    console.log('处理后的答案:', processedAnswer);
+    //console.log('处理后的答案:', processedAnswer);
 
     // 遍历选项找到匹配的
     let found = false;
@@ -1413,11 +1446,11 @@ async function fillJudgeAnswers(questionDiv, answer) {
 
       if (optionValue === processedAnswer && !isChecked) {
         found = true;
-        console.log('选择选项:', optionValue);
+        //console.log('选择选项:', optionValue);
         try {
           option.click();
         } catch (error) {
-          console.error('点击选项失败，尝试使用事件分发:', error);
+          //console.error('点击选项失败，尝试使用事件分发:', error);
           try {
             option.dispatchEvent(new MouseEvent('click', {
               bubbles: true,
@@ -1425,18 +1458,18 @@ async function fillJudgeAnswers(questionDiv, answer) {
               view: window
             }));
           } catch (dispatchError) {
-            console.error('分发点击事件失败:', dispatchError);
+            //console.error('分发点击事件失败:', dispatchError);
           }
         }
       }
     });
 
     if (!found) {
-      console.log('未找到需要选择的选项:', answer);
+      //console.log('未找到需要选择的选项:', answer);
     }
 
   } catch (error) {
-    console.error('填写判断题答案失败:', error);
+    //console.error('填写判断题答案失败:', error);
   }
 }
 
@@ -1451,10 +1484,10 @@ async function autoFillJudge(questionId, answer) {
   }
 
   if (questionDiv) {
-    console.log('找到题目:', questionDiv);
+    //console.log('找到题目:', questionDiv);
     await fillJudgeAnswers(questionDiv, answer);
   } else {
-    console.error('未找到题目:', questionId);
+    //console.error('未找到题目:', questionId);
   }
 }
 
@@ -1469,10 +1502,10 @@ async function autoFillQA(questionId, answer) {
   }
 
   if (questionDiv) {
-    console.log('找到题目:', questionDiv);
+    //console.log('找到题目:', questionDiv);
     await fillQAAnswers(questionDiv, answer);
   } else {
-    console.error('未找到题目:', questionId);
+    //console.error('未找到题目:', questionId);
   }
 }
 
@@ -1481,20 +1514,20 @@ async function fillQAAnswers(questionDiv, answer) {
     // 1. 找到答题区域
     const answerDiv = questionDiv.querySelector('.stem_answer.examAnswer');
     if (!answerDiv) {
-      console.error('未找到答题区域');
+      //console.error('未找到答题区域');
       return;
     }
 
     // 2. 找到编辑器的 iframe
     const editorFrame = answerDiv.querySelector('.edui-editor-iframeholder iframe');
     if (!editorFrame) {
-      console.error('未找到编辑器 iframe');
+      //console.error('未找到编辑器 iframe');
       return;
     }
 
     // 3. 点击编辑区域激活编辑器
     editorFrame.click();
-    console.log('点击编辑区域');
+    //console.log('点击编辑区域');
     await new Promise(resolve => setTimeout(resolve, 100));
 
     // 4. 在编辑器中输入内容，确保每个点都单独一行
@@ -1509,7 +1542,7 @@ async function fillQAAnswers(questionDiv, answer) {
       .join('');
 
     editorBody.innerHTML = formattedAnswer;
-    console.log('设置答案内容');
+    //console.log('设置答案内容');
 
     // 5. 触发编辑器的 input 事件
     editorBody.dispatchEvent(new Event('input', {
@@ -1520,24 +1553,24 @@ async function fillQAAnswers(questionDiv, answer) {
     // 6. 找到并点击保存按钮
     const saveBtn = answerDiv.querySelector('.savebtndiv .jb_btn');
     if (saveBtn) {
-      console.log('点击保存按钮');
+      //console.log('点击保存按钮');
       saveBtn.click();
     } else {
-      console.error('未找到保存按钮');
+      //console.error('未找到保存按钮');
     }
 
     // 等待保存完成
     await new Promise(resolve => setTimeout(resolve, 500));
 
   } catch (error) {
-    console.error('填写答案失败:', error);
+    //console.error('填写答案失败:', error);
   }
 }
 
 // 添加填空题答案填写函数
 async function fillBlankAnswers(questionDiv, answers) {
   try {
-    console.log('开始填写填空题答案:', answers);
+    //console.log('开始填写填空题答案:', answers);
 
     // 确保答案数组格式正确
     let processedAnswers = answers;
@@ -1551,11 +1584,11 @@ async function fillBlankAnswers(questionDiv, answers) {
         .filter(Boolean);
     }
 
-    console.log('处理后的答案:', processedAnswers);
+    //console.log('处理后的答案:', processedAnswers);
 
     // 查找所有填空的编辑器区域
     const answerDivs = questionDiv.querySelectorAll('.sub_que_div');
-    console.log('找到填空数量:', answerDivs.length);
+    //console.log('找到填空数量:', answerDivs.length);
 
     for (let i = 0; i < answerDivs.length; i++) {
       const answerDiv = answerDivs[i];
@@ -1569,27 +1602,27 @@ async function fillBlankAnswers(questionDiv, answers) {
       // 1. 找到答题区域
       const examAnswerDiv = answerDiv.querySelector('.divText.examAnswer');
       if (!examAnswerDiv) {
-        console.error('未找到答题区域');
+        //console.error('未找到答题区域');
         continue;
       }
 
       // 2. 找到编辑器的 iframe
       const editorFrame = examAnswerDiv.querySelector('.edui-editor-iframeholder iframe');
       if (!editorFrame) {
-        console.error('未找到编辑器 iframe');
+        //console.error('未找到编辑器 iframe');
         continue;
       }
 
       // 3. 点击编辑区域激活编辑器
       editorFrame.click();
-      console.log('点击编辑区域');
+      //console.log('点击编辑区域');
       await new Promise(resolve => setTimeout(resolve, 100));
 
       // 4. 在编辑器中输入内容
       const editorDoc = editorFrame.contentDocument || editorFrame.contentWindow.document;
       const editorBody = editorDoc.body;
       editorBody.innerHTML = `<p>${answer}</p>`;
-      console.log(`设置第 ${i + 1} 空的答案:`, answer);
+      //console.log(`设置第 ${i + 1} 空的答案:`, answer);
 
       // 5. 触发编辑器的 input 事件
       editorBody.dispatchEvent(new Event('input', {
@@ -1600,10 +1633,10 @@ async function fillBlankAnswers(questionDiv, answers) {
       // 6. 找到并点击保存按钮
       const saveBtn = answerDiv.querySelector('.savebtndiv .jb_btn');
       if (saveBtn) {
-        console.log('点击保存按钮');
+        //console.log('点击保存按钮');
         saveBtn.click();
       } else {
-        console.error('未找到保存按钮');
+        //console.error('未找到保存按钮');
       }
 
       // 等待保存完成
@@ -1611,7 +1644,7 @@ async function fillBlankAnswers(questionDiv, answers) {
     }
 
   } catch (error) {
-    console.error('填写填空题答案失败:', error);
+    //console.error('填写填空题答案失败:', error);
   }
 }
 
@@ -1627,7 +1660,7 @@ async function retryOperation(operation, maxRetries = 3, delay = 1000) {
       lastError = error;
       retryCount++;
 
-      console.log(`操作失败，第 ${retryCount}/${maxRetries} 次重试:`, error);
+      //console.log(`操作失败，第 ${retryCount}/${maxRetries} 次重试:`, error);
 
       // 如果是最后一次尝试，直接抛出错误
       if (retryCount === maxRetries) {
@@ -1648,7 +1681,7 @@ async function retryOperation(operation, maxRetries = 3, delay = 1000) {
 // 添加选择题答案填写函数
 async function fillChoiceAnswer(questionDiv, answer) {
   try {
-    console.log('开始填写选择题答案:', answer);
+    //console.log('开始填写选择题答案:', answer);
     const options = questionDiv.querySelectorAll('.answerBg');
     let found = false;
 
@@ -1657,7 +1690,7 @@ async function fillChoiceAnswer(questionDiv, answer) {
       // 将答案转换为大写字母数组
       const selectedOptions = Array.isArray(answer) ? answer :
         answer.replace(/[^A-Za-z]/g, '').toUpperCase().split('');
-      console.log('多选题选项:', selectedOptions);
+      //console.log('多选题选项:', selectedOptions);
 
       // 先处理需要取消选择的选项
       for (const option of options) {
@@ -1670,7 +1703,7 @@ async function fillChoiceAnswer(questionDiv, answer) {
 
         // 如果已选但不应该被选中，则取消选择
         if (isChecked && !shouldBeSelected) {
-          console.log('取消选择选项:', optionLabel);
+          //console.log('取消选择选项:', optionLabel);
           await clickWithDelay(option);
           // 添加随机延迟
           const delay = Math.floor(Math.random() * 1000) + 500;
@@ -1688,7 +1721,7 @@ async function fillChoiceAnswer(questionDiv, answer) {
 
         if (selectedOptions.includes(optionLabel) && !isChecked) {
           found = true;
-          console.log('选择选项:', optionLabel);
+          //console.log('选择选项:', optionLabel);
           await clickWithDelay(option);
           // 添加随机延迟
           const delay = Math.floor(Math.random() * 1000) + 500;
@@ -1697,7 +1730,7 @@ async function fillChoiceAnswer(questionDiv, answer) {
       }
     } else {
       // 处理单选题答案
-      console.log('单选题答案:', answer);
+      //console.log('单选题答案:', answer);
       for (const option of options) {
         const optionSpan = option.querySelector('.num_option');
         if (!optionSpan) continue;
@@ -1707,17 +1740,17 @@ async function fillChoiceAnswer(questionDiv, answer) {
 
         if (optionLabel === answer.toUpperCase() && !isChecked) {
           found = true;
-          console.log('选择选项:', optionLabel);
+          //console.log('选择选项:', optionLabel);
           await clickWithDelay(option);
         }
       }
     }
 
     if (!found) {
-      console.log('未找到需要选择的选项:', answer);
+      //console.log('未找到需要选择的选项:', answer);
     }
   } catch (error) {
-    console.error('填写选择题答案失败:', error);
+    //console.error('填写选择题答案失败:', error);
   }
 }
 
@@ -1733,7 +1766,7 @@ window.copyCode = copyCode;
 
 // 修改 showAnswersModal 函数为异步函数
 async function showAnswersModal() {
-  console.log('Showing answers modal');
+  //console.log('Showing answers modal');
 
   // 检查是否已存在模态框
   const existingModal = document.getElementById('ai-answers-modal');
@@ -1745,7 +1778,7 @@ async function showAnswersModal() {
   try {
     // 获取启用的 AI 列表
     const enabledAIs = await getEnabledAIs();
-    console.log('启用的 AI:', enabledAIs);
+    //console.log('启用的 AI:', enabledAIs);
 
     if (!Array.isArray(enabledAIs) || enabledAIs.length === 0) {
       throw new Error('没有启用的 AI');
@@ -1961,13 +1994,19 @@ async function showAnswersModal() {
     const aiNamesRow = document.createElement('div');
     aiNamesRow.style.cssText = `
       display: grid;
-      grid-template-columns: 60px repeat(${enabledAIs.length}, 1fr) 1fr;
+      grid-template-columns: 200px repeat(${enabledAIs.length}, 1fr) 1fr;
       gap: 20px;
       padding: 0 20px;
     `;
 
     // 添加空白占位
     const placeholder = document.createElement('div');
+    placeholder.style.cssText = `
+      font-size: 14px;
+      color: #666;
+      font-weight: 500;
+    `;
+    placeholder.textContent = '题目';
     aiNamesRow.appendChild(placeholder);
 
     // 添加启用的 AI 名称
@@ -2018,7 +2057,7 @@ async function showAnswersModal() {
           const currentQuestion = answersModal?.dataset.currentQuestion;
 
           if (!currentQuestion) {
-            console.error('未找到当前问题');
+            //console.error('未找到当前问题');
             return;
           }
 
@@ -2034,7 +2073,7 @@ async function showAnswersModal() {
             aiType: type
           });
         } catch (error) {
-          console.error('重发请求失败:', error);
+          //console.error('重发请求失败:', error);
         }
       };
 
@@ -2069,29 +2108,52 @@ async function showAnswersModal() {
       position: relative;
     `;
 
+    // 添加初始的整体 loading 状态
+    const initialLoadingDiv = document.createElement('div');
+    initialLoadingDiv.id = 'initial-loading';
+    initialLoadingDiv.style.cssText = `
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: white;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    `;
+    initialLoadingDiv.innerHTML = `
+      <div class="ai-loading" style="transform: scale(1.5);">
+        <div class="loading-dots">
+          <div></div>
+          <div></div>
+          <div></div>
+        </div>
+        <div class="timeout-tips" style="margin-top: 30px;">
+          <div class="timeout-icon" style="font-size: 24px;">⏳</div>
+          <div class="timeout-text">
+            <p>正在等待 AI 响应</p>
+            <p>请稍候...</p>
+          </div>
+        </div>
+      </div>
+    `;
+    answersContainer.appendChild(initialLoadingDiv);
+
+    // 创建答案行容器
+    const answersRowsContainer = document.createElement('div');
+    answersRowsContainer.id = 'answers-rows-container';
+    answersContainer.appendChild(answersRowsContainer);
+
+
     modal.appendChild(header);
     modal.appendChild(answersContainer);
 
     document.body.appendChild(modal);
 
-    console.log('Answers modal created');
-
-    // 为每个已启用的 AI 添加 loading 状态
-    const questions = window.extractedQuestions || [];
-    questions.forEach(question => {
-      const questionRow = createQuestionRow(question.number, question.questionType, enabledAIs);
-      answersContainer.appendChild(questionRow);
-    });
-
-    // 修改 updateAnswerPanel 函数的调用
-    let hasAnyResponse = false;
-    enabledAIs.forEach(([aiType, _]) => {
-      updateAnswerPanel(aiType, 'loading').then(() => {
-        if (!hasAnyResponse) {
-          hasAnyResponse = true;
-        }
-      });
-    });
+    //console.log('Answers modal created');
 
     // 在 showAnswersModal 函数中修改收起按钮的事件处理
     collapseBtn.onclick = async () => {
@@ -2111,7 +2173,7 @@ async function showAnswersModal() {
 
         // 恢复 AI 名称行的列数
         const enabledAIs = await getEnabledAIs();
-        aiNamesRow.style.gridTemplateColumns = `60px repeat(${enabledAIs.length}, 1fr) 1fr`;
+        aiNamesRow.style.gridTemplateColumns = `200px repeat(${enabledAIs.length}, 1fr) 1fr`;
 
         // 显示所有 AI 答案列
         allQuestionRows.forEach(row => {
@@ -2133,11 +2195,11 @@ async function showAnswersModal() {
         modal.style.maxWidth = '500px';
 
         // 修改 AI 名称行的列数
-        aiNamesRow.style.gridTemplateColumns = '60px 1fr';
+        aiNamesRow.style.gridTemplateColumns = '200px 1fr';
 
         // 隐藏 AI 答案列
         allQuestionRows.forEach(row => {
-          row.style.gridTemplateColumns = '60px 1fr';
+          row.style.gridTemplateColumns = '200px 1fr';
           const aiCols = row.querySelectorAll('[class^="ai-answer-"]');
           aiCols.forEach(col => col.style.display = 'none');
         });
@@ -2194,7 +2256,7 @@ async function showAnswersModal() {
     };
 
   } catch (error) {
-    console.error('显示答案模态框时出错:', error);
+    //console.error('显示答案模态框时出错:', error);
     alert('显示答案模态框时出错: ' + error.message);
   }
 }
@@ -2307,7 +2369,7 @@ async function clickWithDelay(element) {
     // 尝试直接点击
     element.click();
   } catch (error) {
-    console.error('点击选项失败，尝试使用事件分发:', error);
+    //console.error('点击选项失败，尝试使用事件分发:', error);
     try {
       // 如果直接点击失败，尝试使用事件分发
       element.dispatchEvent(new MouseEvent('click', {
@@ -2316,7 +2378,7 @@ async function clickWithDelay(element) {
         view: window
       }));
     } catch (dispatchError) {
-      console.error('分发点击事件失败:', dispatchError);
+      //console.error('分发点击事件失败:', dispatchError);
     }
   }
   // 添加点击后的延迟

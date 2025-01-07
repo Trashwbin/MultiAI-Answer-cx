@@ -343,13 +343,23 @@ function showPreviewModal() {
       }).join('\n\n');
 
       // 在发送前显示 AI 配置对话框
-      showAIConfigModal(() => {
+      showAIConfigModal(async () => {
         const fullQuestion = prompt + '\n\n' + questionsText;
 
-        // 先创建答案模态框
-        if (!document.getElementById('ai-answers-modal')) {
-          showAnswersModal();
+        // 获取启用的 AI 列表
+        const enabledAIs = Object.entries(AI_CONFIG).filter(([_, config]) => config.enabled);
+
+        // 如果答案模态框已存在，先移除它
+        const existingModal = document.getElementById('ai-answers-modal');
+        if (existingModal && existingModal.parentNode) {
+          existingModal.parentNode.removeChild(existingModal);
         }
+
+        // 保存选中的题目列表到 window 对象
+        window.selectedQuestions = selectedQuestions;
+
+        // 创建新的答案模态框
+        await showAnswersModal();
 
         // 保存当前问题以供重发使用
         const answersModal = document.getElementById('ai-answers-modal');
@@ -358,18 +368,18 @@ function showPreviewModal() {
         }
 
         // 立即关闭题目列表模态框
-        modal.remove();
+        if (modal && modal.parentNode) {
+          modal.parentNode.removeChild(modal);
+        }
 
-        // 只发送到启用的 AI
-        Object.entries(AI_CONFIG)
-          .filter(([_, config]) => config.enabled)
-          .forEach(([aiType]) => {
-            sendToAI(aiType, fullQuestion);
-          });
+        // 发送到启用的 AI
+        enabledAIs.forEach(([aiType]) => {
+          sendToAI(aiType, fullQuestion);
+        });
       });
 
     } catch (error) {
-      console.error('处理发送请求时出错:', error);
+      //console.error('处理发送请求时出错:', error);
       alert('发送失败，请刷新页面后重试');
     }
   };
