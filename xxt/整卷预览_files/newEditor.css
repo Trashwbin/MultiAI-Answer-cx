@@ -1,8 +1,0 @@
-.editor-table{width:auto;border-collapse:collapse;border-spacing:0;word-wrap:break-word;word-break:break-all;font-size:12px;line-height:12px;color:#666;margin:5px 0;}
-.editor-table td,.editor-table th{border:1px solid #DDD;line-height:22px;padding:5px 10px;overflow: hidden;}
-.editor-table th{border-top:2px solid #BBB;background-color:#f7f7f7;font-weight:700;}
-.editor-table td{background-color:#FFF;}
-.editor-table td p,.editor-table th p{text-indent:0;margin:0;}
-
-/* 新版音频高度样式 */
-.ans-insertaudio-module{height: 84px !important;}

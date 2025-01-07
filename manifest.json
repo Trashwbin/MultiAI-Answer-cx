@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "AI投票做题",
-  "description": "一个智能的自动答题助手，支持多个 AI 模型，可以帮助您更高效地完成在线答题。",
+  "name": "MultiAI Answer",
+  "description": "基于多模型 AI 投票的智能答题助手，让答题更轻松、更准确。支持多个主流 AI 模型，智能分析题目，自动生成答案。",
   "version": "1.0.1",
   "icons": {
     "16": "icons/icon.png",
@@ -9,7 +9,7 @@
     "128": "icons/icon.png"
   },
   "action": {
-    "default_popup": "popup.html",
+    "default_popup": "src/popup/popup.html",
     "default_icon": {
       "16": "icons/icon.png",
       "48": "icons/icon.png",
@@ -30,7 +30,7 @@
     "https://tongyi.aliyun.com/*"
   ],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "src/background/background.js"
   },
   "content_scripts": [
     {
@@ -44,12 +44,12 @@
         "https://*.chaoxing.com/mycourse/studentstudy*"
       ],
       "js": [
-        "config.js",
-        "questionExtractor.js",
-        "aiConfigModal.js",
-        "previewModal.js",
-        "answerHandler.js",
-        "main.js"
+        "src/config/config.js",
+        "src/content/question/questionExtractor.js",
+        "src/content/ai/aiConfigModal.js",
+        "src/content/question/previewModal.js",
+        "src/content/question/answerHandler.js",
+        "src/content/main.js"
       ],
       "run_at": "document_end"
     },
@@ -58,7 +58,7 @@
         "https://kimi.moonshot.cn/*"
       ],
       "js": [
-        "kimi-content.js"
+        "src/content/ai/kimi-content.js"
       ]
     },
     {
@@ -66,7 +66,7 @@
         "https://chat.deepseek.com/*"
       ],
       "js": [
-        "deepseek-content.js"
+        "src/content/ai/deepseek-content.js"
       ]
     },
     {
@@ -74,7 +74,7 @@
         "https://tongyi.aliyun.com/*"
       ],
       "js": [
-        "tongyi-content.js"
+        "src/content/ai/tongyi-content.js"
       ]
     }
   ]
