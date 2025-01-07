@@ -9,6 +9,8 @@
   </p>
 </div>
 
+https://github.com/user-attachments/assets/e84fd061-df37-4767-8a38-5fedd8e6e54d
+
 ## 📖 功能特点
 
 - 🤖 **多 AI 模型支持**
