@@ -57,22 +57,30 @@ class KimiChatAssistant {
       this.typing = true;
 
       await this.updateEditorContent(message);
+      // 等待一小段时间
+      await new Promise(resolve => setTimeout(resolve, 500));
 
-      await new Promise(resolve => {
-        const checkButton = setInterval(() => {
-          const sendButton = document.querySelector('[data-testid="msh-chatinput-send-button"]');
-          if (sendButton && !sendButton.disabled) {
-            clearInterval(checkButton);
-            sendButton.click();
-            resolve();
-          }
-        }, 100);
+      // 尝试两种发送方式:
+      // 1. 回车发送
+      const editor = document.querySelector('[data-testid="msh-chatinput-textarea"]');
+      if (editor) {
+        editor.dispatchEvent(new KeyboardEvent('keydown', {
+          key: 'Enter',
+          code: 'Enter',
+          keyCode: 13,
+          which: 13,
+          bubbles: true
+        }));
 
-        setTimeout(() => {
-          clearInterval(checkButton);
-          resolve();
-        }, 5000);
-      });
+        // 等待一小段时间看是否发送成功
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+
+      // 2. 如果回车发送失败,尝试点击发送按钮
+      const sendButton = document.querySelector('[data-testid="msh-chatinput-send-button"]');
+      if (!this.isResponseComplete && sendButton && !sendButton.disabled) {
+        sendButton.click();
+      }
 
       await this.waitForResponse();
       this.typing = false;
@@ -87,7 +95,7 @@ class KimiChatAssistant {
     return new Promise((resolve) => {
       setTimeout(() => {
         let checkCount = 0;
-        const maxChecks = 120;
+        const maxChecks = 240;
         let hasCopied = false;
         let lastContent = '';
 
@@ -184,7 +192,7 @@ class KimiChatAssistant {
             console.groupEnd();
           }
         }, 250);
-      }, 3000);
+      }, 5000);
     });
   }
 

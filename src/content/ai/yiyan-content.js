@@ -94,7 +94,7 @@ class YiyanChatAssistant {
     return new Promise((resolve) => {
       setTimeout(() => {
         let checkCount = 0;
-        const maxChecks = 120;
+        const maxChecks = 240;
         let hasCopied = false;
         let lastContent = '';
         let contentStabilityCount = 0;
@@ -219,7 +219,7 @@ class YiyanChatAssistant {
               console.log('❌ 达到最大检查次数，结束检查');
               clearInterval(checkTyping);
               resolve();
-            } W
+            }
           } finally {
             console.groupEnd();
           }

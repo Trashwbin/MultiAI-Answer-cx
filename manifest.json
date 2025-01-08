@@ -55,7 +55,7 @@
         "src/content/question/handlers/answerFormatter.js",
         "src/content/ai/aiConfigModal.js",
         "src/content/question/previewModal.js",
-        "src/content/question/answerHandler.js",
+        "src/content/question/handlers/answerHandler.js",
         "src/content/main.js"
       ],
       "run_at": "document_end"

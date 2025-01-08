@@ -81,7 +81,7 @@ class DoubaoAssistant {
       // 先等待2秒，确保新回复开始生成
       setTimeout(async () => {
         let checkCount = 0;
-        const maxChecks = 120; // 最多等待30秒
+        const maxChecks = 240; // 最多等待60秒
 
         // 等待新的回复消息出现
         while (checkCount < maxChecks) {

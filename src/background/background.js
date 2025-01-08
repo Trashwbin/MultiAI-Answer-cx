@@ -2,23 +2,33 @@
 const AI_CONFIG = {
   kimi: {
     url: 'https://kimi.moonshot.cn/',
-    tabId: null
+    tabId: null,
+    windowId: null
   },
   deepseek: {
     url: 'https://chat.deepseek.com/',
-    tabId: null
+    tabId: null,
+    windowId: null
   },
   tongyi: {
     url: 'https://tongyi.aliyun.com/',
-    tabId: null
+    tabId: null,
+    windowId: null
   },
   chatglm: {
     url: 'https://chatglm.cn/',
-    tabId: null
+    tabId: null,
+    windowId: null
   },
   doubao: {
     url: 'https://doubao.com/',
-    tabId: null
+    tabId: null,
+    windowId: null
+  },
+  yiyan: {
+    url: 'https://yiyan.baidu.com/',
+    tabId: null,
+    windowId: null
   }
 };
 
@@ -28,13 +38,36 @@ let questionTabId = null;
 const updateIntervals = {};
 
 // 监听标签页更新
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  if (changeInfo.status === 'loading' && tabId === questionTabId) {
+    // 题目页面正在刷新,关闭所有 AI 窗口
+    try {
+      for (const [aiType, config] of Object.entries(AI_CONFIG)) {
+        if (config.windowId) {
+          try {
+            await chrome.windows.remove(config.windowId);
+          } catch (error) {
+            //console.error(`关闭 ${aiType} 窗口失败:`, error);
+          }
+          // 重置配置
+          config.tabId = null;
+          config.windowId = null;
+        }
+      }
+    } catch (error) {
+      //console.error('清理 AI 窗口时出错:', error);
+    }
+  }
+
   if (changeInfo.status === 'complete' && tab.url) {
     // 查找匹配的 AI
     Object.entries(AI_CONFIG).forEach(([aiType, config]) => {
       if (tab.url.includes(new URL(config.url).hostname)) {
-        //console.log(`找到 ${aiType} 标签页:`, tabId);
         config.tabId = tabId;
+        // 保存窗口 ID
+        chrome.tabs.get(tabId, (tabInfo) => {
+          config.windowId = tabInfo.windowId;
+        });
       }
     });
 
@@ -47,25 +80,57 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 });
 
 // 监听标签页关闭
-chrome.tabs.onRemoved.addListener((tabId) => {
+chrome.tabs.onRemoved.addListener(async (tabId) => {
+  // 检查是否是题目标签页
+  if (tabId === questionTabId) {
+    //console.log('题目标签页已关闭，清理相关窗口');
+    questionTabId = null;
+
+    // 关闭所有 AI 窗口
+    try {
+      for (const [aiType, config] of Object.entries(AI_CONFIG)) {
+        if (config.windowId) {
+          try {
+            await chrome.windows.remove(config.windowId);
+          } catch (error) {
+            //console.error(`关闭 ${aiType} 窗口失败:`, error);
+          }
+          // 重置配置
+          config.tabId = null;
+          config.windowId = null;
+        }
+      }
+    } catch (error) {
+      //console.error('清理 AI 窗口时出错:', error);
+    }
+  }
+
   // 检查是否是 AI 标签页
   Object.entries(AI_CONFIG).forEach(([aiType, config]) => {
     if (config.tabId === tabId) {
       //console.log(`${aiType} 标签页已关闭，重置 tabId`);
       config.tabId = null;
+      config.windowId = null;
     }
   });
 
-  // 检查是否是题目标签页
-  if (tabId === questionTabId) {
-    //console.log('题目标签页已关闭，重置 questionTabId');
-    questionTabId = null;
-  }
-
+  // 清理更新检查定时器
   if (updateIntervals[tabId]) {
     clearInterval(updateIntervals[tabId]);
     delete updateIntervals[tabId];
   }
+});
+
+// 添加窗口关闭监听
+chrome.windows.onRemoved.addListener((windowId) => {
+  // 检查是否是 AI 窗口
+  Object.entries(AI_CONFIG).forEach(([aiType, config]) => {
+    if (config.windowId === windowId) {
+      //console.log(`${aiType} 窗口已关闭，重置配置`);
+      config.tabId = null;
+      config.windowId = null;
+    }
+  });
 });
 
 // 处理消息
@@ -239,34 +304,44 @@ async function handleQuestion(request, fromTabId, sendResponse) {
   }
 
   let targetTabId = config.tabId;
+  let targetWindowId = config.windowId;
 
-  // 检查现有标签页是否可用
-  if (targetTabId) {
+  // 检查现有窗口是否可用
+  if (targetTabId && targetWindowId) {
     try {
       const tab = await chrome.tabs.get(targetTabId);
-      if (!tab || !tab.url || !tab.url.includes(new URL(config.url).hostname)) {
-        //console.log(`${aiType} 标签页状态异常，需要重新创建`);
+      const window = await chrome.windows.get(targetWindowId);
+
+      if (!tab || !tab.url || !tab.url.includes(new URL(config.url).hostname) || !window) {
         targetTabId = null;
+        targetWindowId = null;
         config.tabId = null;
+        config.windowId = null;
       }
     } catch (error) {
-      //console.log(`${aiType} 标签页不存在，需要重新创建`);
       targetTabId = null;
+      targetWindowId = null;
       config.tabId = null;
+      config.windowId = null;
     }
   }
 
-  // 如果目标AI标签页不存在或不可用，创建一个
-  if (!targetTabId) {
-    //console.log(`正在打开 ${aiType} 页面...`);
-    const tab = await chrome.tabs.create({
+  // 如果目标 AI 窗口不存在或不可用，创建一个新窗口
+  if (!targetTabId || !targetWindowId) {
+    const window = await chrome.windows.create({
       url: config.url,
-      active: false
+      type: 'popup',
+      width: 1280,
+      height: 800,
+      focused: false
     });
-    targetTabId = tab.id;
-    config.tabId = tab.id;
 
-    // 等待页面完全加载和初始化
+    targetTabId = window.tabs[0].id;
+    targetWindowId = window.id;
+    config.tabId = targetTabId;
+    config.windowId = targetWindowId;
+
+    // 等待页面加载和初始化
     await new Promise((resolve) => {
       const checkReady = async () => {
         try {
@@ -281,81 +356,44 @@ async function handleQuestion(request, fromTabId, sendResponse) {
         }
       };
 
-      const listener = (tabId, changeInfo) => {
+      chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo) {
         if (tabId === targetTabId && changeInfo.status === 'complete') {
-          setTimeout(checkReady, 1000); // 给页面一些额外的初始化时间
+          chrome.tabs.onUpdated.removeListener(listener);
+          setTimeout(checkReady, 1000);
         }
-      };
-
-      chrome.tabs.onUpdated.addListener(listener);
-
-      // 设置超时，避免无限等待
-      setTimeout(() => {
-        chrome.tabs.onUpdated.removeListener(listener);
-        resolve();
-      }, 30000);
+      });
     });
   }
 
-  // 重试发送消息
-  let retryCount = 0;
-  const maxRetries = 3;
-
-  while (retryCount < maxRetries) {
-    try {
-      const response = await new Promise((resolve, reject) => {
-        chrome.tabs.sendMessage(targetTabId, {
-          type: 'ASK_QUESTION',
-          question: request.question
-        }, response => {
-          if (chrome.runtime.lastError) {
-            reject(chrome.runtime.lastError);
-          } else {
-            resolve(response);
-          }
-        });
-      });
-
-      //console.log('AI页面响应:', response);
-      if (response && response.success) {
-        sendResponse({ success: true });
-        return;
-      }
-    } catch (error) {
-      //console.log(`第 ${retryCount + 1} 次发送失败:`, error);
-      retryCount++;
-      if (retryCount < maxRetries) {
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      }
-    }
+  // 发送消息到目标标签页
+  try {
+    await chrome.tabs.sendMessage(targetTabId, {
+      type: 'ASK_QUESTION',
+      question: request.question
+    });
+    sendResponse({ success: true });
+  } catch (error) {
+    config.tabId = null;
+    config.windowId = null;
+    sendResponse({ error: 'AI 页面未响应' });
   }
-
-  // 如果所有重试都失败了
-  //console.log(`${aiType} 页面未响应，标记为需要重新创建`);
-  config.tabId = null;
-  sendResponse({ error: 'AI页面未响应' });
 }
 
 // 添加处理切换标签页的函数
 async function handleSwitchTab(aiType) {
   const config = AI_CONFIG[aiType];
-  if (!config || !config.tabId) {
-    //console.error('未找到对应的AI标签页:', aiType);
+  if (!config || !config.windowId) {
     return;
   }
 
   try {
-    // 检查标签页是否存在
-    const tab = await chrome.tabs.get(config.tabId);
-    if (tab) {
-      // 激活标签页
-      await chrome.tabs.update(config.tabId, { active: true });
-      // 如果标签页在其他窗口，也需要激活那个窗口
-      await chrome.windows.update(tab.windowId, { focused: true });
-    }
+    // 激活窗口
+    await chrome.windows.update(config.windowId, {
+      focused: true,
+      state: 'normal'
+    });
   } catch (error) {
-    //console.error('切换标签页失败:', error);
-    // 如果标签页不存在，重置 tabId
     config.tabId = null;
+    config.windowId = null;
   }
 } 

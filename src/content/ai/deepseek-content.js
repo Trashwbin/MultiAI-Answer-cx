@@ -64,7 +64,7 @@ class DeepSeekChatAssistant {
     return new Promise((resolve) => {
       setTimeout(() => {
         let checkCount = 0;
-        const maxChecks = 120;
+        const maxChecks = 240;
         let hasCopied = false;
         let lastContent = '';
 

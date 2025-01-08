@@ -102,7 +102,7 @@ class ChatGLMAssistant {
   async waitForResponse() {
     return new Promise((resolve) => {
       let checkCount = 0;
-      const maxChecks = 120;
+      const maxChecks = 240;
       let lastContent = '';
       let stabilityCount = 0;
       let contentStabilityCount = 0;

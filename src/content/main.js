@@ -69,7 +69,6 @@ function updateLoadingUI(aiType, isLoading) {
 
 // 发送到AI
 function sendToAI(aiType, question = null) {
-  // 如果没有传入问题，则获取当前选中的题目
   if (!question) {
     const questions = extractQuestionsFromXXT();
     if (questions.length === 0) {
@@ -89,7 +88,6 @@ function sendToAI(aiType, question = null) {
       return text;
     }).join('\n\n');
 
-    // 使用简洁模式的提示词
     const prompt = ANSWER_MODES.find(mode => mode.id === 'concise').prompt;
     question = prompt + '\n\n' + questionsText;
   }
@@ -108,7 +106,6 @@ function sendToAI(aiType, question = null) {
     question: question
   }, response => {
     if (chrome.runtime.lastError) {
-      //console.error('发送消息失败:', chrome.runtime.lastError);
       updateAnswerPanel(aiType, '发送失败，请点击重试按钮重新发送');
       loadingState.updateUI(aiType, false);
     }
