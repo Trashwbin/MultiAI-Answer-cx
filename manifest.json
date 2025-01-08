@@ -46,6 +46,9 @@
       "js": [
         "src/config/config.js",
         "src/content/question/questionExtractor.js",
+        "src/content/question/handlers/questionHandlers.js",
+        "src/content/question/handlers/autoFill.js",
+        "src/content/question/handlers/answerFormatter.js",
         "src/content/ai/aiConfigModal.js",
         "src/content/question/previewModal.js",
         "src/content/question/answerHandler.js",
