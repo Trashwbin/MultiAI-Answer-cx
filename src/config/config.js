@@ -72,6 +72,12 @@ window.AI_CONFIG = {
     color: '#FF6A00',
     weight: 1,
     enabled: true
+  },
+  yiyan: {
+    name: '文心一言',
+    color: '#4B5CC4',
+    weight: 1,
+    enabled: true
   }
 };
 

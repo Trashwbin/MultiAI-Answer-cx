@@ -24,6 +24,9 @@ const AI_CONFIG = {
 
 let questionTabId = null;
 
+// 存储每个AI的更新检查定时器
+const updateIntervals = {};
+
 // 监听标签页更新
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete' && tab.url) {
@@ -58,6 +61,11 @@ chrome.tabs.onRemoved.addListener((tabId) => {
     //console.log('题目标签页已关闭，重置 questionTabId');
     questionTabId = null;
   }
+
+  if (updateIntervals[tabId]) {
+    clearInterval(updateIntervals[tabId]);
+    delete updateIntervals[tabId];
+  }
 });
 
 // 处理消息
@@ -82,6 +90,66 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     case 'SWITCH_TAB':
       handleSwitchTab(request.aiType);
       return true;
+
+    case 'START_TAB_UPDATE': {
+      const tabId = request.tabId;
+      const aiType = request.aiType;
+
+      // 如果已经有定时器在运行，先清除
+      if (updateIntervals[tabId]) {
+        clearInterval(updateIntervals[tabId]);
+      }
+
+      // 创建新的定时器
+      updateIntervals[tabId] = setInterval(async () => {
+        try {
+          // 获取当前活动标签页
+          const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+
+          // 激活目标标签页
+          await chrome.tabs.update(tabId, { active: true });
+
+          // 等待一小段时间让页面更新
+          await new Promise(resolve => setTimeout(resolve, 100));
+
+          // 切回原来的标签页
+          if (currentTab) {
+            await chrome.tabs.update(currentTab.id, { active: true });
+          }
+        } catch (error) {
+          console.error('更新标签页失败:', error);
+        }
+      }, 2000);
+
+      // 返回成功
+      sendResponse({ success: true });
+      return true;
+    }
+
+    case 'STOP_TAB_UPDATE': {
+      const tabId = request.tabId;
+
+      // 清除定时器
+      if (updateIntervals[tabId]) {
+        clearInterval(updateIntervals[tabId]);
+        delete updateIntervals[tabId];
+      }
+
+      // 返回成功
+      sendResponse({ success: true });
+      return true;
+    }
+
+    case 'ANSWER_READY': {
+      const tabId = sender.tab.id;
+
+      // 清除定时器
+      if (updateIntervals[tabId]) {
+        clearInterval(updateIntervals[tabId]);
+        delete updateIntervals[tabId];
+      }
+      return true;
+    }
   }
 });
 

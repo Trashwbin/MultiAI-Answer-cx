@@ -24,11 +24,17 @@ const AI_CONFIG = {
     name: '豆包',
     color: '#FF6A00',
     url: 'https://doubao.com/'
+  },
+  yiyan: {
+    name: '文心一言',
+    color: '#4B5CC4',
+    url: 'https://yiyan.baidu.com/'
   }
 };
 
 // 存储 AI 标签页 ID
 const aiTabs = {};
+let currentTabId = null;
 
 // 初始化 UI
 function initUI() {
@@ -65,6 +71,11 @@ function initUI() {
   // 绑定按钮事件
   document.getElementById('testButton').addEventListener('click', startTest);
   document.getElementById('clearButton').addEventListener('click', clearResults);
+
+  // 保存当前标签页ID
+  chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+    currentTabId = tabs[0].id;
+  });
 }
 
 // 更新 AI 状态
@@ -99,6 +110,23 @@ function updateAIStatus(aiType, status, message = '') {
   }
 }
 
+// 模拟激活标签页
+async function simulateTabActivation(tabId) {
+  // 保存当前标签页
+  const currentTab = await chrome.tabs.query({ active: true, currentWindow: true });
+
+  // 激活目标标签页
+  await chrome.tabs.update(tabId, { active: true });
+
+  // 等待一小段时间让页面更新
+  await new Promise(resolve => setTimeout(resolve, 100));
+
+  // 切回原来的标签页
+  if (currentTab[0]) {
+    await chrome.tabs.update(currentTab[0].id, { active: true });
+  }
+}
+
 // 获取选中的 AI
 function getSelectedAIs() {
   const checkboxes = document.querySelectorAll('.ai-checkbox input:checked');
@@ -116,7 +144,7 @@ async function initSelectedAITabs() {
         await chrome.tabs.remove(tabId);
         delete aiTabs[aiType];
         updateAIStatus(aiType, 'default');
-        document.getElementById(`ai-card-${aiType}`).classList.remove('active');
+        document.getElementById(`ai-card-${aiType}`).classList.add('active');
       } catch (error) {
         console.error(`关闭 ${AI_CONFIG[aiType].name} 标签页失败:`, error);
       }
@@ -129,19 +157,24 @@ async function initSelectedAITabs() {
       try {
         document.getElementById(`ai-card-${aiType}`).classList.add('active');
 
-        // 创建新标签页
-        const tab = await chrome.tabs.create({
+        // 创建新窗口，使用更大的尺寸
+        const window = await chrome.windows.create({
           url: AI_CONFIG[aiType].url,
-          active: false
+          type: 'popup',  // 使用普通窗口而不是弹出窗口
+          width: 1280,     // 标准的 1280x800 分辨率
+          height: 800,
+          state: 'normal', // 确保窗口是正常状态
+          focused: false
         });
 
-        aiTabs[aiType] = tab.id;
+        // 保存标签页ID
+        aiTabs[aiType] = window.tabs[0].id;
 
         // 等待页面加载完成
         await new Promise((resolve) => {
           const checkReady = async () => {
             try {
-              const response = await chrome.tabs.sendMessage(tab.id, { type: 'CHECK_READY' });
+              const response = await chrome.tabs.sendMessage(window.tabs[0].id, { type: 'CHECK_READY' });
               if (response && response.ready) {
                 updateAIStatus(aiType, 'ready');
                 resolve();
@@ -154,7 +187,7 @@ async function initSelectedAITabs() {
           };
 
           chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo) {
-            if (tabId === tab.id && changeInfo.status === 'complete') {
+            if (tabId === window.tabs[0].id && changeInfo.status === 'complete') {
               chrome.tabs.onUpdated.removeListener(listener);
               setTimeout(checkReady, 1000);
             }

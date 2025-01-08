@@ -191,7 +191,7 @@ class DoubaoAssistant {
           console.log('❌ 等待新回复超时');
           resolve();
         }
-      }, 2000); // 初始等待2秒
+      }, 5000); // 初始等待5秒
     });
   }
 
