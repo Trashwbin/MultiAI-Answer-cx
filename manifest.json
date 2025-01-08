@@ -27,7 +27,10 @@
     "https://*.chaoxing.com/*",
     "https://chat.deepseek.com/*",
     "https://kimi.moonshot.cn/*",
-    "https://tongyi.aliyun.com/*"
+    "https://tongyi.aliyun.com/*",
+    "https://chatglm.cn/*",
+    "https://doubao.com/*",
+    "https://www.doubao.com/*"
   ],
   "background": {
     "service_worker": "src/background/background.js"
@@ -78,6 +81,23 @@
       ],
       "js": [
         "src/content/ai/tongyi-content.js"
+      ]
+    },
+    {
+      "matches": [
+        "https://chatglm.cn/*"
+      ],
+      "js": [
+        "src/content/ai/chatglm-content.js"
+      ]
+    },
+    {
+      "matches": [
+        "https://doubao.com/*",
+        "https://www.doubao.com/*"
+      ],
+      "js": [
+        "src/content/ai/doubao-content.js"
       ]
     }
   ]

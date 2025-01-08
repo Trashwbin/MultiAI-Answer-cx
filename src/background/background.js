@@ -11,6 +11,14 @@ const AI_CONFIG = {
   tongyi: {
     url: 'https://tongyi.aliyun.com/',
     tabId: null
+  },
+  chatglm: {
+    url: 'https://chatglm.cn/',
+    tabId: null
+  },
+  doubao: {
+    url: 'https://doubao.com/',
+    tabId: null
   }
 };
 
