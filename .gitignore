@@ -1,2 +1,3 @@
 # 忽略 release 目录及其内容
 release/ 
+ai/

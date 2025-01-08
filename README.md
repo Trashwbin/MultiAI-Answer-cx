@@ -4,7 +4,7 @@
   <img src="icons/icon.png" alt="MultiAI Answer Logo" width="128">
   <p>基于多模型 AI 投票的智能答题助手，让答题更轻松、更准确</p>
   <p>
-    <img src="https://img.shields.io/badge/version-1.0.1-blue.svg" alt="version">
+    <img src="https://img.shields.io/badge/version-1.0.2-blue.svg" alt="version">
     <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="license">
   </p>
 </div>
@@ -69,6 +69,73 @@ https://github.com/user-attachments/assets/e84fd061-df37-4767-8a38-5fedd8e6e54d
 3. 可以手动编辑最终答案
 4. 使用【自动填写】功能一键填入答案
 
+## ⚙️ AI 实现逻辑
+
+### 消息发送逻辑
+
+1. **Kimi**
+   - 使用 `data-testid="msh-chatinput-editor"` 定位输入框
+   - 通过模拟粘贴事件输入内容
+   - 优先使用回车键发送，备用方案点击发送按钮
+   - 通过 `chat-segment` 元素监控回复状态
+
+2. **DeepSeek**
+   - 使用 `#chat-input` 定位输入框
+   - 直接设置输入框值并触发事件
+   - 使用回车键发送消息
+   - 通过 `.ds-markdown--block` 元素监控回复
+
+3. **通义千问**
+   - 使用 `textarea[placeholder="千事不决问通义"]` 定位输入框
+   - 直接设置值并触发输入事件
+   - 使用回车键发送
+   - 通过 `.answerItem--` 和工具栏状态监控回复
+
+4. **智谱清言**
+   - 使用 `.input-box-inner textarea` 定位输入框
+   - 模拟焦点和输入事件
+   - 点击发送按钮发送
+   - 通过 `.answer` 和 `.markdown-body` 监控回复
+
+5. **豆包**
+   - 使用 `[data-testid="chat_input_input"]` 定位输入框
+   - 设置值并等待发送按钮启用
+   - 点击发送按钮发送
+   - 通过 `[data-testid="receive_message"]` 监控回复
+
+6. **文心一言**
+   - 使用 `.yc-editor[contenteditable="true"]` 定位输入框
+   - 使用剪贴板API模拟粘贴
+   - 优先点击发送按钮，备用回车发送
+   - 通过 `.dialogue_card_item` 监控回复
+
+### 终止逻辑
+
+每个 AI 都实现了以下终止判断：
+- 检测停止按钮消失
+- 监控内容稳定性（连续多次内容相同）
+- 设置最大等待时间（60秒）
+- 出现复制按钮等完成标志
+
+### 答案提取逻辑
+
+统一的答案处理流程：
+1. 处理有序列表（添加序号和换行）
+2. 处理无序列表（添加符号和换行）
+3. 处理代码块（移除行号和操作按钮）
+4. 规范化空行和格式
+5. 移除多余的空白字符
+
+## 🧪 测试功能
+
+访问 `chrome-extension://<扩展ID>/test/test.html` 可以进行功能测试：
+
+1. 选择要测试的 AI 模型
+2. 输入测试问题
+3. 点击【开始测试】
+4. 实时查看各 AI 的回答状态和内容
+5. 使用【清除结果】重置测试
+
 ## ⚙️ 支持的题型
 
 - 单选题
@@ -98,6 +165,12 @@ https://github.com/user-attachments/assets/e84fd061-df37-4767-8a38-5fedd8e6e54d
 - AI 对话内容仅在对应平台进行
 
 ## 🔄 更新日志
+
+### v1.0.2
+- 优化各 AI 模型的消息处理逻辑
+- 改进答案提取和格式化
+- 添加测试功能说明
+- 完善文档
 
 ### v1.0.1
 - 优化多个 AI 模型的响应处理

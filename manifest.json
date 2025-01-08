@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "MultiAI Answer",
   "description": "基于多模型 AI 投票的智能答题助手，让答题更轻松、更准确。支持多个主流 AI 模型，智能分析题目，自动生成答案。",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "icons": {
     "16": "icons/icon.png",
     "48": "icons/icon.png",
