@@ -3,17 +3,40 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   try {
     switch (message.action) {
       case 'showQuestionList':
+        // 检查是否在考试页面（通过页面标题和aria-label判断）
+        const subNav = document.querySelector('.subNav');
+        const isExamPage = subNav?.getAttribute('aria-label')?.includes('考试 页面');
+
+        // 检查是否有整卷预览按钮（通过onclick属性判断）
+        const previewBtn = document.querySelector('.completeBtn[onclick*="topreview"]');
+
+        if (isExamPage && previewBtn) {
+          const confirmed = window.confirm('需要跳转到整卷预览页面才能查看完整题目，是否跳转？');
+          if (confirmed) {
+            previewBtn.click();
+            sendResponse({ success: true, redirected: true });
+          } else {
+            sendResponse({ success: false, cancelled: true });
+          }
+          return true;
+        }
+
         // 显示题目列表
         showPreviewModal();
+        sendResponse({ success: true });
         break;
+
       case 'showAnswers':
         // 显示 AI 答案
         showAnswersModal();
+        sendResponse({ success: true });
         break;
     }
   } catch (error) {
     //console.error('处理消息时出错:', error);
+    sendResponse({ success: false, error: error.message });
   }
+  return true;
 });
 
 // 加载状态管理

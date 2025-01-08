@@ -387,48 +387,74 @@ function createQuestionRow(questionNum, type, enabledAIs) {
     display: grid;
     grid-template-columns: 200px repeat(${enabledAIs.length}, 1fr) 1fr;
     gap: 20px;
-    padding: 10px 20px;
-    border-bottom: 1px solid #eee;
+    padding: 0px 20px;
+    align-items: stretch;
+    margin-bottom: 12px;
   `;
 
   // 添加题号列
   const questionNumCol = document.createElement('div');
   questionNumCol.style.cssText = `
-    font-weight: bold;
-    color: #333;
+    background: #f8f9fa;
+    border-radius: 6px;
+    padding: 12px;
+    min-height: calc(1.5em * 2 + 24px);
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  `;
+
+  // 创建内容容器
+  const contentDiv = document.createElement('div');
+  contentDiv.style.cssText = `
+    font-size: 14px;
+    color: #2d3748;
+    flex-grow: 1;
   `;
 
   // 添加题号
-  const numberDiv = document.createElement('div');
-  numberDiv.textContent = questionInfo ? questionInfo.number : questionNum;
-  numberDiv.style.cssText = `
-    font-size: 14px;
-    color: #666;
+  const numberSpan = document.createElement('span');
+  numberSpan.textContent = questionInfo ? questionInfo.number : questionNum;
+  numberSpan.style.cssText = `
+    font-weight: 500;
+    color: #4a5568;
+    margin-right: 6px;
   `;
-  questionNumCol.appendChild(numberDiv);
+  contentDiv.appendChild(numberSpan);
 
-  // 添加简短题目内容
+  // 添加题型标签
+  if (questionInfo && questionInfo.type) {
+    const typeSpan = document.createElement('span');
+    typeSpan.style.cssText = `
+      font-size: 12px;
+      color: #718096;
+      background: #edf2f7;
+      padding: 1px 6px;
+      border-radius: 4px;
+      margin-right: 6px;
+    `;
+    typeSpan.textContent = questionInfo.type;
+    contentDiv.appendChild(typeSpan);
+  }
+
+  // 添加题目内容
   if (questionInfo && questionInfo.content) {
-    const contentDiv = document.createElement('div');
-    contentDiv.style.cssText = `
-      font-size: 13px;
-      color: #333;
+    const contentSpan = document.createElement('span');
+    contentSpan.style.cssText = `
       overflow: hidden;
       text-overflow: ellipsis;
       display: -webkit-box;
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
-      line-height: 1.3;
-      font-weight: normal;
+      line-height: 1.5;
+      min-width: 0;
     `;
-    contentDiv.title = questionInfo.content; // 添加完整内容作为提示
-    contentDiv.textContent = questionInfo.content;
-    questionNumCol.appendChild(contentDiv);
+    contentSpan.textContent = questionInfo.content;
+    contentSpan.title = questionInfo.content; // 添加完整内容作为提示
+    contentDiv.appendChild(contentSpan);
   }
 
+  questionNumCol.appendChild(contentDiv);
   row.appendChild(questionNumCol);
 
   // 为每个启用的 AI 创建答案列
@@ -444,23 +470,26 @@ function createQuestionRow(questionNum, type, enabledAIs) {
   return row;
 }
 
-// 创建 AI 答案列
+// 修改 AI 答案列创建函数
 function createAIAnswerColumn(aiType, config) {
   const col = document.createElement('div');
   col.className = `ai-answer-${aiType}`;
   col.style.cssText = `
-          padding: 10px;
-          background: ${config.color}10;
-          border-radius: 4px;
-          min-height: 40px;
-        `;
+    padding: 10px;
+    background: ${config.color}10;
+    border-radius: 4px;
+    min-height: calc(1.5em * 2 + 20px); /* 两行文字高度加上内边距 */
+    display: flex;
+    flex-direction: column;
+  `;
 
   const content = document.createElement('div');
   content.className = 'answer-content';
   content.style.cssText = `
-          white-space: pre-wrap;
-          word-break: break-word;
-        `;
+    white-space: pre-wrap;
+    word-break: break-word;
+    flex-grow: 1;
+  `;
 
   // 添加 loading 状态
   content.innerHTML = createLoadingHTML(aiType);
@@ -469,20 +498,47 @@ function createAIAnswerColumn(aiType, config) {
   return col;
 }
 
-// 创建最终答案列
+// 修改最终答案列创建函数
 function createFinalAnswerColumn(questionNum, type) {
   const col = document.createElement('div');
   col.className = 'final-answer';
   col.style.cssText = `
-        padding: 10px;
-        background: #f8f9fa;
-        border-radius: 4px;
-        min-height: 40px;
-      `;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 4px;
+    min-height: calc(1.5em * 2 + 20px);
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+  `;
 
   const editor = createAnswerEditor(questionNum, '', type);
-  col.appendChild(editor);
+  editor.style.cssText = `
+    flex-grow: 1;
+    width: 100%;
+  `;
 
+  // 修改编辑器内部的样式
+  const textarea = editor.querySelector('.answer-textarea');
+  if (textarea) {
+    textarea.style.cssText = `
+      width: 100%;
+      max-width: 100%;
+      min-height: calc(1.5em * 2);
+      padding: 8px;
+      border: 1px solid #e2e8f0;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 14px;
+      line-height: 1.5;
+      resize: vertical;
+      background: white;
+      color: #2d3748;
+      white-space: pre-wrap;
+    `;
+  }
+
+  col.appendChild(editor);
   return col;
 }
 
@@ -532,8 +588,8 @@ function createLoadingHTML(aiType) {
       <div class="timeout-tips">
         <div class="timeout-icon">⏳</div>
         <div class="timeout-text">
-          <p>正在等待 AI 响应</p>
-          <p>您可点击上方<span class="highlight">↻</span>按钮重试</p>
+          <p>若 AI 长时间未响应</p>
+          <p>您可点击上方<span class="highlight">↻</span>重试</p>
         </div>
       </div>
     </div>
@@ -1114,7 +1170,7 @@ style.textContent = `
   }
 
   .answer-textarea {
-    width: 100%;
+    width: 92%;
     padding: 8px;
     border: 1px solid #dee2e6;
     border-radius: 4px;
@@ -1164,8 +1220,7 @@ style.textContent = `
     display: grid;
     grid-template-columns: 60px repeat(auto-fit, minmax(200px, 1fr));
     gap: 20px;
-    padding: 10px 20px;
-    border-bottom: 1px solid #eee;
+    padding: 6px 20px;
     align-items: start;
   }
 
@@ -2002,9 +2057,12 @@ async function showAnswersModal() {
     // 添加空白占位
     const placeholder = document.createElement('div');
     placeholder.style.cssText = `
-      font-size: 14px;
       color: #666;
-      font-weight: 500;
+      font-weight: bold;
+      font-size: 16px;
+      text-align: center;
+      padding: 10px;
+      border-bottom: 3px solid #666;
     `;
     placeholder.textContent = '题目';
     aiNamesRow.appendChild(placeholder);
@@ -2299,10 +2357,8 @@ loadingStyle.textContent = `
     font-size: 13px !important;
     color: #666 !important;
     opacity: 0.9 !important;
-    background: #f8f9fa !important;
     padding: 12px !important;
     border-radius: 8px !important;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important;
     display: flex !important;
     flex-direction: column !important;
     align-items: center !important;
