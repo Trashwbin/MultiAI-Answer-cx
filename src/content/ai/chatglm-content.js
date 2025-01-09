@@ -5,8 +5,14 @@ class ChatGLMAssistant {
     this.isReady = false;
     this.isProcessing = false;
     this.observer = null;
+    this.debugPanel = new DebugPanel('智谱清言');
     this.setupObserver();
     this.listenForQuestions();
+  }
+
+  // 添加日志方法
+  log(...args) {
+    this.debugPanel.log(...args);
   }
 
   setupObserver() {
@@ -29,6 +35,7 @@ class ChatGLMAssistant {
       this.isReady = true;
       this.setupEventListeners();
       this.observer.disconnect();
+      this.log('智谱清言页面已就绪');
     }
     return this.isReady;
   }
@@ -79,7 +86,7 @@ class ChatGLMAssistant {
       }
 
     } catch (error) {
-      console.error('更新输入框失败:', error);
+      this.log('错误: 更新输入框失败:', error);
       throw error;
     }
   }
@@ -88,13 +95,14 @@ class ChatGLMAssistant {
     try {
       if (this.isProcessing) return;
       this.isProcessing = true;
+      this.debugPanel.activate(); // 激活调试面板
 
       await this.updateEditorContent(message);
       await this.waitForResponse();
       this.isProcessing = false;
 
     } catch (error) {
-      console.error('发送消息失败:', error);
+      this.log('错误: 发送消息失败:', error);
       this.isProcessing = false;
     }
   }
@@ -106,12 +114,12 @@ class ChatGLMAssistant {
       let lastContent = '';
       let stabilityCount = 0;
       let contentStabilityCount = 0;
-      const requiredStability = 3; // 停止按钮检测需要3次稳定
-      const requiredContentStability = 10; // 内容检测需要10次稳定
+      const requiredStability = 3;
+      const requiredContentStability = 10;
 
       const checkTyping = setInterval(() => {
         checkCount++;
-        console.log(`检查回复 #${checkCount}`);
+        this.log(`检查回复 #${checkCount}`);
 
         try {
           // 获取最后一个回复内容
@@ -119,7 +127,7 @@ class ChatGLMAssistant {
           const lastAnswer = answerDivs[answerDivs.length - 1];
 
           if (!lastAnswer) {
-            console.log('未找到回复内容');
+            this.log('未找到回复内容');
             return;
           }
 
@@ -161,7 +169,7 @@ class ChatGLMAssistant {
           }
 
           if (!content) {
-            console.log('内容为空');
+            this.log('内容为空');
             return;
           }
 
@@ -169,7 +177,7 @@ class ChatGLMAssistant {
           const enterDiv = document.querySelector('.enter');
           const isGenerating = enterDiv?.classList.contains('searching');
 
-          console.log('状态:', {
+          this.log('状态:', {
             '正在生成': isGenerating ? '是' : '否',
             '内容稳定次数': contentStabilityCount,
             '停止按钮稳定次数': stabilityCount
@@ -197,9 +205,8 @@ class ChatGLMAssistant {
           }
 
           if (shouldComplete) {
-            console.log('✅ 回答完成，内容:', content);
-            console.log('内容长度:', content.length);
-            console.log('完成原因:', contentStabilityCount >= requiredContentStability ? '内容稳定' : '停止按钮消失');
+            this.log('✅ 回答完成，内容长度:', content.length);
+            this.log('完成原因:', contentStabilityCount >= requiredContentStability ? '内容稳定' : '停止按钮消失');
 
             chrome.runtime.sendMessage({
               type: 'ANSWER_READY',
@@ -214,9 +221,9 @@ class ChatGLMAssistant {
 
           // 超时检查
           if (checkCount >= maxChecks) {
-            console.log('❌ 达到最大检查次数，结束检查');
+            this.log('❌ 达到最大检查次数，结束检查');
             if (content) {
-              console.log('使用当前内容作为最终答案');
+              this.log('使用当前内容作为最终答案');
               chrome.runtime.sendMessage({
                 type: 'ANSWER_READY',
                 answer: content,
@@ -227,7 +234,7 @@ class ChatGLMAssistant {
             resolve();
           }
         } catch (error) {
-          console.error('检查回复时出错:', error);
+          this.log('错误:', error.message);
         }
       }, 250);
     });

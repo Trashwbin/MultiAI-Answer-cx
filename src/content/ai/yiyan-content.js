@@ -3,9 +3,14 @@ class YiyanChatAssistant {
   constructor() {
     this.typing = false;
     this.ready = false;
-    this.lastMessageId = null;
+    this.debugPanel = new DebugPanel('文心一言');
     this.listenForQuestions();
     this.checkReady();
+  }
+
+  // 添加日志方法
+  log(...args) {
+    this.debugPanel.log(...args);
   }
 
   async checkReady() {
@@ -14,7 +19,7 @@ class YiyanChatAssistant {
       await new Promise(resolve => setTimeout(resolve, 500));
     }
     this.ready = true;
-    console.log('文心一言页面已就绪');
+    this.log('文心一言页面已就绪');
   }
 
   async updateEditorContent(message) {
@@ -64,7 +69,7 @@ class YiyanChatAssistant {
       }
 
     } catch (error) {
-      console.error('更新输入框失败:', error);
+      this.log('错误: 更新输入框失败:', error);
       throw error;
     }
   }
@@ -73,6 +78,7 @@ class YiyanChatAssistant {
     try {
       if (this.typing) return;
       this.typing = true;
+      this.debugPanel.activate(); // 激活调试面板
 
       const currentMessages = Array.from(document.querySelectorAll('.dialogue_card_item[data-chat-id]'));
       this.lastMessageId = currentMessages.length > 0 ?
@@ -84,7 +90,7 @@ class YiyanChatAssistant {
       this.typing = false;
 
     } catch (error) {
-      console.error('发送消息失败:', error);
+      this.log('错误: 发送消息失败:', error);
       this.typing = false;
       throw error;
     }
@@ -104,7 +110,7 @@ class YiyanChatAssistant {
 
         const checkTyping = setInterval(() => {
           checkCount++;
-          console.group(`检查回复 #${checkCount}`);
+          this.log(`检查回复 #${checkCount}`);
 
           try {
             // 如果距离上次更新超过2秒，模拟标签页激活状态
@@ -115,18 +121,18 @@ class YiyanChatAssistant {
               window.dispatchEvent(new Event('blur'));
               window.dispatchEvent(new Event('focus'));
               document.dispatchEvent(new Event('visibilitychange'));
-              console.log('触发页面更新');
+              this.log('触发页面更新');
             }
 
             // 获取所有对话项并找到最新的一个
             const messageItems = Array.from(document.querySelectorAll('.dialogue_card_item[data-chat-id]'));
             if (!messageItems.length) {
-              console.log('未找到对话项');
+              this.log('未找到对话项');
               return;
             }
 
             const lastMessage = messageItems[0];
-            console.log('最新对话ID:', lastMessage.getAttribute('data-chat-id'));
+            this.log('最新对话ID:', lastMessage.getAttribute('data-chat-id'));
 
             if (lastMessage) {
               // 检查是否还在输出中 - 通过查找停止按钮或复制按钮
@@ -177,7 +183,7 @@ class YiyanChatAssistant {
                 // 检查内容稳定性
                 if (content === lastContent) {
                   contentStabilityCount++;
-                  console.log(`内容稳定性检查 ${contentStabilityCount}/${requiredContentStability}`);
+                  this.log(`内容稳定性检查 ${contentStabilityCount}/${requiredContentStability}`);
                 } else {
                   contentStabilityCount = 0;
                   lastContent = content;
@@ -191,8 +197,8 @@ class YiyanChatAssistant {
                   copyContainer;
 
                 if (shouldComplete && !hasCopied) {
-                  console.log('获取到完整回复，长度:', content.length);
-                  console.log('完成原因:', copyContainer ? '出现复制按钮' : '内容稳定');
+                  this.log('获取到完整回复，长度:', content.length);
+                  this.log('完成原因:', copyContainer ? '出现复制按钮' : '内容稳定');
                   hasCopied = true;
 
                   if (content) {
@@ -202,7 +208,7 @@ class YiyanChatAssistant {
                       aiType: 'yiyan'
                     });
 
-                    console.log('✅ 回答完成');
+                    this.log('✅ 回答完成');
                     clearInterval(checkTyping);
                     resolve();
                   }
@@ -210,18 +216,18 @@ class YiyanChatAssistant {
               }
 
               if (isTyping) {
-                console.log('等待输出完成...');
+                this.log('等待输出完成...');
                 return;
               }
             }
 
             if (checkCount >= maxChecks) {
-              console.log('❌ 达到最大检查次数，结束检查');
+              this.log('❌ 达到最大检查次数，结束检查');
               clearInterval(checkTyping);
               resolve();
             }
-          } finally {
-            console.groupEnd();
+          } catch (error) {
+            this.log('错误:', error.message);
           }
         }, 250);
       }, 5000); // 初始等待5秒

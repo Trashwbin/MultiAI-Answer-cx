@@ -29,6 +29,11 @@ const AI_CONFIG = {
     name: '文心一言',
     color: '#4B5CC4',
     url: 'https://yiyan.baidu.com/'
+  },
+  xinghuo: {
+    name: '讯飞星火',
+    color: '#1890FF',
+    url: 'https://xinghuo.xfyun.cn/desk'
   }
 };
 

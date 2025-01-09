@@ -78,6 +78,12 @@ window.AI_CONFIG = {
     color: '#4B5CC4',
     weight: 1,
     enabled: true
+  },
+  xinghuo: {
+    name: '讯飞星火',
+    color: '#1890FF',
+    weight: 1,
+    enabled: true
   }
 };
 

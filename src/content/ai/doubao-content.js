@@ -1,23 +1,28 @@
 // 豆包聊天助手
 class DoubaoAssistant {
   constructor() {
-    console.log('豆包助手开始初始化...');
     this.typing = false;
     this.ready = false;
+    this.debugPanel = new DebugPanel('豆包');
     this.listenForQuestions();
     this.checkReady();
   }
 
+  // 添加日志方法
+  log(...args) {
+    this.debugPanel.log(...args);
+  }
+
   async checkReady() {
-    console.log('开始检查豆包页面是否就绪...');
+    this.log('开始检查豆包页面是否就绪...');
     // 等待输入框加载
     let attempts = 0;
     const maxAttempts = 20; // 最多等待10秒
 
     while (!document.querySelector('[data-testid="chat_input_input"]')) {
-      console.log(`第 ${attempts + 1} 次尝试查找输入框...`);
+      this.log(`第 ${attempts + 1} 次尝试查找输入框...`);
       if (attempts >= maxAttempts) {
-        console.error('豆包页面加载超时：未找到输入框');
+        this.log('豆包页面加载超时：未找到输入框');
         return;
       }
       await new Promise(resolve => setTimeout(resolve, 500));
@@ -25,7 +30,7 @@ class DoubaoAssistant {
     }
 
     this.ready = true;
-    console.log('✅ 豆包页面已就绪，输入框加载完成');
+    this.log('✅ 豆包页面已就绪，输入框加载完成');
   }
 
   async updateEditorContent(message) {
@@ -57,7 +62,7 @@ class DoubaoAssistant {
       });
 
     } catch (error) {
-      console.error('更新输入框失败:', error);
+      this.log('错误: 更新输入框失败:', error);
     }
   }
 
@@ -65,13 +70,14 @@ class DoubaoAssistant {
     try {
       if (this.typing) return;
       this.typing = true;
+      this.debugPanel.activate(); // 激活调试面板
 
       await this.updateEditorContent(message);
       await this.waitForResponse();
       this.typing = false;
 
     } catch (error) {
-      console.error('发送消息失败:', error);
+      this.log('错误: 发送消息失败:', error);
       this.typing = false;
     }
   }
@@ -90,7 +96,7 @@ class DoubaoAssistant {
           const contentDiv = lastMessage?.querySelector('[data-testid="message_text_content"]');
 
           if (!lastMessage || !contentDiv) {
-            console.log('等待新回复内容区域加载...');
+            this.log('等待新回复内容区域加载...');
             await new Promise(resolve => setTimeout(resolve, 250));
             checkCount++;
             continue;
@@ -107,7 +113,7 @@ class DoubaoAssistant {
               const stopButton = document.querySelector('[data-testid="chat_input_local_break_button"]');
               const isGenerating = stopButton && !stopButton.classList.contains('!hidden');
 
-              console.log('状态:', {
+              this.log('状态:', {
                 '正在生成': isGenerating ? '是' : '否'
               });
 
@@ -150,11 +156,10 @@ class DoubaoAssistant {
 
                 if (currentContent === lastContent) {
                   stabilityCount++;
-                  console.log(`内容稳定性检查 ${stabilityCount}/${requiredStability}`);
+                  this.log(`内容稳定性检查 ${stabilityCount}/${requiredStability}`);
 
                   if (stabilityCount >= requiredStability) {
-                    console.log('✅ 回答完成，内容:', currentContent);
-                    console.log('内容长度:', currentContent.length);
+                    this.log('✅ 回答完成，内容长度:', currentContent.length);
 
                     chrome.runtime.sendMessage({
                       type: 'ANSWER_READY',
@@ -167,7 +172,7 @@ class DoubaoAssistant {
                     return;
                   }
                 } else {
-                  console.log('内容发生变化，重置稳定性计数');
+                  this.log('内容发生变化，重置稳定性计数');
                   stabilityCount = 0;
                   lastContent = currentContent;
                 }
@@ -175,12 +180,12 @@ class DoubaoAssistant {
                 // 每次检查后等待一小段时间
                 await new Promise(resolve => setTimeout(resolve, 200));
               } else {
-                console.log('等待生成完成...');
+                this.log('等待生成完成...');
                 stabilityCount = 0;
                 lastContent = '';
               }
             } catch (error) {
-              console.error('检查回复时出错:', error);
+              this.log('错误:', error.message);
             }
           }, 250);
 
@@ -188,7 +193,7 @@ class DoubaoAssistant {
         }
 
         if (checkCount >= maxChecks) {
-          console.log('❌ 等待新回复超时');
+          this.log('❌ 等待新回复超时');
           resolve();
         }
       }, 5000); // 初始等待5秒
@@ -196,20 +201,20 @@ class DoubaoAssistant {
   }
 
   listenForQuestions() {
-    console.log('开始监听问题消息...');
+    this.log('开始监听问题消息...');
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-      console.log('收到消息:', request.type);
+      this.log('收到消息:', request.type);
 
       if (request.type === 'CHECK_READY') {
-        console.log('检查就绪状态:', this.ready);
+        this.log('检查就绪状态:', this.ready);
         sendResponse({ ready: this.ready });
         return true;
       }
 
       if (request.type === 'ASK_QUESTION') {
-        console.log('收到提问:', request.question);
+        this.log('收到提问:', request.question);
         if (!this.ready) {
-          console.error('页面未就绪，无法发送问题');
+          this.log('页面未就绪，无法发送问题');
           sendResponse({ success: false, error: 'Page not ready' });
           return true;
         }
@@ -223,7 +228,6 @@ class DoubaoAssistant {
 
 // 初始化
 const init = () => {
-  console.log('初始化豆包助手...');
   new DoubaoAssistant();
 };
 

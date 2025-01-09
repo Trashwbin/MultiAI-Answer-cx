@@ -29,6 +29,11 @@ const AI_CONFIG = {
     url: 'https://yiyan.baidu.com/',
     tabId: null,
     windowId: null
+  },
+  xinghuo: {
+    url: 'https://xinghuo.xfyun.cn/desk',
+    tabId: null,
+    windowId: null
   }
 };
 

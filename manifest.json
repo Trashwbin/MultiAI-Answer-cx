@@ -31,7 +31,8 @@
     "https://chatglm.cn/*",
     "https://doubao.com/*",
     "https://www.doubao.com/*",
-    "https://yiyan.baidu.com/*"
+    "https://yiyan.baidu.com/*",
+    "https://xinghuo.xfyun.cn/*"
   ],
   "background": {
     "service_worker": "src/background/background.js"
@@ -65,6 +66,7 @@
         "https://kimi.moonshot.cn/*"
       ],
       "js": [
+        "src/content/ai/debugPanel.js",
         "src/content/ai/kimi-content.js"
       ]
     },
@@ -73,6 +75,7 @@
         "https://chat.deepseek.com/*"
       ],
       "js": [
+        "src/content/ai/debugPanel.js",
         "src/content/ai/deepseek-content.js"
       ]
     },
@@ -81,6 +84,7 @@
         "https://tongyi.aliyun.com/*"
       ],
       "js": [
+        "src/content/ai/debugPanel.js",
         "src/content/ai/tongyi-content.js"
       ]
     },
@@ -89,6 +93,7 @@
         "https://chatglm.cn/*"
       ],
       "js": [
+        "src/content/ai/debugPanel.js",
         "src/content/ai/chatglm-content.js"
       ]
     },
@@ -98,6 +103,7 @@
         "https://www.doubao.com/*"
       ],
       "js": [
+        "src/content/ai/debugPanel.js",
         "src/content/ai/doubao-content.js"
       ]
     },
@@ -106,7 +112,17 @@
         "https://yiyan.baidu.com/*"
       ],
       "js": [
+        "src/content/ai/debugPanel.js",
         "src/content/ai/yiyan-content.js"
+      ]
+    },
+    {
+      "matches": [
+        "https://xinghuo.xfyun.cn/desk"
+      ],
+      "js": [
+        "src/content/ai/debugPanel.js",
+        "src/content/ai/xinghuo-content.js"
       ]
     }
   ]

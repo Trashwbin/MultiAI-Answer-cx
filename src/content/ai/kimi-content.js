@@ -3,8 +3,14 @@ class KimiChatAssistant {
   constructor() {
     this.typing = false;
     this.ready = false;
+    this.debugPanel = new DebugPanel('Kimi');
     this.listenForQuestions();
     this.checkReady();
+  }
+
+  // 添加日志方法
+  log(...args) {
+    this.debugPanel.log(...args);
   }
 
   async checkReady() {
@@ -13,7 +19,7 @@ class KimiChatAssistant {
       await new Promise(resolve => setTimeout(resolve, 500));
     }
     this.ready = true;
-    console.log('Kimi 页面已就绪');
+    this.log('Kimi 页面已就绪');
   }
 
   async updateEditorContent(message) {
@@ -47,7 +53,7 @@ class KimiChatAssistant {
       await new Promise(resolve => setTimeout(resolve, 100));
 
     } catch (error) {
-      console.error('更新输入框失败:', error);
+      this.log('错误: 更新输入框失败:', error);
     }
   }
 
@@ -55,6 +61,7 @@ class KimiChatAssistant {
     try {
       if (this.typing) return;
       this.typing = true;
+      this.debugPanel.activate(); // 激活调试面板
 
       await this.updateEditorContent(message);
       // 等待一小段时间
@@ -86,7 +93,7 @@ class KimiChatAssistant {
       this.typing = false;
 
     } catch (error) {
-      console.error('发送消息失败:', error);
+      this.log('错误: 发送消息失败:', error);
       this.typing = false;
     }
   }
@@ -101,7 +108,7 @@ class KimiChatAssistant {
 
         const checkTyping = setInterval(() => {
           checkCount++;
-          console.group(`检查回复 #${checkCount}`);
+          this.log(`检查回复 #${checkCount}`);
 
           try {
             // 获取最后一个回复内容
@@ -154,10 +161,10 @@ class KimiChatAssistant {
                     content = clonedDiv.textContent;
                   }
 
-                  console.log('Kimi回答内容:', content);
+                  this.log('Kimi回答内容:', content);
 
                   if (content !== lastContent && !hasCopied) {
-                    console.log('获取到完整回复，长度:', content.length);
+                    this.log('获取到完整回复，长度:', content.length);
                     hasCopied = true;
 
                     if (content) {
@@ -167,7 +174,7 @@ class KimiChatAssistant {
                         aiType: 'kimi'
                       });
 
-                      console.log('✅ 回答完成');
+                      this.log('✅ 回答完成');
                       clearInterval(checkTyping);
                       resolve();
                     }
@@ -177,19 +184,19 @@ class KimiChatAssistant {
                 }
 
                 if (isTyping) {
-                  console.log('等待输出完成...');
+                  this.log('等待输出完成...');
                   return;
                 }
               }
             }
 
             if (checkCount >= maxChecks) {
-              console.log('❌ 达到最大检查次数，结束检查');
+              this.log('❌ 达到最大检查次数，结束检查');
               clearInterval(checkTyping);
               resolve();
             }
-          } finally {
-            console.groupEnd();
+          } catch (error) {
+            this.log('错误:', error.message);
           }
         }, 250);
       }, 5000);
