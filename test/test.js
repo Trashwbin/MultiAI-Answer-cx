@@ -34,6 +34,16 @@ const AI_CONFIG = {
     name: '讯飞星火',
     color: '#1890FF',
     url: 'https://xinghuo.xfyun.cn/desk'
+  },
+  chatgpt: {
+    name: 'ChatGPT',
+    color: '#10A37F',
+    url: 'https://chatgpt.com/'
+  },
+  gemini: {
+    name: 'Gemini',
+    color: '#1A73E8',
+    url: 'https://gemini.google.com/'
   }
 };
 
@@ -223,10 +233,6 @@ async function initSelectedAITabs() {
     }
   }
 
-  // 保存当前测试窗口
-  const currentTestWindow = await chrome.windows.getCurrent();
-  const currentTestTab = (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
-
   // 并行初始化所有选中的AI
   await Promise.all(selectedAIs.map(async (aiType, index) => {
     let currentTabId = aiTabs[aiType];
@@ -268,7 +274,7 @@ async function initSelectedAITabs() {
         // 等待页面加载完成并确保内容脚本准备就绪
         await new Promise((resolve, reject) => {
           let retryCount = 0;
-          const maxRetries = 30; // 最多等待30秒
+          const maxRetries = 30;
 
           const checkReady = async () => {
             try {
@@ -297,7 +303,7 @@ async function initSelectedAITabs() {
           chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo) {
             if (tabId === window.tabs[0].id && changeInfo.status === 'complete') {
               chrome.tabs.onUpdated.removeListener(listener);
-              setTimeout(checkReady, 2000); // 页面加载完成后等待2秒再开始检查
+              setTimeout(checkReady, 2000);
             }
           });
         });
@@ -305,14 +311,10 @@ async function initSelectedAITabs() {
       } catch (error) {
         console.error(`初始化 ${AI_CONFIG[aiType].name} 失败:`, error);
         updateAIStatus(aiType, 'error', `初始化失败: ${error.message}`);
-        delete aiTabs[aiType]; // 清除失败的标签页记录
+        delete aiTabs[aiType];
       }
     }
   }));
-
-  // 所有AI都初始化完成后，切回测试窗口
-  await chrome.tabs.update(currentTestTab.id, { active: true });
-  await chrome.windows.update(currentTestWindow.id, { focused: true });
 }
 
 // 开始测试
@@ -336,32 +338,120 @@ async function startTest() {
   testButton.disabled = true;
 
   try {
-    // 初始化选中的 AI
-    await initSelectedAITabs();
+    // 保存当前测试窗口
+    const currentTestWindow = await chrome.windows.getCurrent();
+    const currentTestTab = (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
 
-    // 向选中的 AI 发送问题
-    for (const aiType of selectedAIs) {
-      const tabId = aiTabs[aiType];
-      if (tabId) {
-        try {
-          // 再次检查标签页是否存在
-          if (await checkTabExists(tabId)) {
+    // 并行处理所有选中的AI，但不等待它们完成
+    selectedAIs.forEach(async (aiType, index) => {
+      try {
+        let currentTabId = aiTabs[aiType];
+
+        // 检查现有标签页是否还存在
+        if (currentTabId && !(await checkTabExists(currentTabId))) {
+          delete aiTabs[aiType];
+          currentTabId = null;
+        }
+
+        if (!currentTabId) {
+          document.getElementById(`ai-card-${aiType}`).classList.add('active');
+          updateAIStatus(aiType, 'loading', '正在初始化...');
+
+          // 清理同URL的其他窗口
+          await cleanupDuplicateWindows(aiType);
+
+          // 计算窗口位置
+          const position = await calculateWindowPosition(index);
+
+          // 创建新窗口
+          const window = await chrome.windows.create({
+            url: AI_CONFIG[aiType].url,
+            type: 'popup',
+            width: position.width,
+            height: position.height,
+            left: position.left,
+            top: position.top,
+            focused: false
+          });
+
+          // 保存标签页ID
+          aiTabs[aiType] = window.tabs[0].id;
+
+          // 激活新窗口
+          await simulateTabActivation(window.tabs[0].id);
+
+          // 等待页面加载完成并确保内容脚本准备就绪
+          try {
+            await new Promise((resolve, reject) => {
+              let retryCount = 0;
+              const maxRetries = 30;
+
+              const checkReady = async () => {
+                try {
+                  const response = await chrome.tabs.sendMessage(window.tabs[0].id, { type: 'CHECK_READY' });
+                  if (response && response.ready) {
+                    updateAIStatus(aiType, 'ready');
+                    resolve();
+                  } else if (retryCount < maxRetries) {
+                    retryCount++;
+                    updateAIStatus(aiType, 'loading', `正在等待页面准备就绪... (${retryCount}/${maxRetries})`);
+                    setTimeout(checkReady, 1000);
+                  } else {
+                    reject(new Error('页面加载超时'));
+                  }
+                } catch (error) {
+                  if (retryCount < maxRetries) {
+                    retryCount++;
+                    updateAIStatus(aiType, 'loading', `正在等待页面准备就绪... (${retryCount}/${maxRetries})`);
+                    setTimeout(checkReady, 1000);
+                  } else {
+                    reject(new Error('内容脚本未能成功加载'));
+                  }
+                }
+              };
+
+              chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo) {
+                if (tabId === window.tabs[0].id && changeInfo.status === 'complete') {
+                  chrome.tabs.onUpdated.removeListener(listener);
+                  setTimeout(checkReady, 2000);
+                }
+              });
+            });
+
+            // AI 准备就绪后立即发送问题
             updateAIStatus(aiType, 'loading', '正在处理问题...');
-            await chrome.tabs.sendMessage(tabId, {
+            await chrome.tabs.sendMessage(window.tabs[0].id, {
               type: 'ASK_QUESTION',
               question: question
             });
-          } else {
-            // 如果标签页不存在，删除记录并显示错误
+
+            // 发送问题后立即切回测试窗口
+            await chrome.tabs.update(currentTestTab.id, { active: true });
+            await chrome.windows.update(currentTestWindow.id, { focused: true });
+
+          } catch (error) {
+            console.error(`初始化 ${AI_CONFIG[aiType].name} 失败:`, error);
+            updateAIStatus(aiType, 'error', `初始化失败: ${error.message}`);
             delete aiTabs[aiType];
-            updateAIStatus(aiType, 'error', '标签页已关闭，请重试');
           }
-        } catch (error) {
-          console.error(`发送问题到 ${AI_CONFIG[aiType].name} 失败:`, error);
-          updateAIStatus(aiType, 'error', `发送失败: ${error.message}`);
+        } else {
+          // 如果标签页已存在，直接发送问题
+          updateAIStatus(aiType, 'loading', '正在处理问题...');
+          await chrome.tabs.sendMessage(currentTabId, {
+            type: 'ASK_QUESTION',
+            question: question
+          });
+
+          // 发送问题后立即切回测试窗口
+          await chrome.tabs.update(currentTestTab.id, { active: true });
+          await chrome.windows.update(currentTestWindow.id, { focused: true });
         }
+      } catch (error) {
+        console.error(`处理 ${AI_CONFIG[aiType].name} 失败:`, error);
+        updateAIStatus(aiType, 'error', `处理失败: ${error.message}`);
       }
-    }
+    });
+
   } finally {
     // 启用按钮
     testButton.disabled = false;

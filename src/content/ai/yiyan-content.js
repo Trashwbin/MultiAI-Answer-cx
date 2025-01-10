@@ -43,7 +43,9 @@ class YiyanChatAssistant {
         throw new Error('找不到输入框');
       }
 
-      document.querySelector('.swiper').innerHTML = '';
+      if (document.querySelector('.swiper')) {
+        document.querySelector('.swiper').innerHTML = '';
+      }
 
       // 聚焦编辑器
       editor.focus();
@@ -130,7 +132,7 @@ class YiyanChatAssistant {
         let contentStabilityCount = 0;
         const requiredContentStability = 10;
         let lastUpdateTime = Date.now();
-        const updateInterval = 2000; // 每2秒触发一次页面更新
+        const updateInterval = 1000; // 每2秒触发一次页面更新
 
         const checkTyping = setInterval(() => {
           checkCount++;

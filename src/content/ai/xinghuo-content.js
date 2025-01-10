@@ -121,7 +121,7 @@ class XunfeiChatAssistant {
         let stabilityCount = 0;
         const requiredStability = 5;
         let lastUpdateTime = Date.now();
-        const updateInterval = 2000; // 每2秒触发一次页面更新
+        const updateInterval = 1000; // 每2秒触发一次页面更新
 
         const checkTyping = setInterval(() => {
           checkCount++;

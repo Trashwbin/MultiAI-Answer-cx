@@ -14,8 +14,8 @@ class TongyiChatAssistant {
   }
 
   async checkReady() {
-    // 等待输入框加载
-    while (!document.querySelector('textarea[placeholder="千事不决问通义"]')) {
+    // 等待输入框加载，使用类名前缀查找
+    while (!document.querySelector('textarea[class*="textarea--"]')) {
       await new Promise(resolve => setTimeout(resolve, 500));
     }
     this.ready = true;
@@ -24,7 +24,7 @@ class TongyiChatAssistant {
 
   async updateEditorContent(message) {
     try {
-      const editor = document.querySelector('textarea[placeholder="千事不决问通义"]');
+      const editor = document.querySelector('textarea[class*="textarea--"]');
       if (!editor) {
         throw new Error('找不到输入框');
       }
@@ -32,14 +32,23 @@ class TongyiChatAssistant {
       editor.value = message;
       editor.dispatchEvent(new Event('input', { bubbles: true }));
 
-      // 触发回车发送
-      editor.dispatchEvent(new KeyboardEvent('keydown', {
-        key: 'Enter',
-        code: 'Enter',
-        keyCode: 13,
-        which: 13,
-        bubbles: true
-      }));
+      // 等待发送按钮启用
+      await new Promise(resolve => {
+        const checkButton = setInterval(() => {
+          // 查找不带 disabled 类的发送按钮容器
+          const sendButtonContainer = document.querySelector('div[class*="operateBtn--"]:not([class*="disabled--"])');
+          if (sendButtonContainer) {
+            clearInterval(checkButton);
+            sendButtonContainer.click();
+            resolve();
+          }
+        }, 100);
+
+        setTimeout(() => {
+          clearInterval(checkButton);
+          resolve();
+        }, 5000);
+      });
 
     } catch (error) {
       this.log('错误: 更新输入框失败:', error);

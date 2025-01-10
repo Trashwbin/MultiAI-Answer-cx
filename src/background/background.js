@@ -34,6 +34,16 @@ const AI_CONFIG = {
     url: 'https://xinghuo.xfyun.cn/desk',
     tabId: null,
     windowId: null
+  },
+  chatgpt: {
+    url: 'https://chatgpt.com/',
+    tabId: null,
+    windowId: null
+  },
+  gemini: {
+    url: 'https://gemini.google.com/',
+    tabId: null,
+    windowId: null
   }
 };
 

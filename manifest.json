@@ -33,7 +33,9 @@
     "https://doubao.com/*",
     "https://www.doubao.com/*",
     "https://yiyan.baidu.com/*",
-    "https://xinghuo.xfyun.cn/*"
+    "https://xinghuo.xfyun.cn/*",
+    "https://chatgpt.com/*",
+    "https://gemini.google.com/*"
   ],
   "background": {
     "service_worker": "src/background/background.js"
@@ -124,6 +126,24 @@
       "js": [
         "src/content/ai/debugPanel.js",
         "src/content/ai/xinghuo-content.js"
+      ]
+    },
+    {
+      "matches": [
+        "https://chatgpt.com/*"
+      ],
+      "js": [
+        "src/content/ai/debugPanel.js",
+        "src/content/ai/chatgpt-content.js"
+      ]
+    },
+    {
+      "matches": [
+        "https://gemini.google.com/*"
+      ],
+      "js": [
+        "src/content/ai/debugPanel.js",
+        "src/content/ai/gemini-content.js"
       ]
     }
   ]

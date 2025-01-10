@@ -84,6 +84,18 @@ window.AI_CONFIG = {
     color: '#1890FF',
     weight: 1,
     enabled: true
+  },
+  chatgpt: {
+    name: 'ChatGPT',
+    color: '#10A37F',
+    weight: 2,
+    enabled: true
+  },
+  gemini: {
+    name: 'Gemini',
+    color: '#1A73E8',
+    weight: 2,
+    enabled: true
   }
 };
 

@@ -115,7 +115,7 @@ class ChatGLMAssistant {
       let stabilityCount = 0;
       let contentStabilityCount = 0;
       const requiredStability = 2;
-      const requiredContentStability = 3;
+      const requiredContentStability = 10;
       let lastUpdateTime = Date.now();
       const updateInterval = 1000;
 
