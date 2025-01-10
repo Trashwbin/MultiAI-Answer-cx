@@ -38,7 +38,7 @@ class YiyanChatAssistant {
 
   async updateEditorContent(message) {
     try {
-      const editor = document.querySelector('#dialogue-input');
+      const editor = document.querySelector('#dialogue-input') || document.querySelector('.yc-editor[contenteditable="true"]');
       if (!editor) {
         throw new Error('找不到输入框');
       }

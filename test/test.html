@@ -158,6 +158,53 @@
       margin-top: 10px;
       text-align: right;
     }
+
+    .mode-selection {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 20px;
+      padding: 10px;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .mode-title {
+      font-weight: bold;
+      color: #333;
+    }
+
+    .mode-options {
+      display: flex;
+      gap: 20px;
+    }
+
+    .mode-option {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+    }
+
+    .info-icon {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      line-height: 16px;
+      text-align: center;
+      border-radius: 50%;
+      background: #e0e0e0;
+      color: #666;
+      font-size: 12px;
+      font-style: italic;
+      cursor: help;
+      margin-left: 4px;
+    }
+
+    .info-icon:hover {
+      background: #d0d0d0;
+    }
   </style>
 </head>
 
@@ -169,6 +216,22 @@
   <div class="test-panel">
     <div class="ai-selection" id="aiSelection">
       <!-- AI 选择框将在这里动态生成 -->
+    </div>
+
+    <div class="mode-selection">
+      <div class="mode-title">运行模式：</div>
+      <div class="mode-options">
+        <label class="mode-option">
+          <input type="radio" name="mode" value="stable" checked>
+          <span>稳定模式</span>
+          <span class="info-icon" title="等待所有AI都回复完成再切换回测试页面">i</span>
+        </label>
+        <label class="mode-option">
+          <input type="radio" name="mode" value="fast">
+          <span>极速模式</span>
+          <span class="info-icon" title="所有AI加载完成就立即切换回测试页面">i</span>
+        </label>
+      </div>
     </div>
 
     <div class="test-controls">
