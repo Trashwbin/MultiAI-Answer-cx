@@ -18,54 +18,78 @@ class YiyanChatAssistant {
     while (!document.querySelector('.yc-editor[contenteditable="true"]')) {
       await new Promise(resolve => setTimeout(resolve, 500));
     }
+
+    // 等待编辑器完全初始化
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // 尝试一次空输入，确保编辑器已经完全准备好
+    try {
+      const editor = document.querySelector('.yc-editor[contenteditable="true"]');
+      editor.focus();
+      editor.dispatchEvent(new Event('focus', { bubbles: true }));
+      editor.dispatchEvent(new Event('input', { bubbles: true }));
+    } catch (error) {
+      this.log('初始化测试失败，但继续执行:', error);
+    }
+
     this.ready = true;
     this.log('文心一言页面已就绪');
   }
 
   async updateEditorContent(message) {
     try {
-      const editor = document.querySelector('.yc-editor[contenteditable="true"]');
+      const editor = document.querySelector('#dialogue-input');
       if (!editor) {
         throw new Error('找不到输入框');
       }
 
-      // 聚焦输入框
-      editor.focus();
+      document.querySelector('.swiper').innerHTML = '';
 
-      // 使用剪贴板API模拟粘贴操作
-      const data = new DataTransfer();
-      data.setData('text/plain', message);
-      const pasteEvent = new ClipboardEvent('paste', {
-        bubbles: true,
-        cancelable: true,
-        clipboardData: data
-      });
-      editor.dispatchEvent(pasteEvent);
+      // 聚焦编辑器
+      editor.focus();
+      editor.dispatchEvent(new Event('focus', { bubbles: true }));
+      // 确保编辑器处于可编辑状态
+      editor.contentEditable = 'true';
+      // 尝试使用 click 事件触发聚焦
+      editor.click();
+      editor.placeholder = '请输入问题或“/”获取模板';
+      this.log('输入框已聚焦');
+
+      // 使用 execCommand 插入文本
+      const selection = window.getSelection();
+      const range = document.createRange();
+
+      // 确保编辑器有一个空段落
+      if (!editor.querySelector('p')) {
+        const p = document.createElement('p');
+        p.className = 'yc-editor-paragraph';
+        p.innerHTML = '<br>';
+        editor.appendChild(p);
+      }
+
+      const p = editor.querySelector('p');
+      range.selectNodeContents(p);
+      selection.removeAllRanges();
+      selection.addRange(range);
+
+      document.execCommand('insertText', false, message);
+
+      // 触发输入事件
+      editor.dispatchEvent(new Event('input', { bubbles: true }));
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
       // 等待一下确保内容更新
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 200));
 
-      // 尝试点击发送按钮
+      // 点击发送按钮
       const sendButton = document.querySelector('#sendBtn');
       if (sendButton) {
-        // 模拟真实的点击事件
         const clickEvent = new MouseEvent('click', {
           bubbles: true,
           cancelable: true,
           view: window
         });
         sendButton.dispatchEvent(clickEvent);
-      } else {
-        // 如果找不到发送按钮，尝试使用回车发送
-        const enterEvent = new KeyboardEvent('keydown', {
-          key: 'Enter',
-          code: 'Enter',
-          keyCode: 13,
-          which: 13,
-          bubbles: true,
-          cancelable: true
-        });
-        editor.dispatchEvent(enterEvent);
       }
 
     } catch (error) {
@@ -125,14 +149,13 @@ class YiyanChatAssistant {
             }
 
             // 获取所有对话项并找到最新的一个
-            const messageItems = Array.from(document.querySelectorAll('.dialogue_card_item[data-chat-id]'));
+            const messageItems = Array.from(document.querySelectorAll('.dialog-card-wrapper'));
             if (!messageItems.length) {
               this.log('未找到对话项');
               return;
             }
 
             const lastMessage = messageItems[0];
-            this.log('最新对话ID:', lastMessage.getAttribute('data-chat-id'));
 
             if (lastMessage) {
               // 检查是否还在输出中 - 通过查找停止按钮或复制按钮

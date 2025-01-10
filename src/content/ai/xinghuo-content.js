@@ -27,12 +27,35 @@ class XunfeiChatAssistant {
   }
 
   async checkReady() {
-    // 等待输入框加载
-    while (!document.querySelector('#askwindow-textarea')) {
+    this.log('开始检查星火页面是否就绪...');
+    let attempts = 0;
+    const maxAttempts = 20; // 最多等待10秒
+
+    while (true) {
+      const editor = document.querySelector('#askwindow-textarea');
+      if (editor) {
+        // 检查编辑器是否真的可用
+        try {
+          editor.focus();
+          editor.dispatchEvent(new Event('focus', { bubbles: true }));
+          editor.dispatchEvent(new Event('input', { bubbles: true }));
+          this.ready = true;
+          this.log('✅ 星火页面已就绪，输入框加载完成');
+          return;
+        } catch (error) {
+          this.log('编辑器存在但未完全初始化:', error);
+        }
+      }
+
+      if (attempts >= maxAttempts) {
+        this.log('❌ 星火页面加载超时：未找到输入框或输入框未就绪');
+        return;
+      }
+
+      this.log(`第 ${attempts + 1} 次尝试查找输入框...`);
       await new Promise(resolve => setTimeout(resolve, 500));
+      attempts++;
     }
-    this.ready = true;
-    this.log('讯飞星火页面已就绪');
   }
 
   async updateEditorContent(message) {
@@ -97,12 +120,25 @@ class XunfeiChatAssistant {
         let lastContent = '';
         let stabilityCount = 0;
         const requiredStability = 5;
+        let lastUpdateTime = Date.now();
+        const updateInterval = 2000; // 每2秒触发一次页面更新
 
         const checkTyping = setInterval(() => {
           checkCount++;
           this.log(`检查回复 #${checkCount}`);
 
           try {
+            // 如果距离上次更新超过2秒，模拟标签页激活状态
+            const now = Date.now();
+            if (now - lastUpdateTime >= updateInterval) {
+              lastUpdateTime = now;
+              // 模拟标签页激活和失活
+              window.dispatchEvent(new Event('blur'));
+              window.dispatchEvent(new Event('focus'));
+              document.dispatchEvent(new Event('visibilitychange'));
+              this.log('触发页面更新');
+            }
+
             // 使用类名前缀查找元素
             const contentItems = Array.from(document.getElementsByTagName('*'))
               .filter(el => {
@@ -213,7 +249,7 @@ class XunfeiChatAssistant {
             this.log('错误:', error.message);
           }
         }, 250);
-      }, 3000);
+      }, 5000);
     });
   }
 

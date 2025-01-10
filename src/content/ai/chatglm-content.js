@@ -114,14 +114,27 @@ class ChatGLMAssistant {
       let lastContent = '';
       let stabilityCount = 0;
       let contentStabilityCount = 0;
-      const requiredStability = 3;
-      const requiredContentStability = 10;
+      const requiredStability = 2;
+      const requiredContentStability = 3;
+      let lastUpdateTime = Date.now();
+      const updateInterval = 1000;
 
       const checkTyping = setInterval(() => {
         checkCount++;
         this.log(`检查回复 #${checkCount}`);
 
         try {
+          // 如果距离上次更新超过1秒，模拟标签页激活状态
+          const now = Date.now();
+          if (now - lastUpdateTime >= updateInterval) {
+            lastUpdateTime = now;
+            // 模拟标签页激活和失活
+            window.dispatchEvent(new Event('blur'));
+            window.dispatchEvent(new Event('focus'));
+            document.dispatchEvent(new Event('visibilitychange'));
+            this.log('触发页面更新');
+          }
+
           // 获取最后一个回复内容
           const answerDivs = document.querySelectorAll('.answer');
           const lastAnswer = answerDivs[answerDivs.length - 1];
@@ -192,8 +205,8 @@ class ChatGLMAssistant {
           }
 
           // 两种情况下认为回复完成：
-          // 1. 停止按钮消失且内容稳定3次
-          // 2. 内容连续稳定10次
+          // 1. 停止按钮消失且内容稳定2次
+          // 2. 内容连续稳定3次
           const shouldComplete =
             (!isGenerating && content === lastContent && stabilityCount >= requiredStability) ||
             (contentStabilityCount >= requiredContentStability);
@@ -236,7 +249,7 @@ class ChatGLMAssistant {
         } catch (error) {
           this.log('错误:', error.message);
         }
-      }, 250);
+      }, 100);
     });
   }
 

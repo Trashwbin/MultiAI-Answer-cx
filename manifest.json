@@ -21,7 +21,8 @@
     "tabs",
     "clipboardRead",
     "clipboardWrite",
-    "storage"
+    "storage",
+    "system.display"
   ],
   "host_permissions": [
     "https://*.chaoxing.com/*",
