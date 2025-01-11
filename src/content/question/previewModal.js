@@ -372,10 +372,11 @@ function showPreviewModal() {
           modal.parentNode.removeChild(modal);
         }
 
-        // 发送到启用的 AI
-        enabledAIs.forEach(([aiType]) => {
-          sendToAI(aiType, fullQuestion);
-        });
+        sendToAllAIs();
+        // // 发送到启用的 AI
+        // enabledAIs.forEach(([aiType]) => {
+        //   sendToAI(aiType, fullQuestion);
+        // });
       });
 
     } catch (error) {

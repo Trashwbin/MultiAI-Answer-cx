@@ -3,56 +3,47 @@ const AI_CONFIG = {
   kimi: {
     url: 'https://kimi.moonshot.cn/',
     tabId: null,
-    windowId: null,
-    enabled: true
+    windowId: null
   },
   deepseek: {
     url: 'https://chat.deepseek.com/',
     tabId: null,
-    windowId: null,
-    enabled: true
+    windowId: null
   },
   tongyi: {
     url: 'https://tongyi.aliyun.com/',
     tabId: null,
-    windowId: null,
-    enabled: true
+    windowId: null
   },
   chatglm: {
     url: 'https://chatglm.cn/',
     tabId: null,
-    windowId: null,
-    enabled: true
+    windowId: null
   },
   doubao: {
     url: 'https://doubao.com/',
     tabId: null,
-    windowId: null,
-    enabled: true
+    windowId: null
   },
   yiyan: {
     url: 'https://yiyan.baidu.com/',
     tabId: null,
-    windowId: null,
-    enabled: true
+    windowId: null
   },
   xinghuo: {
     url: 'https://xinghuo.xfyun.cn/desk',
     tabId: null,
-    windowId: null,
-    enabled: true
+    windowId: null
   },
   chatgpt: {
     url: 'https://chatgpt.com/',
     tabId: null,
-    windowId: null,
-    enabled: true
+    windowId: null
   },
   gemini: {
     url: 'https://gemini.google.com/',
     tabId: null,
-    windowId: null,
-    enabled: true
+    windowId: null
   }
 };
 
@@ -94,73 +85,53 @@ async function cleanupDuplicateWindows(aiType, exceptTabId = null) {
 
 // 计算窗口位置
 async function calculateWindowPosition(index, totalWindows) {
-  try {
-    // 获取显示器信息
-    const displays = await chrome.system.display.getInfo();
-    // 使用主显示器
-    const primaryDisplay = displays.find(d => d.isPrimary) || displays[0];
+  // 获取屏幕信息
+  const displays = await chrome.system.display.getInfo();
+  const primaryDisplay = displays.find(d => d.isPrimary) || displays[0];
 
-    // 获取工作区尺寸
-    const screenWidth = primaryDisplay.workArea.width;
-    const screenHeight = primaryDisplay.workArea.height;
-    const screenLeft = primaryDisplay.workArea.left;
-    const screenTop = primaryDisplay.workArea.top;
+  // 获取工作区尺寸
+  const screenWidth = primaryDisplay.workArea.width;
+  const screenHeight = primaryDisplay.workArea.height;
 
-    // 根据窗口总数决定布局
-    let cols, rows;
-    if (totalWindows <= 2) {
-      cols = 2;
-      rows = 1;
-    } else if (totalWindows <= 4) {
-      cols = 2;
-      rows = 2;
-    } else if (totalWindows <= 6) {
-      cols = 3;
-      rows = 2;
-    } else {
-      cols = 3;
-      rows = 3;
-    }
-
-    // 计算单个窗口的尺寸
-    const horizontalGap = 20;
-    const verticalGap = 20;
-    const availableWidth = screenWidth - (horizontalGap * (cols + 1));
-    const availableHeight = screenHeight - (verticalGap * (rows + 1));
-
-    const windowWidth = Math.floor(availableWidth / cols);
-    const windowHeight = Math.floor(availableHeight / rows);
-
-    // 计算当前窗口应该在第几行第几列
-    const row = Math.floor(index / cols);
-    const col = index % cols;
-
-    // 计算左上角坐标，确保在工作区内
-    const left = screenLeft + horizontalGap + col * (windowWidth + horizontalGap);
-    const top = screenTop + verticalGap + row * (windowHeight + verticalGap);
-
-    // 确保窗口尺寸和位置合理（至少 50% 在屏幕内）
-    const minWidth = Math.min(windowWidth, Math.floor(screenWidth * 0.9));
-    const minHeight = Math.min(windowHeight, Math.floor(screenHeight * 0.9));
-    const safeLeft = Math.max(screenLeft, Math.min(left, screenLeft + screenWidth - minWidth));
-    const safeTop = Math.max(screenTop, Math.min(top, screenTop + screenHeight - minHeight));
-
-    return {
-      left: safeLeft,
-      top: safeTop,
-      width: minWidth,
-      height: minHeight
-    };
-  } catch (error) {
-    // 如果获取显示器信息失败，使用默认值
-    //console.error('获取显示器信息失败，使用默认值:', error);
-    return {
-      left: 100 + index * 50,
-      top: 100 + index * 50,
-      width: 800,
-      height: 600
-    };
+  // 根据窗口总数决定布局
+  let cols, rows;
+  if (totalWindows <= 2) {
+    cols = 2;
+    rows = 1;
+  } else if (totalWindows <= 4) {
+    cols = 2;
+    rows = 2;
+  } else if (totalWindows <= 6) {
+    cols = 3;
+    rows = 2;
+  } else {
+    cols = 3;
+    rows = 3;
   }
+
+  // 计算单个窗口的尺寸
+  const horizontalGap = 20;
+  const verticalGap = 20;
+  const availableWidth = screenWidth - (horizontalGap * (cols + 1));
+  const availableHeight = screenHeight - (verticalGap * (rows + 1));
+
+  const windowWidth = Math.floor(availableWidth / cols);
+  const windowHeight = Math.floor(availableHeight / rows);
+
+  // 计算当前窗口应该在第几行第几列
+  const row = Math.floor(index / cols);
+  const col = index % cols;
+
+  // 计算左上角坐标，确保在工作区内
+  const left = primaryDisplay.workArea.left + horizontalGap + col * (windowWidth + horizontalGap);
+  const top = primaryDisplay.workArea.top + verticalGap + row * (windowHeight + verticalGap);
+
+  return {
+    left,
+    top,
+    width: windowWidth,
+    height: windowHeight
+  };
 }
 
 // 处理问题发送
@@ -168,9 +139,14 @@ async function handleQuestion(request, fromTabId, sendResponse) {
   console.log('正在处理问题...', request.aiType, '运行模式:', request.runMode);
   const aiType = request.aiType;
   const config = AI_CONFIG[aiType];
+  console.log(chrome.storage.local)
+  // 从 storage 获取启用的 AI 配置
+  const { AI_CONFIG: storedConfig } = await chrome.storage.local.get('AI_CONFIG');
+  const enabledAIs = Object.entries(storedConfig || {})
+    .filter(([_, cfg]) => cfg.enabled)
+    .sort(([a], [b]) => a.localeCompare(b));
 
-  // 获取启用的 AI 数量和当前 AI 的索引
-  const enabledAIs = Object.entries(AI_CONFIG).filter(([_, cfg]) => cfg.enabled);
+  console.log('启用的 AI:', enabledAIs.map(([type]) => type));
   const currentIndex = enabledAIs.findIndex(([type]) => type === aiType);
 
   // 如果是第一个 AI，重置切换标记
@@ -524,22 +500,180 @@ chrome.windows.onRemoved.addListener((windowId) => {
   });
 });
 
+// 处理批量问题发送
+async function handleQuestions(request, fromTabId, sendResponse) {
+  console.log('正在处理批量问题...', request.aiList, '运行模式:', request.runMode);
+
+  try {
+    // 获取启用的 AI 列表
+    const enabledAIs = request.aiList;
+    console.log('启用的 AI:', enabledAIs);
+
+    // 重置切换标记
+    hasSwitchedBackInFastMode = false;
+
+    // 重置待响应集合
+    pendingResponses = new Set(enabledAIs);
+
+    // 并行处理所有 AI
+    await Promise.all(enabledAIs.map(async (aiType, index) => {
+      const config = AI_CONFIG[aiType];
+      if (!config) return;
+
+      let targetTabId = config.tabId;
+      let targetWindowId = config.windowId;
+
+      // 检查现有窗口是否可用
+      if (targetTabId && targetWindowId) {
+        try {
+          const tab = await chrome.tabs.get(targetTabId);
+          const window = await chrome.windows.get(targetWindowId);
+
+          if (!tab || !tab.url || !tab.url.includes(new URL(config.url).hostname) || !window) {
+            targetTabId = null;
+            targetWindowId = null;
+            config.tabId = null;
+            config.windowId = null;
+          }
+        } catch (error) {
+          targetTabId = null;
+          targetWindowId = null;
+          config.tabId = null;
+          config.windowId = null;
+        }
+      }
+
+      // 如果目标 AI 窗口不存在或不可用，创建一个新窗口
+      if (!targetTabId || !targetWindowId) {
+        // 清理同URL的其他窗口
+        await cleanupDuplicateWindows(aiType);
+
+        // 计算窗口位置
+        const position = await calculateWindowPosition(index, enabledAIs.length);
+
+        const window = await chrome.windows.create({
+          url: config.url,
+          type: 'popup',
+          width: position.width,
+          height: position.height,
+          left: position.left,
+          top: position.top,
+          focused: true
+        });
+
+        targetTabId = window.tabs[0].id;
+        targetWindowId = window.id;
+        config.tabId = targetTabId;
+        config.windowId = targetWindowId;
+
+        // 等待页面加载和初始化
+        await new Promise((resolve) => {
+          const checkReady = async () => {
+            try {
+              const response = await chrome.tabs.sendMessage(targetTabId, { type: 'CHECK_READY' });
+              if (response && response.ready) {
+                resolve();
+              } else {
+                setTimeout(checkReady, 1000);
+              }
+            } catch (error) {
+              setTimeout(checkReady, 1000);
+            }
+          };
+
+          chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo) {
+            if (tabId === targetTabId && changeInfo.status === 'complete') {
+              chrome.tabs.onUpdated.removeListener(listener);
+              setTimeout(checkReady, 1000);
+            }
+          });
+        });
+      }
+
+      // 发送消息到目标标签页
+      try {
+        await chrome.tabs.sendMessage(targetTabId, {
+          type: 'ASK_QUESTION',
+          question: request.question
+        });
+
+        // 开始定时更新
+        if (updateIntervals[targetTabId]) {
+          clearInterval(updateIntervals[targetTabId]);
+        }
+
+        updateIntervals[targetTabId] = setInterval(async () => {
+          try {
+            // 获取当前活动标签页
+            const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+
+            // 激活目标标签页
+            await chrome.tabs.update(targetTabId, { active: true });
+
+            // 等待一小段时间让页面更新
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            // 切回原来的标签页
+            if (currentTab) {
+              await chrome.tabs.update(currentTab.id, { active: true });
+            }
+          } catch (error) {
+            console.error('更新标签页失败:', error);
+          }
+        }, 2000);
+
+      } catch (error) {
+        console.error(`发送问题到 ${aiType} 失败:`, error);
+        config.tabId = null;
+        config.windowId = null;
+        pendingResponses.delete(aiType);
+        if (updateIntervals[targetTabId]) {
+          clearInterval(updateIntervals[targetTabId]);
+          delete updateIntervals[targetTabId];
+        }
+      }
+    }));
+
+    // 如果是极速模式，立即切回题目页面
+    if (request.runMode === 'fast') {
+      try {
+        const fromTab = await chrome.tabs.get(fromTabId);
+        if (fromTab) {
+          await chrome.tabs.update(fromTabId, { active: true });
+          await chrome.windows.update(fromTab.windowId, { focused: true });
+          console.log('极速模式：已切回题目页面');
+          hasSwitchedBackInFastMode = true;
+        }
+      } catch (error) {
+        console.error('切回题目页面失败:', error);
+      }
+    }
+
+    sendResponse({ success: true });
+  } catch (error) {
+    console.error('处理批量问题失败:', error);
+    sendResponse({ success: false, error: error.message });
+  }
+}
+
 // 处理消息
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   console.log('收到消息:', request.type);
 
   switch (request.type) {
-    case 'GET_QUESTION':
+    case 'GET_QUESTIONS':  // 新增：处理批量问题
+      handleQuestions(request, sender.tab.id, sendResponse);
+      return true;
+
+    case 'GET_QUESTION':  // 保留原有的单个问题处理，用于重试功能
       handleQuestion(request, sender.tab.id, sendResponse);
       return true;
 
     case 'ANSWER_READY':
-      //console.log('收到AI回答:', request.aiType, request.answer);
       handleAnswerReady(request);
       return true;
 
     case 'QUESTION_PAGE_READY':
-      //console.log('题目页面已就绪:', sender.tab.id);
       questionTabId = sender.tab.id;
       return true;
 

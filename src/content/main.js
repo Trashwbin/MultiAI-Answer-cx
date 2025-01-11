@@ -131,12 +131,82 @@ async function sendToAI(aiType, question = null) {
 }
 
 // 发送到所有AI
-function sendToAllAIs() {
-  Object.keys(AI_CONFIG).forEach(aiType => {
-    if (AI_CONFIG[aiType].enabled) {
-      sendToAI(aiType);
+async function sendToAllAIs() {
+  // 获取题目文本
+  const questions = extractQuestionsFromXXT();
+  if (questions.length === 0) {
+    alert('未找到题目');
+    return;
+  }
+
+  // 组装题目文本
+  const questionsText = questions.map(q => {
+    let text = `${q.number} ${q.type}\n${q.content}`;
+    if (q.options.length > 0) {
+      text += '\n' + q.options.join('\n');
     }
+    if (q.type.includes('填空') && q.blankCount > 0) {
+      text += `\n(本题共有 ${q.blankCount} 个空)`;
+    }
+    return text;
+  }).join('\n\n');
+
+  const prompt = ANSWER_MODES.find(mode => mode.id === 'concise').prompt;
+  const question = prompt + '\n\n' + questionsText;
+
+  // 确保答案模态框存在
+  if (!document.getElementById('ai-answers-modal')) {
+    showAnswersModal();
+  }
+
+  // 获取所有启用的 AI
+  const enabledAIs = Object.entries(AI_CONFIG)
+    .filter(([_, config]) => config.enabled)
+    .map(([aiType]) => aiType);
+
+  if (enabledAIs.length === 0) {
+    alert('请至少启用一个 AI');
+    return;
+  }
+
+  // 为所有启用的 AI 显示 loading 状态
+  enabledAIs.forEach(aiType => {
+    updateAnswerPanel(aiType, 'loading');
+    loadingState.updateUI(aiType, true);
   });
+
+  try {
+    // 使用 window.currentRunMode 而不是从 storage 获取
+    const runMode = window.currentRunMode || 'stable';
+    console.log('当前运行模式:', runMode);
+
+    // 一次性发送所有 AI 的请求
+    const response = await new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage({
+        type: 'GET_QUESTIONS',
+        aiList: enabledAIs,
+        question: question,
+        runMode: runMode
+      }, response => {
+        if (chrome.runtime.lastError) {
+          reject(chrome.runtime.lastError);
+        } else {
+          resolve(response);
+        }
+      });
+    });
+
+    if (!response || !response.success) {
+      throw new Error(response?.error || '发送失败');
+    }
+  } catch (error) {
+    console.error('发送失败:', error);
+    // 显示错误状态
+    enabledAIs.forEach(aiType => {
+      updateAnswerPanel(aiType, '发送失败，请点击重试按钮重新发送');
+      loadingState.updateUI(aiType, false);
+    });
+  }
 }
 
 // 初始化函数
