@@ -99,6 +99,20 @@ window.AI_CONFIG = {
   }
 };
 
+// 运行模式配置
+window.RUN_MODES = {
+  stable: {
+    id: 'stable',
+    name: '稳定模式',
+    description: '等待所有 AI 回答完成后再切回题目页面'
+  },
+  fast: {
+    id: 'fast',
+    name: '极速模式',
+    description: '发送问题后立即切回题目页面'
+  }
+};
+
 // 回答模式配置
 window.ANSWER_MODES = [
   {

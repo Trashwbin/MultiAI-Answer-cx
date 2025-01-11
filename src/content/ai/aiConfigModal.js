@@ -29,6 +29,83 @@ function showAIConfigModal(callback) {
     border-bottom: 1px solid #eee;
   `;
 
+  // 运行模式选择
+  const runModeSection = document.createElement('div');
+  runModeSection.style.cssText = `
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #eee;
+  `;
+
+  const runModeTitle = document.createElement('div');
+  runModeTitle.textContent = '运行模式';
+  runModeTitle.style.cssText = `
+    font-weight: 500;
+    margin-bottom: 10px;
+  `;
+  runModeSection.appendChild(runModeTitle);
+
+  const runModeList = document.createElement('div');
+  runModeList.style.cssText = `
+    display: flex;
+    gap: 15px;
+  `;
+
+  Object.values(window.RUN_MODES).forEach(mode => {
+    const label = document.createElement('label');
+    label.style.cssText = `
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+    `;
+
+    const radio = document.createElement('input');
+    radio.type = 'radio';
+    radio.name = 'run-mode';
+    radio.value = mode.id;
+    radio.checked = mode.id === 'stable';
+
+    const span = document.createElement('span');
+    span.textContent = mode.name;
+    span.style.cssText = `
+      font-size: 14px;
+      color: #333;
+    `;
+
+    const tooltip = document.createElement('div');
+    tooltip.textContent = mode.description;
+    tooltip.style.cssText = `
+      display: none;
+      position: absolute;
+      background: #333;
+      color: white;
+      padding: 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      max-width: 200px;
+      z-index: 1000;
+    `;
+
+    label.appendChild(radio);
+    label.appendChild(span);
+    label.appendChild(tooltip);
+
+    // 添加悬停提示
+    label.addEventListener('mouseenter', () => {
+      tooltip.style.display = 'block';
+    });
+    label.addEventListener('mouseleave', () => {
+      tooltip.style.display = 'none';
+    });
+
+    runModeList.appendChild(label);
+  });
+
+  runModeSection.appendChild(runModeList);
+  content.appendChild(title);
+  content.appendChild(runModeSection);
+
   const aiList = document.createElement('div');
   aiList.style.cssText = `
     display: flex;
@@ -144,9 +221,17 @@ function showAIConfigModal(callback) {
         throw new Error('请选择一个权重 AI');
       }
 
-      // 保存配置到 localStorage
-      localStorage.setItem('AI_CONFIG', JSON.stringify(window.AI_CONFIG));
+      // 获取选中的运行模式
+      const selectedMode = document.querySelector('input[name="run-mode"]:checked').value;
+      window.currentRunMode = selectedMode;
+      console.log('当前运行模式:', window.currentRunMode);
+      // 保存配置到 chrome.storage.local
+      chrome.storage.local.set({
+        'AI_CONFIG': window.AI_CONFIG,
+        'RUN_MODE': selectedMode
+      });
       //console.log('AI 配置已保存:', window.AI_CONFIG);
+      //console.log('运行模式已保存:', selectedMode);
     } catch (error) {
       //console.error('保存配置失败:', error);
       throw error;
@@ -178,7 +263,6 @@ function showAIConfigModal(callback) {
   };
 
   buttons.appendChild(confirmBtn);
-  content.appendChild(title);
   content.appendChild(aiList);
   content.appendChild(buttons);
   modal.appendChild(content);

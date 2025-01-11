@@ -3,7 +3,7 @@ class DebugPanel {
   constructor(aiName) {
     this.aiName = aiName;
     this.isActive = false;
-    this.isExpanded = true;
+    this.isExpanded = false;
     this.originalLog = console.log;
     this.originalError = console.error;
     this.dragData = null;

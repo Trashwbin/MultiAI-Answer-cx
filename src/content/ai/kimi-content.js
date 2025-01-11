@@ -57,6 +57,38 @@ class KimiChatAssistant {
     }
   }
 
+  // 检查是否发送成功
+  async checkSendSuccess() {
+    let retryCount = 0;
+    const maxRetries = 10;
+    const retryInterval = 500;
+
+    while (retryCount < maxRetries) {
+      const segments = document.querySelectorAll('div[id^="chat-segment-"]');
+      const lastSegment = segments[segments.length - 1];
+      const editor = document.querySelector('[data-testid="msh-chatinput-editor"]');
+
+      // 检查是否有停止按钮或输入框已清空
+      if (lastSegment) {
+        const stopBlock = lastSegment.querySelector('div[class*="stopBlock"]');
+        const stopButton = stopBlock?.querySelector('button');
+        if (stopButton && stopButton.textContent === '停止输出') {
+          return true;
+        }
+      }
+
+      // 检查输入框是否已清空
+      if (editor && !editor.textContent.trim()) {
+        return true;
+      }
+
+      retryCount++;
+      await new Promise(resolve => setTimeout(resolve, retryInterval));
+    }
+
+    return false;
+  }
+
   async sendMessage(message) {
     try {
       if (this.typing) return;
@@ -67,26 +99,44 @@ class KimiChatAssistant {
       // 等待一小段时间
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      // 尝试两种发送方式:
-      // 1. 回车发送
-      const editor = document.querySelector('[data-testid="msh-chatinput-textarea"]');
-      if (editor) {
-        editor.dispatchEvent(new KeyboardEvent('keydown', {
-          key: 'Enter',
-          code: 'Enter',
-          keyCode: 13,
-          which: 13,
-          bubbles: true
-        }));
+      let sendSuccess = false;
+      let retryCount = 0;
+      const maxRetries = 3;
 
-        // 等待一小段时间看是否发送成功
-        await new Promise(resolve => setTimeout(resolve, 500));
+      while (!sendSuccess && retryCount < maxRetries) {
+        // 尝试回车发送
+        const editor = document.querySelector('[data-testid="msh-chatinput-textarea"]');
+        if (editor) {
+          editor.dispatchEvent(new KeyboardEvent('keydown', {
+            key: 'Enter',
+            code: 'Enter',
+            keyCode: 13,
+            which: 13,
+            bubbles: true
+          }));
+        }
+
+        // 检查是否发送成功
+        sendSuccess = await this.checkSendSuccess();
+
+        // 如果回车发送失败，尝试点击发送按钮
+        if (!sendSuccess) {
+          const sendButton = document.querySelector('[data-testid="msh-chatinput-send-button"]');
+          if (sendButton && !sendButton.disabled) {
+            sendButton.click();
+            sendSuccess = await this.checkSendSuccess();
+          }
+        }
+
+        if (!sendSuccess) {
+          retryCount++;
+          this.log(`发送失败，第 ${retryCount} 次重试...`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
       }
 
-      // 2. 如果回车发送失败,尝试点击发送按钮
-      const sendButton = document.querySelector('[data-testid="msh-chatinput-send-button"]');
-      if (!this.isResponseComplete && sendButton && !sendButton.disabled) {
-        sendButton.click();
+      if (!sendSuccess) {
+        throw new Error('发送消息失败，已达到最大重试次数');
       }
 
       await this.waitForResponse();
@@ -116,7 +166,8 @@ class KimiChatAssistant {
             if (segments.length > 0) {
               const lastSegment = segments[segments.length - 1];
               if (lastSegment) {
-                const stopButton = lastSegment.querySelector('div[class*="stop"] button');
+                const stopBlock = lastSegment.querySelector('div[class*="stopBlock"]');
+                const stopButton = stopBlock?.querySelector('button');
                 const isTyping = stopButton && stopButton.textContent === '停止输出';
 
                 if (!isTyping) {
@@ -147,13 +198,9 @@ class KimiChatAssistant {
                     });
 
                     // 处理代码块
-                    const codeBlocks = clonedDiv.querySelectorAll('.highlight-code-light pre');
+                    const codeBlocks = clonedDiv.querySelectorAll('pre code');
                     Array.from(codeBlocks).forEach(block => {
                       const codeContent = block.cloneNode(true);
-                      const copyBtn = codeContent.querySelector('.copyBtn___l3xJQ');
-                      if (copyBtn) {
-                        copyBtn.remove();
-                      }
                       // 替换原始代码块为处理后的内容
                       block.innerHTML = '\n' + codeContent.textContent.trim() + '\n';
                     });
@@ -199,7 +246,7 @@ class KimiChatAssistant {
             this.log('错误:', error.message);
           }
         }, 250);
-      }, 5000);
+      }, 2000);
     });
   }
 
