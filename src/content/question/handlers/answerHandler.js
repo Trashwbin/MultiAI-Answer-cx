@@ -584,14 +584,6 @@ function createLoadingHTML(aiType) {
         <div></div>
         <div></div>
       </div>
-      
-      <div class="timeout-tips">
-        <div class="timeout-icon">⏳</div>
-        <div class="timeout-text">
-          <p>若 AI 长时间未响应</p>
-          <p>您可点击上方<span class="highlight">↻</span>重试</p>
-        </div>
-      </div>
     </div>
   `;
 }
@@ -821,7 +813,8 @@ async function showAnswersModal() {
       left: 50%;
       transform: translate(-50%, -50%);
       width: 90%;
-      max-width: 1200px;
+      max-width: 90vw;
+      min-width: 60vw;
       height: 90vh;
       background: white;
       border-radius: 8px;
@@ -1052,6 +1045,7 @@ async function showAnswersModal() {
         font-size: 16px;
         text-align: center;
         padding: 10px;
+        min-width: 100px;
         border-bottom: 3px solid ${config.color};
       `;
 
@@ -1200,7 +1194,7 @@ async function showAnswersModal() {
       if (isCollapsed) {
         // 展开状态
         modal.style.width = '90%';
-        modal.style.maxWidth = '1200px';
+        modal.style.maxWidth = '90vw';
 
         // 恢复 AI 名称行的列数
         const enabledAIs = await getEnabledAIs();
