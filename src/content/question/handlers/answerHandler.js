@@ -481,7 +481,25 @@ function createAIAnswerColumn(aiType, config) {
     min-height: calc(1.5em * 2 + 20px); /* 两行文字高度加上内边距 */
     display: flex;
     flex-direction: column;
+    border: 1px solid ${config.color}20;
+    position: relative;
   `;
+
+  // 添加AI类型标识
+  const aiTypeIndicator = document.createElement('div');
+  aiTypeIndicator.style.cssText = `
+    position: absolute;
+    top: 0;
+    right: 0;
+    background: ${config.color}20;
+    color: ${config.color};
+    padding: 2px 6px;
+    font-size: 12px;
+    border-radius: 0 4px 0 4px;
+    opacity: 0.8;
+  `;
+  aiTypeIndicator.textContent = config.name;
+  col.appendChild(aiTypeIndicator);
 
   const content = document.createElement('div');
   content.className = 'answer-content';
@@ -489,6 +507,7 @@ function createAIAnswerColumn(aiType, config) {
     white-space: pre-wrap;
     word-break: break-word;
     flex-grow: 1;
+    margin-top: 20px;
   `;
 
   // 添加 loading 状态
@@ -507,11 +526,16 @@ function createFinalAnswerColumn(questionNum, type) {
     background: #f8f9fa;
     border-radius: 4px;
     min-height: calc(1.5em * 2 + 20px);
+    min-width: 200px;
     display: flex;
     flex-direction: column;
     width: 100%;
   `;
-
+  if (type.includes('单选题') || type.includes('判断题') || type.includes('填空题') || type.includes('多选题')) {
+    col.style.cssText += `
+      justify-content: center;
+    `;
+  }
   const editor = createAnswerEditor(questionNum, '', type);
   editor.style.cssText = `
     flex-grow: 1;
@@ -814,7 +838,6 @@ async function showAnswersModal() {
       transform: translate(-50%, -50%);
       width: 90%;
       max-width: 90vw;
-      min-width: 60vw;
       height: 90vh;
       background: white;
       border-radius: 8px;
@@ -933,6 +956,613 @@ async function showAnswersModal() {
       gap: 10px;
     `;
 
+    // 重发按钮和下拉菜单容器
+    const retryContainer = document.createElement('div');
+    retryContainer.id = 'retry-container';
+    retryContainer.style.cssText = `
+      position: relative;
+      display: inline-block;
+    `;
+
+    // 删除AI按钮和下拉菜单容器
+    const deleteContainer = document.createElement('div');
+    deleteContainer.id = 'delete-container';
+    deleteContainer.style.cssText = `
+      position: relative;
+      display: inline-block;
+    `;
+
+    // 删除AI按钮
+    const deleteBtn = document.createElement('button');
+    deleteBtn.textContent = '删除AI';
+    deleteBtn.style.cssText = `
+      padding: 6px 12px;
+      background: #dc3545;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    `;
+
+    // 添加下拉箭头
+    const deleteArrow = document.createElement('span');
+    deleteArrow.textContent = '▼';
+    deleteArrow.style.fontSize = '10px';
+    deleteBtn.appendChild(deleteArrow);
+
+    // 创建删除下拉菜单
+    const deleteDropdown = document.createElement('div');
+    deleteDropdown.style.cssText = `
+      position: absolute;
+      top: 100%;
+      left: 0;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      display: none;
+      z-index: 1000;
+      min-width: 150px;
+      margin-top: 5px;
+    `;
+
+    // 添加删除按钮事件
+    deleteBtn.onmouseover = () => deleteBtn.style.background = '#c82333';
+    deleteBtn.onmouseout = () => deleteBtn.style.background = '#dc3545';
+
+    // 删除按钮点击事件处理
+    deleteBtn.onclick = async () => {
+      const isVisible = deleteDropdown.style.display === 'block';
+      deleteDropdown.style.display = isVisible ? 'none' : 'block';
+
+      if (!isVisible) {
+        // 获取启用的AI列表并更新下拉菜单
+        const enabledAIs = await getEnabledAIs();
+        deleteDropdown.innerHTML = ''; // 清空现有选项
+
+        // 如果只有一个AI，显示提示信息
+        if (enabledAIs.length <= 1) {
+          const message = document.createElement('div');
+          message.style.cssText = `
+            padding: 8px 12px;
+            color: #666;
+            font-size: 13px;
+            text-align: center;
+          `;
+          message.textContent = '至少需要保留一个AI';
+          deleteDropdown.appendChild(message);
+          return;
+        }
+
+        enabledAIs.forEach(([type, config]) => {
+          const option = document.createElement('div');
+          option.style.cssText = `
+            padding: 8px 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #333;
+            transition: background 0.2s;
+          `;
+
+          // 创建颜色标记
+          const colorDot = document.createElement('span');
+          colorDot.style.cssText = `
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: ${config.color};
+            display: inline-block;
+          `;
+
+          option.appendChild(colorDot);
+          option.appendChild(document.createTextNode(config.name));
+
+          option.onmouseover = () => option.style.background = '#f5f5f5';
+          option.onmouseout = () => option.style.background = 'white';
+
+          option.onclick = async () => {
+            try {
+              // 检查是否是权重AI
+              if (config.weight === 2) {
+                alert('不能删除权重为2的AI，请先修改权重再删除');
+                return;
+              }
+
+              // 获取所有启用的AI
+              const currentEnabledAIs = await getEnabledAIs();
+              if (currentEnabledAIs.length <= 1) {
+                alert('至少需要保留一个AI');
+                return;
+              }
+
+              // 删除对应的AI列
+              const modal = document.getElementById('ai-answers-modal');
+              const aiColumns = modal.querySelectorAll(`.ai-answer-${type}`);
+              aiColumns.forEach(col => col.remove());
+
+              // 更新AI配置
+              window.AI_CONFIG[type].enabled = false;
+
+              // 更新网格布局
+              const remainingAIs = await getEnabledAIs();
+              const aiNamesRow = modal.querySelector('div[style*="grid-template-columns"]');
+              const allQuestionRows = modal.querySelectorAll('[class^="question-row-"]');
+
+              // 更新网格布局
+              if (remainingAIs.length > 6) {
+                const newGridTemplate = `200px repeat(1, 1fr) 200px`;
+                aiNamesRow.style.gridTemplateColumns = newGridTemplate;
+              } else {
+                const newGridTemplate = `200px repeat(${remainingAIs.length}, 1fr) 1fr`;
+                aiNamesRow.style.gridTemplateColumns = newGridTemplate;
+
+                const aiNameCells = aiNamesRow.children;
+                // 保留第一个（题目）和最后一个（最终答案）单元格
+                const firstCell = aiNameCells[0];
+                const lastCell = aiNameCells[aiNameCells.length - 1];
+                aiNamesRow.innerHTML = '';
+                aiNamesRow.appendChild(firstCell);
+
+                // 重新创建AI名称列
+                for (const [aiType, aiConfig] of remainingAIs) {
+                  const aiName = document.createElement('div');
+                  aiName.style.cssText = `
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    font-weight: bold;
+                    color: ${aiConfig.color};
+                    font-size: 16px;
+                    text-align: center;
+                    padding: 10px;
+                    min-width: 100px;
+                    border-bottom: 3px solid ${aiConfig.color};
+                  `;
+
+                  // AI 名称
+                  const nameSpan = document.createElement('span');
+                  nameSpan.textContent = aiConfig.name;
+
+                  // 重发按钮
+                  const retryBtn = document.createElement('button');
+                  retryBtn.innerHTML = '↻';
+                  retryBtn.title = '重新发送';
+                  retryBtn.style.cssText = `
+                    background: none;
+                    border: none;
+                    color: ${aiConfig.color};
+                    cursor: pointer;
+                    font-size: 18px;
+                    padding: 4px 8px;
+                    border-radius: 4px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    opacity: 0.8;
+                    transition: opacity 0.2s;
+                  `;
+                  retryBtn.onmouseover = () => retryBtn.style.opacity = '1';
+                  retryBtn.onmouseout = () => retryBtn.style.opacity = '0.8';
+
+                  // 添加点击事件处理
+                  retryBtn.onclick = async () => {
+                    try {
+                      const currentQuestion = modal.dataset.currentQuestion;
+                      if (!currentQuestion) return;
+                      await updateAnswerPanel(aiType, 'loading');
+                      await sendToAI(aiType, currentQuestion);
+                      chrome.runtime.sendMessage({
+                        type: 'SWITCH_TAB',
+                        aiType: aiType
+                      });
+                    } catch (error) {
+                      //console.error('重发请求失败:', error);
+                    }
+                  };
+
+                  aiName.appendChild(nameSpan);
+                  aiName.appendChild(retryBtn);
+                  aiNamesRow.appendChild(aiName);
+                }
+                aiNamesRow.appendChild(lastCell);
+
+              }
+              const newGridTemplate = `200px repeat(${remainingAIs.length}, 1fr) 1fr`;
+              allQuestionRows.forEach(row => {
+                row.style.gridTemplateColumns = newGridTemplate;
+              });
+              // 更新AI名称行
+
+              // 更新所有下拉菜单
+              const updateDropdownMenu = async (dropdown, type) => {
+                dropdown.innerHTML = '';
+                if (remainingAIs.length <= 1) {
+                  const message = document.createElement('div');
+                  message.style.cssText = `
+                    padding: 8px 12px;
+                    color: #666;
+                    font-size: 13px;
+                    text-align: center;
+                  `;
+                  message.textContent = '至少需要保留一个AI';
+                  dropdown.appendChild(message);
+                } else {
+                  remainingAIs.forEach(([aiType, aiConfig]) => {
+                    const option = document.createElement('div');
+                    option.style.cssText = `
+                      padding: 8px 12px;
+                      cursor: pointer;
+                      display: flex;
+                      align-items: center;
+                      gap: 8px;
+                      color: #333;
+                      transition: background 0.2s;
+                      ${type === 'weight' && aiConfig.weight === 2 ? 'background: #f3e5f5;' : ''}
+                    `;
+
+                    const colorDot = document.createElement('span');
+                    colorDot.style.cssText = `
+                      width: 8px;
+                      height: 8px;
+                      border-radius: 50%;
+                      background: ${aiConfig.color};
+                      display: inline-block;
+                    `;
+
+                    if (type === 'weight') {
+                      const nameSpan = document.createElement('span');
+                      nameSpan.textContent = aiConfig.name;
+                      nameSpan.style.flex = '1';
+
+                      const weightSpan = document.createElement('span');
+                      weightSpan.textContent = `权重: ${aiConfig.weight}`;
+                      weightSpan.style.fontSize = '12px';
+                      weightSpan.style.color = '#666';
+
+                      option.appendChild(colorDot);
+                      option.appendChild(nameSpan);
+                      option.appendChild(weightSpan);
+                    } else {
+                      option.appendChild(colorDot);
+                      option.appendChild(document.createTextNode(aiConfig.name));
+                    }
+
+                    option.onmouseover = () => option.style.background = type === 'weight' && aiConfig.weight === 2 ? '#ede7f6' : '#f5f5f5';
+                    option.onmouseout = () => option.style.background = type === 'weight' && aiConfig.weight === 2 ? '#f3e5f5' : 'white';
+
+                    dropdown.appendChild(option);
+                  });
+                }
+              };
+
+              // 更新所有下拉菜单
+              await updateDropdownMenu(deleteDropdown, 'delete');
+              await updateDropdownMenu(weightDropdown, 'weight');
+              await updateDropdownMenu(dropdown, 'retry');
+
+              // 关闭下拉菜单
+              deleteDropdown.style.display = 'none';
+
+              // 更新最终答案
+              const answersContainer = document.getElementById('answers-container');
+              const questionRows = answersContainer.querySelectorAll('[class^="question-row-"]');
+              for (const row of questionRows) {
+                const questionNum = row.className.match(/question-row-(\d+)/)[1];
+                await updateFinalAnswer(questionNum);
+              }
+            } catch (error) {
+              //console.error('删除AI失败:', error);
+            }
+          };
+
+          deleteDropdown.appendChild(option);
+        });
+      }
+    };
+
+    // 点击其他地方关闭删除下拉菜单
+    document.addEventListener('click', (e) => {
+      if (!deleteContainer.contains(e.target)) {
+        deleteDropdown.style.display = 'none';
+      }
+    });
+
+    // 组装删除按钮和下拉菜单
+    deleteContainer.appendChild(deleteBtn);
+    deleteContainer.appendChild(deleteDropdown);
+    rightGroup.appendChild(deleteContainer);
+
+    // 权重选择按钮和下拉菜单容器
+    const weightContainer = document.createElement('div');
+    weightContainer.id = 'weight-container';
+    weightContainer.style.cssText = `
+      position: relative;
+      display: inline-block;
+    `;
+
+    // 权重选择按钮
+    const weightBtn = document.createElement('button');
+    // 获取当前权重为2的AI
+    const getCurrentWeightAI = () => {
+      for (const [type, config] of Object.entries(window.AI_CONFIG)) {
+        if (config.enabled && config.weight === 2) {
+          return config.name;
+        }
+      }
+      return '无';
+    };
+    weightBtn.textContent = `当前权重AI: ${getCurrentWeightAI()}`;
+    weightBtn.style.cssText = `
+      padding: 6px 12px;
+      background: #9c27b0;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    `;
+
+    // 添加下拉箭头
+    const weightArrow = document.createElement('span');
+    weightArrow.textContent = '▼';
+    weightArrow.style.fontSize = '10px';
+    weightBtn.appendChild(weightArrow);
+
+    // 创建权重下拉菜单
+    const weightDropdown = document.createElement('div');
+    weightDropdown.style.cssText = `
+      position: absolute;
+      top: 100%;
+      left: 0;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      display: none;
+      z-index: 1000;
+      min-width: 150px;
+      margin-top: 5px;
+    `;
+
+    // 添加权重按钮事件
+    weightBtn.onmouseover = () => weightBtn.style.background = '#7b1fa2';
+    weightBtn.onmouseout = () => weightBtn.style.background = '#9c27b0';
+
+    // 权重按钮点击事件处理
+    weightBtn.onclick = async () => {
+      const isVisible = weightDropdown.style.display === 'block';
+      weightDropdown.style.display = isVisible ? 'none' : 'block';
+
+      if (!isVisible) {
+        // 获取启用的AI列表并更新下拉菜单
+        const enabledAIs = await getEnabledAIs();
+        weightDropdown.innerHTML = ''; // 清空现有选项
+
+        enabledAIs.forEach(([type, config]) => {
+          const option = document.createElement('div');
+          option.style.cssText = `
+            padding: 8px 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #333;
+            transition: background 0.2s;
+            ${config.weight === 2 ? 'background: #f3e5f5;' : ''}
+          `;
+
+          // 创建颜色标记
+          const colorDot = document.createElement('span');
+          colorDot.style.cssText = `
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: ${config.color};
+            display: inline-block;
+          `;
+
+          // 创建名称和权重显示
+          const nameSpan = document.createElement('span');
+          nameSpan.textContent = config.name;
+          nameSpan.style.flex = '1';
+
+          const weightSpan = document.createElement('span');
+          weightSpan.textContent = `权重: ${config.weight}`;
+          weightSpan.style.fontSize = '12px';
+          weightSpan.style.color = '#666';
+
+          option.appendChild(colorDot);
+          option.appendChild(nameSpan);
+          option.appendChild(weightSpan);
+
+          option.onmouseover = () => option.style.background = config.weight === 2 ? '#ede7f6' : '#f5f5f5';
+          option.onmouseout = () => option.style.background = config.weight === 2 ? '#f3e5f5' : 'white';
+
+          option.onclick = async () => {
+            try {
+              // 重置所有AI权重为1
+              Object.values(window.AI_CONFIG).forEach(cfg => {
+                cfg.weight = 1;
+              });
+
+              // 设置选中的AI权重为2
+              window.AI_CONFIG[type].weight = 2;
+
+              // 更新按钮文本
+              weightBtn.textContent = `当前权重AI: ${config.name}`;
+              weightBtn.appendChild(weightArrow);
+
+              // 关闭下拉菜单
+              weightDropdown.style.display = 'none';
+
+              // 更新最终答案
+              const answersContainer = document.getElementById('answers-container');
+              const questionRows = answersContainer.querySelectorAll('[class^="question-row-"]');
+              for (const row of questionRows) {
+                const questionNum = row.className.match(/question-row-(\d+)/)[1];
+                await updateFinalAnswer(questionNum);
+              }
+            } catch (error) {
+              //console.error('设置权重失败:', error);
+            }
+          };
+
+          weightDropdown.appendChild(option);
+        });
+      }
+    };
+
+    // 点击其他地方关闭权重下拉菜单
+    document.addEventListener('click', (e) => {
+      if (!weightContainer.contains(e.target)) {
+        weightDropdown.style.display = 'none';
+      }
+    });
+
+    // 组装权重按钮和下拉菜单
+    weightContainer.appendChild(weightBtn);
+    weightContainer.appendChild(weightDropdown);
+    rightGroup.appendChild(weightContainer);
+
+    // 重发大按钮
+    const retryBtn = document.createElement('button');
+    retryBtn.textContent = '重发问题';
+    retryBtn.style.cssText = `
+      padding: 6px 12px;
+      background: #2196F3;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    `;
+
+    // 添加下拉箭头
+    const arrow = document.createElement('span');
+    arrow.textContent = '▼';
+    arrow.style.fontSize = '10px';
+    retryBtn.appendChild(arrow);
+
+    // 创建下拉菜单
+    const dropdown = document.createElement('div');
+    dropdown.style.cssText = `
+      position: absolute;
+      top: 100%;
+      left: 0;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      display: none;
+      z-index: 1000;
+      min-width: 150px;
+      margin-top: 5px;
+    `;
+
+    // 添加按钮事件
+    retryBtn.onmouseover = () => retryBtn.style.background = '#1976D2';
+    retryBtn.onmouseout = () => retryBtn.style.background = '#2196F3';
+
+    // 点击事件处理
+    retryBtn.onclick = async () => {
+      const isVisible = dropdown.style.display === 'block';
+      dropdown.style.display = isVisible ? 'none' : 'block';
+
+      if (!isVisible) {
+        // 获取启用的AI列表并更新下拉菜单
+        const enabledAIs = await getEnabledAIs();
+        dropdown.innerHTML = ''; // 清空现有选项
+
+        enabledAIs.forEach(([type, config]) => {
+          const option = document.createElement('div');
+          option.style.cssText = `
+            padding: 8px 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #333;
+            transition: background 0.2s;
+          `;
+
+          // 创建颜色标记
+          const colorDot = document.createElement('span');
+          colorDot.style.cssText = `
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: ${config.color};
+            display: inline-block;
+          `;
+
+          option.appendChild(colorDot);
+          option.appendChild(document.createTextNode(config.name));
+
+          option.onmouseover = () => option.style.background = '#f5f5f5';
+          option.onmouseout = () => option.style.background = 'white';
+
+          option.onclick = async () => {
+            try {
+              // 获取当前保存的问题
+              const answersModal = document.getElementById('ai-answers-modal');
+              const currentQuestion = answersModal?.dataset.currentQuestion;
+
+              if (!currentQuestion) {
+                //console.error('未找到当前问题');
+                return;
+              }
+
+              // 更新对应 AI 的答案状态为 loading
+              await updateAnswerPanel(type, 'loading');
+
+              // 重新发送问题到对应的 AI
+              await sendToAI(type, currentQuestion);
+
+              // 切换到对应的标签页
+              chrome.runtime.sendMessage({
+                type: 'SWITCH_TAB',
+                aiType: type
+              });
+
+              // 关闭下拉菜单
+              dropdown.style.display = 'none';
+            } catch (error) {
+              //console.error('重发请求失败:', error);
+            }
+          };
+
+          dropdown.appendChild(option);
+        });
+      }
+    };
+
+    // 点击其他地方关闭下拉菜单
+    document.addEventListener('click', (e) => {
+      if (!retryContainer.contains(e.target)) {
+        dropdown.style.display = 'none';
+      }
+    });
+
+    // 组装重发按钮和下拉菜单
+    retryContainer.appendChild(retryBtn);
+    retryContainer.appendChild(dropdown);
+    rightGroup.appendChild(retryContainer);
+
     // 收起AI回答按钮
     collapseBtn = document.createElement('button');
     collapseBtn.textContent = '收起AI回答';
@@ -1033,10 +1663,29 @@ async function showAnswersModal() {
     placeholder.textContent = '题目';
     aiNamesRow.appendChild(placeholder);
 
-    // 添加启用的 AI 名称
-    for (const [type, config] of enabledAIs) {
-      const aiName = document.createElement('div');
-      aiName.style.cssText = `
+    if (enabledAIs.length > 6) {
+      aiNamesRow.style.gridTemplateColumns = `200px repeat(1, 1fr) 200px`;
+      // 添加回答对比标题占据ai全部列
+      const aiNames = document.createElement('div');
+      aiNames.style.cssText = `
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-weight: bold;
+        color: #E06C75;
+        font-size: 16px;
+        text-align: center;
+        padding: 10px;
+        min-width: 100px;
+        border-bottom: 3px solid #E06C75;
+        `;
+      aiNames.textContent = '回答对比';
+      aiNamesRow.appendChild(aiNames);
+    } else {
+      // 添加启用的 AI 名称
+      for (const [type, config] of enabledAIs) {
+        const aiName = document.createElement('div');
+        aiName.style.cssText = `
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -1049,15 +1698,15 @@ async function showAnswersModal() {
         border-bottom: 3px solid ${config.color};
       `;
 
-      // AI 名称
-      const nameSpan = document.createElement('span');
-      nameSpan.textContent = config.name;
+        // AI 名称
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = config.name;
 
-      // 重发按钮
-      const retryBtn = document.createElement('button');
-      retryBtn.innerHTML = '↻';
-      retryBtn.title = '重新发送';
-      retryBtn.style.cssText = `
+        // 重发按钮
+        const retryBtn = document.createElement('button');
+        retryBtn.innerHTML = '↻';
+        retryBtn.title = '重新发送';
+        retryBtn.style.cssText = `
         background: none;
         border: none;
         color: ${config.color};
@@ -1071,42 +1720,42 @@ async function showAnswersModal() {
         opacity: 0.8;
         transition: opacity 0.2s;
       `;
-      retryBtn.onmouseover = () => retryBtn.style.opacity = '1';
-      retryBtn.onmouseout = () => retryBtn.style.opacity = '0.8';
+        retryBtn.onmouseover = () => retryBtn.style.opacity = '1';
+        retryBtn.onmouseout = () => retryBtn.style.opacity = '0.8';
 
-      // 添加点击事件处理
-      retryBtn.onclick = async () => {
-        try {
-          // 获取当前保存的问题
-          const answersModal = document.getElementById('ai-answers-modal');
-          const currentQuestion = answersModal?.dataset.currentQuestion;
+        // 添加点击事件处理
+        retryBtn.onclick = async () => {
+          try {
+            // 获取当前保存的问题
+            const answersModal = document.getElementById('ai-answers-modal');
+            const currentQuestion = answersModal?.dataset.currentQuestion;
 
-          if (!currentQuestion) {
-            //console.error('未找到当前问题');
-            return;
+            if (!currentQuestion) {
+              //console.error('未找到当前问题');
+              return;
+            }
+
+            // 更新对应 AI 的答案状态为 loading
+            await updateAnswerPanel(type, 'loading');
+
+            // 重新发送问题到对应的 AI
+            await sendToAI(type, currentQuestion);
+
+            // 切换到对应的标签页
+            chrome.runtime.sendMessage({
+              type: 'SWITCH_TAB',
+              aiType: type
+            });
+          } catch (error) {
+            //console.error('重发请求失败:', error);
           }
+        };
 
-          // 更新对应 AI 的答案状态为 loading
-          await updateAnswerPanel(type, 'loading');
-
-          // 重新发送问题到对应的 AI
-          await sendToAI(type, currentQuestion);
-
-          // 切换到对应的标签页
-          chrome.runtime.sendMessage({
-            type: 'SWITCH_TAB',
-            aiType: type
-          });
-        } catch (error) {
-          //console.error('重发请求失败:', error);
-        }
-      };
-
-      aiName.appendChild(nameSpan);
-      aiName.appendChild(retryBtn);
-      aiNamesRow.appendChild(aiName);
+        aiName.appendChild(nameSpan);
+        aiName.appendChild(retryBtn);
+        aiNamesRow.appendChild(aiName);
+      }
     }
-
     // 添加最终答案列标题
     const finalAnswerTitle = document.createElement('div');
     finalAnswerTitle.style.cssText = `
@@ -1191,14 +1840,28 @@ async function showAnswersModal() {
       const isCollapsed = collapseBtn.textContent === '展开AI回答';
       collapseBtn.textContent = isCollapsed ? '收起AI回答' : '展开AI回答';
 
+      // 获取三个主要按钮容器
+      const retryContainer = document.getElementById('retry-container');
+      const deleteContainer = document.getElementById('delete-container');
+      const weightContainer = document.getElementById('weight-container');
+
       if (isCollapsed) {
         // 展开状态
         modal.style.width = '90%';
         modal.style.maxWidth = '90vw';
 
+        // 显示三个主要按钮
+        if (retryContainer) retryContainer.style.display = 'inline-block';
+        if (deleteContainer) deleteContainer.style.display = 'inline-block';
+        if (weightContainer) weightContainer.style.display = 'inline-block';
+
         // 恢复 AI 名称行的列数
         const enabledAIs = await getEnabledAIs();
-        aiNamesRow.style.gridTemplateColumns = `200px repeat(${enabledAIs.length}, 1fr) 1fr`;
+        if (enabledAIs.length > 6) {
+          aiNamesRow.style.gridTemplateColumns = `200px repeat(1, 1fr) 200px`;
+        } else {
+          aiNamesRow.style.gridTemplateColumns = `200px repeat(${enabledAIs.length}, 1fr)`;
+        }
 
         // 显示所有 AI 答案列
         allQuestionRows.forEach(row => {
@@ -1218,6 +1881,7 @@ async function showAnswersModal() {
         // 收起状态
         modal.style.width = '500px';
         modal.style.maxWidth = '500px';
+
 
         // 修改 AI 名称行的列数
         aiNamesRow.style.gridTemplateColumns = '200px 1fr';
@@ -1249,6 +1913,14 @@ async function showAnswersModal() {
 
       // 更新收起按钮文本
       collapseBtn.textContent = '展开AI回答';
+      // 获取三个主要按钮容器
+      const retryContainer = document.getElementById('retry-container');
+      const deleteContainer = document.getElementById('delete-container');
+      const weightContainer = document.getElementById('weight-container');
+      // 隐藏三个主要按钮
+      if (retryContainer) retryContainer.style.display = 'none';
+      if (deleteContainer) deleteContainer.style.display = 'none';
+      if (weightContainer) weightContainer.style.display = 'none';
 
       // 收起状态
       modal.style.width = '500px';
