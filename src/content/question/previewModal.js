@@ -271,7 +271,9 @@ function showPreviewModal() {
       document.querySelectorAll('.question-checkbox:checked').forEach(cb => {
         const questionDiv = cb.closest('.question-item');
         const questionId = questionDiv.dataset.id;
-        const question = questions.find(q => q.id === questionId);
+        // 从原始的题目列表中找到对应的题目
+        const originalQuestions = window.extractedQuestions || [];
+        const question = originalQuestions.find(q => q.id === questionId);
         if (question) {
           selectedQuestions.push(question);
         }

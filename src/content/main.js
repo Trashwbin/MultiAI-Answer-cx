@@ -71,14 +71,15 @@ function updateLoadingUI(aiType, isLoading) {
 async function sendToAI(aiType, question = null) {
   try {
     if (!question) {
-      const questions = extractQuestionsFromXXT();
-      if (questions.length === 0) {
-        alert('未找到题目');
+      // 使用已选择的题目
+      const selectedQuestions = window.selectedQuestions;
+      if (!selectedQuestions || selectedQuestions.length === 0) {
+        alert('未找到选中的题目');
         return;
       }
 
       // 组装题目文本
-      const questionsText = questions.map(q => {
+      const questionsText = selectedQuestions.map(q => {
         let text = `${q.number} ${q.type}\n${q.content}`;
         if (q.options.length > 0) {
           text += '\n' + q.options.join('\n');
@@ -136,15 +137,15 @@ async function sendToAI(aiType, question = null) {
 // 发送到所有AI
 async function sendToAllAIs() {
   try {
-    // 获取题目文本
-    const questions = extractQuestionsFromXXT();
-    if (questions.length === 0) {
-      alert('未找到题目');
+    // 使用已选择的题目
+    const selectedQuestions = window.selectedQuestions;
+    if (!selectedQuestions || selectedQuestions.length === 0) {
+      alert('未找到选中的题目');
       return;
     }
 
     // 组装题目文本
-    const questionsText = questions.map(q => {
+    const questionsText = selectedQuestions.map(q => {
       let text = `${q.number} ${q.type}\n${q.content}`;
       if (q.options.length > 0) {
         text += '\n' + q.options.join('\n');

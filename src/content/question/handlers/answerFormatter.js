@@ -12,14 +12,17 @@ function formatAnswerWithAnalysis(answer) {
   }
 
   // 提取答案和解析
-  const answerMatch = answer.match(/答案[:：]\s*([^解析]+)(?=解析|$)/);
+  // 首先尝试匹配"答案："后面的内容
+  const answerMatch = answer.match(/答案[:：]\s*([\s\S]+?)(?=\s*解析[:：]|$)/);
   const analysisMatch = answer.match(/解析[:：]\s*([\s\S]+)$/);
 
   // 设置答案
   if (answerMatch) {
     result.answer = answerMatch[1].trim();
   } else {
-    result.answer = answer.trim();
+    // 如果没有找到"答案："标记，尝试直接提取第一部分内容
+    const firstPart = answer.split(/\s*解析[:：]/)[0];
+    result.answer = firstPart.trim();
   }
 
   // 设置解析

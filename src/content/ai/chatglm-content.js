@@ -109,147 +109,150 @@ class ChatGLMAssistant {
 
   async waitForResponse() {
     return new Promise((resolve) => {
-      let checkCount = 0;
-      const maxChecks = 240;
-      let lastContent = '';
-      let stabilityCount = 0;
-      let contentStabilityCount = 0;
-      const requiredStability = 2;
-      const requiredContentStability = 10;
-      let lastUpdateTime = Date.now();
-      const updateInterval = 1000;
+      setTimeout(() => {
 
-      const checkTyping = setInterval(() => {
-        checkCount++;
-        this.log(`检查回复 #${checkCount}`);
+        let checkCount = 0;
+        const maxChecks = 240;
+        let lastContent = '';
+        let stabilityCount = 0;
+        let contentStabilityCount = 0;
+        const requiredStability = 2;
+        const requiredContentStability = 10;
+        let lastUpdateTime = Date.now();
+        const updateInterval = 1000;
 
-        try {
-          // 如果距离上次更新超过1秒，模拟标签页激活状态
-          const now = Date.now();
-          if (now - lastUpdateTime >= updateInterval) {
-            lastUpdateTime = now;
-            // 模拟标签页激活和失活
-            window.dispatchEvent(new Event('blur'));
-            window.dispatchEvent(new Event('focus'));
-            document.dispatchEvent(new Event('visibilitychange'));
-            this.log('触发页面更新');
-          }
+        const checkTyping = setInterval(() => {
+          checkCount++;
+          this.log(`检查回复 #${checkCount}`);
 
-          // 获取最后一个回复内容
-          const answerDivs = document.querySelectorAll('.answer');
-          const lastAnswer = answerDivs[answerDivs.length - 1];
+          try {
+            // 如果距离上次更新超过1秒，模拟标签页激活状态
+            const now = Date.now();
+            if (now - lastUpdateTime >= updateInterval) {
+              lastUpdateTime = now;
+              // 模拟标签页激活和失活
+              window.dispatchEvent(new Event('blur'));
+              window.dispatchEvent(new Event('focus'));
+              document.dispatchEvent(new Event('visibilitychange'));
+              this.log('触发页面更新');
+            }
 
-          if (!lastAnswer) {
-            this.log('未找到回复内容');
-            return;
-          }
+            // 获取最后一个回复内容
+            const answerDivs = document.querySelectorAll('.answer');
+            const lastAnswer = answerDivs[answerDivs.length - 1];
 
-          // 获取完整内容
-          const contentDiv = lastAnswer.querySelector('.markdown-body');
-          let content = '';
+            if (!lastAnswer) {
+              this.log('未找到回复内容');
+              return;
+            }
 
-          if (contentDiv) {
-            // 克隆节点以避免修改原始内容
-            const clonedDiv = contentDiv.cloneNode(true);
+            // 获取完整内容
+            const contentDiv = lastAnswer.querySelector('.markdown-body');
+            let content = '';
 
-            // 处理有序列表，添加序号和换行
-            const orderedLists = clonedDiv.querySelectorAll('ol');
-            orderedLists.forEach(ol => {
-              const items = ol.querySelectorAll('li');
-              items.forEach((li, index) => {
-                li.textContent = `${index + 1}. ${li.textContent}\n`;
+            if (contentDiv) {
+              // 克隆节点以避免修改原始内容
+              const clonedDiv = contentDiv.cloneNode(true);
+
+              // 处理有序列表，添加序号和换行
+              const orderedLists = clonedDiv.querySelectorAll('ol');
+              orderedLists.forEach(ol => {
+                const items = ol.querySelectorAll('li');
+                items.forEach((li, index) => {
+                  li.textContent = `${index + 1}. ${li.textContent}\n`;
+                });
               });
-            });
 
-            // 处理无序列表，添加符号和换行
-            const unorderedLists = clonedDiv.querySelectorAll('ul');
-            unorderedLists.forEach(ul => {
-              const items = ul.querySelectorAll('li');
-              items.forEach(li => {
-                li.textContent = `• ${li.textContent}\n`;
+              // 处理无序列表，添加符号和换行
+              const unorderedLists = clonedDiv.querySelectorAll('ul');
+              unorderedLists.forEach(ul => {
+                const items = ul.querySelectorAll('li');
+                items.forEach(li => {
+                  li.textContent = `• ${li.textContent}\n`;
+                });
               });
+
+              // 处理代码块
+              const codeBlocks = clonedDiv.querySelectorAll('pre code');
+              Array.from(codeBlocks).forEach(block => {
+                const codeContent = block.cloneNode(true);
+                // 替换原始代码块为处理后的内容
+                block.innerHTML = '\n' + codeContent.textContent.trim() + '\n';
+              });
+
+              content = clonedDiv.textContent.trim();
+            }
+
+            if (!content) {
+              this.log('内容为空');
+              return;
+            }
+
+            // 检查是否还在生成回复
+            const enterDiv = document.querySelector('.enter');
+            const isGenerating = enterDiv?.classList.contains('searching');
+
+            this.log('状态:', {
+              '正在生成': isGenerating ? '是' : '否',
+              '内容稳定次数': contentStabilityCount,
+              '停止按钮稳定次数': stabilityCount
             });
 
-            // 处理代码块
-            const codeBlocks = clonedDiv.querySelectorAll('pre code');
-            Array.from(codeBlocks).forEach(block => {
-              const codeContent = block.cloneNode(true);
-              // 替换原始代码块为处理后的内容
-              block.innerHTML = '\n' + codeContent.textContent.trim() + '\n';
-            });
+            // 检查内容稳定性
+            if (content === lastContent) {
+              contentStabilityCount++;
+            } else {
+              contentStabilityCount = 0;
+              lastContent = content;
+            }
 
-            content = clonedDiv.textContent.trim();
-          }
+            // 两种情况下认为回复完成：
+            // 1. 停止按钮消失且内容稳定2次
+            // 2. 内容连续稳定3次
+            const shouldComplete =
+              (!isGenerating && content === lastContent && stabilityCount >= requiredStability) ||
+              (contentStabilityCount >= requiredContentStability);
 
-          if (!content) {
-            this.log('内容为空');
-            return;
-          }
+            if (!isGenerating && content === lastContent) {
+              stabilityCount++;
+            } else {
+              stabilityCount = 0;
+            }
 
-          // 检查是否还在生成回复
-          const enterDiv = document.querySelector('.enter');
-          const isGenerating = enterDiv?.classList.contains('searching');
+            if (shouldComplete) {
+              this.log('✅ 回答完成，内容长度:', content.length);
+              this.log('完成原因:', contentStabilityCount >= requiredContentStability ? '内容稳定' : '停止按钮消失');
 
-          this.log('状态:', {
-            '正在生成': isGenerating ? '是' : '否',
-            '内容稳定次数': contentStabilityCount,
-            '停止按钮稳定次数': stabilityCount
-          });
-
-          // 检查内容稳定性
-          if (content === lastContent) {
-            contentStabilityCount++;
-          } else {
-            contentStabilityCount = 0;
-            lastContent = content;
-          }
-
-          // 两种情况下认为回复完成：
-          // 1. 停止按钮消失且内容稳定2次
-          // 2. 内容连续稳定3次
-          const shouldComplete =
-            (!isGenerating && content === lastContent && stabilityCount >= requiredStability) ||
-            (contentStabilityCount >= requiredContentStability);
-
-          if (!isGenerating && content === lastContent) {
-            stabilityCount++;
-          } else {
-            stabilityCount = 0;
-          }
-
-          if (shouldComplete) {
-            this.log('✅ 回答完成，内容长度:', content.length);
-            this.log('完成原因:', contentStabilityCount >= requiredContentStability ? '内容稳定' : '停止按钮消失');
-
-            chrome.runtime.sendMessage({
-              type: 'ANSWER_READY',
-              answer: content,
-              aiType: 'chatglm'
-            });
-
-            clearInterval(checkTyping);
-            resolve();
-            return;
-          }
-
-          // 超时检查
-          if (checkCount >= maxChecks) {
-            this.log('❌ 达到最大检查次数，结束检查');
-            if (content) {
-              this.log('使用当前内容作为最终答案');
               chrome.runtime.sendMessage({
                 type: 'ANSWER_READY',
                 answer: content,
                 aiType: 'chatglm'
               });
+
+              clearInterval(checkTyping);
+              resolve();
+              return;
             }
-            clearInterval(checkTyping);
-            resolve();
+
+            // 超时检查
+            if (checkCount >= maxChecks) {
+              this.log('❌ 达到最大检查次数，结束检查');
+              if (content) {
+                this.log('使用当前内容作为最终答案');
+                chrome.runtime.sendMessage({
+                  type: 'ANSWER_READY',
+                  answer: content,
+                  aiType: 'chatglm'
+                });
+              }
+              clearInterval(checkTyping);
+              resolve();
+            }
+          } catch (error) {
+            this.log('错误:', error.message);
           }
-        } catch (error) {
-          this.log('错误:', error.message);
-        }
-      }, 500);
+        }, 250);
+      }, 3000);
     });
   }
 
