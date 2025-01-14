@@ -249,7 +249,7 @@ class ChatGLMAssistant {
         } catch (error) {
           this.log('错误:', error.message);
         }
-      }, 100);
+      }, 500);
     });
   }
 

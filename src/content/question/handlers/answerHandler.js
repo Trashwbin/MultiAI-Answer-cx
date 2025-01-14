@@ -155,15 +155,28 @@ async function updateAnswerPanel(aiType, answer) {
     const answers = [];
     const regex = /问题\s*(\d+)\s*答案[:：]([^问]*?)(?=问题\s*\d+\s*答案[:：]|$)/gs;
     let match;
+    let hasStandardFormat = false;
 
     while ((match = regex.exec(answer)) !== null) {
+      hasStandardFormat = true;
       answers.push({
         questionNum: match[1],
         answer: match[2].trim()
       });
     }
 
-    //console.log('解析出的答案:', answers);
+    // 如果无法解析出标准格式，则将整个回答放在第一题
+    if (!hasStandardFormat) {
+      const firstQuestionNum = '1';  // 默认放在第一题
+      answers.push({
+        questionNum: firstQuestionNum,
+        answer: answer.trim()
+      });
+    }
+
+    // 获取所有题目信息
+    const allQuestions = window.selectedQuestions || [];
+    const questionNumbers = allQuestions.map(q => q.number.replace(/\./g, ''));
 
     // 获取启用的 AI 列表
     const enabledAIs = await getEnabledAIs();
@@ -171,41 +184,45 @@ async function updateAnswerPanel(aiType, answer) {
       throw new Error('无效的 AI 列表');
     }
 
-    // 使用 Promise.all 等待所有答案更新完成
-    await Promise.all(answers.map(async ({ questionNum, answer }) => {
-      try {
-        // 获取题目信息
-        const questionInfo = getQuestionInfo(questionNum);
-        if (!questionInfo) {
-          //console.error('未找到题目信息:', questionNum);
-          return;
-        }
+    // 确保所有题目都有行
+    for (const questionNum of questionNumbers) {
+      const questionInfo = getQuestionInfo(questionNum);
+      if (!questionInfo) continue;
 
-        // 检查问题行是否存在，如果不存在则创建
-        let questionRow = container.querySelector(`.question-row-${questionNum}`);
-        if (!questionRow) {
-          questionRow = createQuestionRow(questionNum, questionInfo.type, enabledAIs);
-          container.appendChild(questionRow);
-        }
-
-        // 更新对应 AI 的答案
-        const answerCol = questionRow.querySelector(`.ai-answer-${aiType} .answer-content`);
-        if (answerCol) {
-          updateAnswerContent(answerCol, answer, questionInfo.type);
-        }
-
-        // 更新最终答案
-        await updateFinalAnswer(questionNum);
-      } catch (error) {
-        //console.error(`处理题目 ${questionNum} 时出错:`, error);
-        // 显示错误信息到界面
-        const errorMessage = `处理答案时出错: ${error.message}`;
-        const aiAnswers = container.querySelectorAll(`.ai-answer-${aiType} .answer-content`);
-        aiAnswers.forEach(answerCol => {
-          answerCol.innerHTML = `<div class="error-message">${errorMessage}</div>`;
-        });
+      // 检查问题行是否存在，如果不存在则创建
+      let questionRow = container.querySelector(`.question-row-${questionNum}`);
+      if (!questionRow) {
+        questionRow = createQuestionRow(questionNum, questionInfo.type, enabledAIs);
+        container.appendChild(questionRow);
       }
-    }));
+
+      // 如果这个题目有答案，更新它
+      const answer = answers.find(a => a.questionNum === questionNum);
+      if (answer) {
+        const answerCol = questionRow.querySelector(`.ai-answer-${aiType} .answer-content`);
+        const analysisOverlay = questionRow.querySelector(`.ai-answer-${aiType} .analysis-overlay .analysis-content`);
+
+        if (answerCol && analysisOverlay) {
+          if (!hasStandardFormat) {
+            // 如果不是标准格式，直接显示完整回答，不显示解析
+            answerCol.textContent = answer.answer;
+            analysisOverlay.textContent = '';  // 清空解析
+          } else {
+            // 使用 formatAnswerWithAnalysis 处理答案和解析
+            const { answer: formattedAnswer, analysis } = window.formatAnswerWithAnalysis(answer.answer);
+            updateAnswerContent(answerCol, formattedAnswer, questionInfo.type);
+
+            // 更新解析内容
+            if (analysis) {
+              analysisOverlay.textContent = analysis;
+            }
+          }
+        }
+      }
+
+      // 更新最终答案
+      await updateFinalAnswer(questionNum);
+    }
   } catch (error) {
     //console.error('更新答案面板时出错:', error);
     // 显示错误信息到界面
@@ -324,7 +341,7 @@ function createAIAnswerColumn(aiType, config) {
     padding: 10px;
     background: ${config.color}10;
     border-radius: 4px;
-    min-height: calc(1.5em * 2 + 20px); /* 两行文字高度加上内边距 */
+    min-height: calc(1.5em * 2 + 20px);
     display: flex;
     flex-direction: column;
     border: 1px solid ${config.color}20;
@@ -356,10 +373,100 @@ function createAIAnswerColumn(aiType, config) {
     margin-top: 20px;
   `;
 
+  // 添加解析浮层
+  const analysisOverlay = document.createElement('div');
+  analysisOverlay.className = 'analysis-overlay';
+  analysisOverlay.style.cssText = `
+    display: none;
+    position: absolute;
+    top: 0;
+    left: calc(99%);
+    background: white;
+    border: 1px solid ${config.color}40;
+    border-radius: 4px;
+    padding: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    z-index: 1000;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 100%;
+    width: 300px;
+    overflow-y: auto;
+    font-size: 14px;
+    color: #333;
+    backdrop-filter: blur(4px);
+  `;
+
+  // 添加小箭头
+  const arrow = document.createElement('div');
+  arrow.style.cssText = `
+    position: absolute;
+    top: 20px;
+    left: -6px;
+    width: 12px;
+    height: 12px;
+    background: white;
+    border-left: 1px solid ${config.color}40;
+    border-bottom: 1px solid ${config.color}40;
+    transform: rotate(45deg);
+  `;
+  analysisOverlay.appendChild(arrow);
+
+  // 添加解析标题
+  const analysisTitle = document.createElement('div');
+  analysisTitle.style.cssText = `
+    font-weight: bold;
+    margin-bottom: 8px;
+    color: ${config.color};
+    border-bottom: 1px solid ${config.color}20;
+    padding-bottom: 4px;
+  `;
+  analysisTitle.textContent = '解析';
+  analysisOverlay.insertBefore(analysisTitle, analysisOverlay.firstChild);
+
+  // 添加解析内容容器
+  const analysisContent = document.createElement('div');
+  analysisContent.className = 'analysis-content';
+  analysisContent.style.cssText = `
+    line-height: 1.6;
+  `;
+  analysisOverlay.appendChild(analysisContent);
+
+  // 添加 hover 事件
+  col.addEventListener('mouseenter', () => {
+    if (analysisContent.textContent.trim()) {
+      analysisOverlay.style.display = 'block';
+
+      // 检查是否超出视口右侧
+      const rect = analysisOverlay.getBoundingClientRect();
+      if (rect.right > window.innerWidth) {
+        // 如果超出右侧，则显示在左侧
+        analysisOverlay.style.left = 'auto';
+        analysisOverlay.style.right = 'calc(99%)';
+        arrow.style.left = 'auto';
+        arrow.style.right = '-6px';
+        arrow.style.borderLeft = 'none';
+        arrow.style.borderRight = `1px solid ${config.color}40`;
+      }
+    }
+  });
+
+  col.addEventListener('mouseleave', () => {
+    analysisOverlay.style.display = 'none';
+    // 重置位置设置
+    analysisOverlay.style.left = 'calc(99%)';
+    analysisOverlay.style.right = 'auto';
+    arrow.style.left = '-6px';
+    arrow.style.right = 'auto';
+    arrow.style.borderLeft = `1px solid ${config.color}40`;
+    arrow.style.borderRight = 'none';
+  });
+
   // 添加 loading 状态
   content.innerHTML = createLoadingHTML(aiType);
 
   col.appendChild(content);
+  col.appendChild(analysisOverlay);
   return col;
 }
 

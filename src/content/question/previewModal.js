@@ -37,7 +37,7 @@ function showPreviewModal() {
   const previewHeader = document.createElement('div');
   previewHeader.style.cssText = `
     display: flex;
-    justify-content: space-between;
+    justify-content: end;
     align-items: center;
     margin-bottom: 20px;
     padding: 0 20px;
