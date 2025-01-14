@@ -1816,10 +1816,6 @@ async function showAnswersModal() {
     `;
     answersContainer.appendChild(initialLoadingDiv);
 
-    // 创建答案行容器
-    const answersRowsContainer = document.createElement('div');
-    answersRowsContainer.id = 'answers-rows-container';
-    answersContainer.appendChild(answersRowsContainer);
 
 
     modal.appendChild(header);
@@ -1860,12 +1856,12 @@ async function showAnswersModal() {
         if (enabledAIs.length > 6) {
           aiNamesRow.style.gridTemplateColumns = `200px repeat(1, 1fr) 200px`;
         } else {
-          aiNamesRow.style.gridTemplateColumns = `200px repeat(${enabledAIs.length}, 1fr)`;
+          aiNamesRow.style.gridTemplateColumns = `200px repeat(${enabledAIs.length}, 1fr) 1fr`;
         }
 
         // 显示所有 AI 答案列
         allQuestionRows.forEach(row => {
-          row.style.gridTemplateColumns = aiNamesRow.style.gridTemplateColumns;
+          row.style.gridTemplateColumns = `200px repeat(${enabledAIs.length}, 1fr) 1fr`;
           const aiCols = row.querySelectorAll('[class^="ai-answer-"]');
           aiCols.forEach(col => col.style.display = 'block');
         });
@@ -1882,7 +1878,10 @@ async function showAnswersModal() {
         modal.style.width = '500px';
         modal.style.maxWidth = '500px';
 
-
+        // 隐藏三个主要按钮
+        if (retryContainer) retryContainer.style.display = 'none';
+        if (deleteContainer) deleteContainer.style.display = 'none';
+        if (weightContainer) weightContainer.style.display = 'none';
         // 修改 AI 名称行的列数
         aiNamesRow.style.gridTemplateColumns = '200px 1fr';
 

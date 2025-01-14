@@ -69,37 +69,40 @@ function updateLoadingUI(aiType, isLoading) {
 
 // 发送到AI
 async function sendToAI(aiType, question = null) {
-  if (!question) {
-    const questions = extractQuestionsFromXXT();
-    if (questions.length === 0) {
-      alert('未找到题目');
-      return;
+  try {
+    if (!question) {
+      const questions = extractQuestionsFromXXT();
+      if (questions.length === 0) {
+        alert('未找到题目');
+        return;
+      }
+
+      // 组装题目文本
+      const questionsText = questions.map(q => {
+        let text = `${q.number} ${q.type}\n${q.content}`;
+        if (q.options.length > 0) {
+          text += '\n' + q.options.join('\n');
+        }
+        if (q.type.includes('填空') && q.blankCount > 0) {
+          text += `\n(本题共有 ${q.blankCount} 个空)`;
+        }
+        return text;
+      }).join('\n\n');
+
+      // 从 storage 获取保存的提示词
+      const result = await chrome.storage.local.get(['ANSWER_MODE']);
+      const prompt = result.ANSWER_MODE || window.ANSWER_MODES.find(mode => mode.id === 'concise').prompt;
+
+      question = prompt + '\n\n' + questionsText;
     }
 
-    // 组装题目文本
-    const questionsText = questions.map(q => {
-      let text = `${q.number} ${q.type}\n${q.content}`;
-      if (q.options.length > 0) {
-        text += '\n' + q.options.join('\n');
-      }
-      if (q.type.includes('填空') && q.blankCount > 0) {
-        text += `\n(本题共有 ${q.blankCount} 个空)`;
-      }
-      return text;
-    }).join('\n\n');
+    // 确保答案模态框存在并显示 loading
+    if (!document.getElementById('ai-answers-modal')) {
+      showAnswersModal();
+    }
+    updateAnswerPanel(aiType, 'loading');
+    loadingState.updateUI(aiType, true);
 
-    const prompt = ANSWER_MODES.find(mode => mode.id === 'concise').prompt;
-    question = prompt + '\n\n' + questionsText;
-  }
-
-  // 确保答案模态框存在并显示 loading
-  if (!document.getElementById('ai-answers-modal')) {
-    showAnswersModal();
-  }
-  updateAnswerPanel(aiType, 'loading');
-  loadingState.updateUI(aiType, true);
-
-  try {
     // 使用 window.currentRunMode 而不是从 storage 获取
     const runMode = window.currentRunMode || 'stable';
     console.log('当前运行模式:', runMode);
@@ -132,50 +135,53 @@ async function sendToAI(aiType, question = null) {
 
 // 发送到所有AI
 async function sendToAllAIs() {
-  // 获取题目文本
-  const questions = extractQuestionsFromXXT();
-  if (questions.length === 0) {
-    alert('未找到题目');
-    return;
-  }
-
-  // 组装题目文本
-  const questionsText = questions.map(q => {
-    let text = `${q.number} ${q.type}\n${q.content}`;
-    if (q.options.length > 0) {
-      text += '\n' + q.options.join('\n');
-    }
-    if (q.type.includes('填空') && q.blankCount > 0) {
-      text += `\n(本题共有 ${q.blankCount} 个空)`;
-    }
-    return text;
-  }).join('\n\n');
-
-  const prompt = ANSWER_MODES.find(mode => mode.id === 'concise').prompt;
-  const question = prompt + '\n\n' + questionsText;
-
-  // 确保答案模态框存在
-  if (!document.getElementById('ai-answers-modal')) {
-    showAnswersModal();
-  }
-
-  // 获取所有启用的 AI
-  const enabledAIs = Object.entries(AI_CONFIG)
-    .filter(([_, config]) => config.enabled)
-    .map(([aiType]) => aiType);
-
-  if (enabledAIs.length === 0) {
-    alert('请至少启用一个 AI');
-    return;
-  }
-
-  // 为所有启用的 AI 显示 loading 状态
-  enabledAIs.forEach(aiType => {
-    updateAnswerPanel(aiType, 'loading');
-    loadingState.updateUI(aiType, true);
-  });
-
   try {
+    // 获取题目文本
+    const questions = extractQuestionsFromXXT();
+    if (questions.length === 0) {
+      alert('未找到题目');
+      return;
+    }
+
+    // 组装题目文本
+    const questionsText = questions.map(q => {
+      let text = `${q.number} ${q.type}\n${q.content}`;
+      if (q.options.length > 0) {
+        text += '\n' + q.options.join('\n');
+      }
+      if (q.type.includes('填空') && q.blankCount > 0) {
+        text += `\n(本题共有 ${q.blankCount} 个空)`;
+      }
+      return text;
+    }).join('\n\n');
+
+    // 从 storage 获取保存的提示词
+    const result = await chrome.storage.local.get(['ANSWER_MODE']);
+    const prompt = result.ANSWER_MODE || window.ANSWER_MODES.find(mode => mode.id === 'concise').prompt;
+
+    const question = prompt + '\n\n' + questionsText;
+
+    // 确保答案模态框存在
+    if (!document.getElementById('ai-answers-modal')) {
+      showAnswersModal();
+    }
+
+    // 获取所有启用的 AI
+    const enabledAIs = Object.entries(AI_CONFIG)
+      .filter(([_, config]) => config.enabled)
+      .map(([aiType]) => aiType);
+
+    if (enabledAIs.length === 0) {
+      alert('请至少启用一个 AI');
+      return;
+    }
+
+    // 为所有启用的 AI 显示 loading 状态
+    enabledAIs.forEach(aiType => {
+      updateAnswerPanel(aiType, 'loading');
+      loadingState.updateUI(aiType, true);
+    });
+
     // 使用 window.currentRunMode 而不是从 storage 获取
     const runMode = window.currentRunMode || 'stable';
     console.log('当前运行模式:', runMode);

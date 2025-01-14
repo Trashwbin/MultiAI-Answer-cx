@@ -113,11 +113,26 @@ window.RUN_MODES = {
   }
 };
 
+// 对话策略配置
+window.CHAT_STRATEGIES = {
+  single: {
+    id: 'single',
+    name: '单次对话',
+    description: '接收完答案后关闭AI窗口'
+  },
+  continuous: {
+    id: 'continuous',
+    name: '连续对话',
+    description: '保持AI窗口开启以便继续对话'
+  }
+};
+
 // 回答模式配置
 window.ANSWER_MODES = [
   {
     id: 'concise',
     label: '简洁模式',
+    description: '☑️推荐使用，此模式引导AI给出符合自动解析逻辑的答案',
     prompt: `请用中文回答以下题目。
 请严格按照以下格式回答，注意每个答案必须以"问题X答案:"开头，X为题号：
 
@@ -162,6 +177,7 @@ A. 对
   {
     id: 'detailed',
     label: '解析模式',
+    description: '带有丰富的答案解析，但不适用自动解析答案',
     prompt: `请用中文回答以下题目。
 请严格按照以下格式回答，注意每个答案必须以"问题X答案:"开头，X为题号：
 

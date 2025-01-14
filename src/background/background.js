@@ -313,6 +313,26 @@ async function handleAnswerReady(request) {
     delete updateIntervals[aiConfig.tabId];
   }
 
+  // 获取对话策略
+  let chatStrategy = 'continuous';  // 默认为连续对话
+  try {
+    const result = await chrome.storage.local.get('CHAT_STRATEGY');
+    chatStrategy = result.CHAT_STRATEGY || 'continuous';
+  } catch (error) {
+    console.error('获取对话策略失败:', error);
+  }
+
+  // 如果是单次对话模式，关闭AI窗口
+  if (chatStrategy === 'single' && aiConfig && aiConfig.windowId) {
+    try {
+      await chrome.windows.remove(aiConfig.windowId);
+      aiConfig.tabId = null;
+      aiConfig.windowId = null;
+    } catch (error) {
+      console.error('关闭AI窗口失败:', error);
+    }
+  }
+
   // 如果没有 questionTabId，尝试查找题目页面
   if (!questionTabId) {
     try {
@@ -324,7 +344,7 @@ async function handleAnswerReady(request) {
         }
       }
     } catch (error) {
-      return; // 如果查找失败，直接返回
+      return;
     }
   }
 
@@ -337,7 +357,7 @@ async function handleAnswerReady(request) {
       await chrome.windows.get(questionTab.windowId);
     } catch (error) {
       questionTabId = null;
-      return; // 如果标签页或窗口不存在，直接返回
+      return;
     }
   }
 

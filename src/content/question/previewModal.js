@@ -45,43 +45,6 @@ function showPreviewModal() {
     padding-bottom: 15px;
   `;
 
-  // 创建模式选择区域
-  const modeSelection = document.createElement('div');
-  modeSelection.style.cssText = `
-    display: flex;
-    align-items: center;
-    gap: 20px;
-  `;
-
-  // 添加模式选择按钮
-  window.ANSWER_MODES.forEach(mode => {
-    const label = document.createElement('label');
-    label.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      cursor: pointer;
-    `;
-
-    const radio = document.createElement('input');
-    radio.type = 'radio';
-    radio.name = 'answer-mode';
-    radio.id = mode.id;
-    radio.value = mode.prompt;
-    radio.checked = mode.id === 'concise';
-
-    const span = document.createElement('span');
-    span.textContent = mode.label;
-    span.style.cssText = `
-      font-size: 14px;
-      color: #333;
-    `;
-
-    label.appendChild(radio);
-    label.appendChild(span);
-    modeSelection.appendChild(label);
-  });
-
   // 创建按钮区域
   const actionButtons = document.createElement('div');
   actionButtons.style.cssText = `
@@ -116,7 +79,6 @@ function showPreviewModal() {
   actionButtons.appendChild(sendSelectedButton);
 
   // 组装头部
-  previewHeader.appendChild(modeSelection);
   previewHeader.appendChild(actionButtons);
 
   // 创建内容区域
@@ -320,68 +282,69 @@ function showPreviewModal() {
         return;
       }
 
-      // 获取选中的模式提示词
-      const selectedMode = document.querySelector('input[name="answer-mode"]:checked');
-      if (!selectedMode) {
-        alert('请选择回答模式');
-        return;
-      }
-
-      const prompt = selectedMode.value;
-
-      // 组装完整问题
-      const questionsText = selectedQuestions.map(q => {
-        let text = `${q.number} ${q.type}\n${q.content}`;
-        if (q.options.length > 0) {
-          text += '\n' + q.options.join('\n');
-        }
-        // 如果是填空题，添加空的数量信息
-        if (q.questionType === window.QUESTION_TYPES.FILL_BLANK && q.blankCount > 0) {
-          text += `\n(本题共有 ${q.blankCount} 个空，请按顺序填写)`;
-        }
-        return text;
-      }).join('\n\n');
-
       // 在发送前显示 AI 配置对话框
       showAIConfigModal(async () => {
-        const fullQuestion = prompt + '\n\n' + questionsText;
+        try {
+          // 从 storage 获取最新的配置
+          const result = await chrome.storage.local.get(['ANSWER_MODE', 'ANSWER_MODE_TYPE']);
+          const prompt = result.ANSWER_MODE;
 
-        // 获取启用的 AI 列表
-        const enabledAIs = Object.entries(AI_CONFIG).filter(([_, config]) => config.enabled);
+          if (!prompt) {
+            alert('未找到回答模式配置');
+            return;
+          }
 
-        // 如果答案模态框已存在，先移除它
-        const existingModal = document.getElementById('ai-answers-modal');
-        if (existingModal && existingModal.parentNode) {
-          existingModal.parentNode.removeChild(existingModal);
+          // 组装完整问题
+          const questionsText = selectedQuestions.map(q => {
+            let text = `${q.number} ${q.type}\n${q.content}`;
+            if (q.options.length > 0) {
+              text += '\n' + q.options.join('\n');
+            }
+            // 如果是填空题，添加空的数量信息
+            if (q.questionType === window.QUESTION_TYPES.FILL_BLANK && q.blankCount > 0) {
+              text += `\n(本题共有 ${q.blankCount} 个空，请按顺序填写)`;
+            }
+            return text;
+          }).join('\n\n');
+
+          const fullQuestion = prompt + '\n\n' + questionsText;
+
+          // 获取启用的 AI 列表
+          const enabledAIs = Object.entries(AI_CONFIG).filter(([_, config]) => config.enabled);
+
+          // 如果答案模态框已存在，先移除它
+          const existingModal = document.getElementById('ai-answers-modal');
+          if (existingModal && existingModal.parentNode) {
+            existingModal.parentNode.removeChild(existingModal);
+          }
+
+          // 保存选中的题目列表到 window 对象
+          window.selectedQuestions = selectedQuestions;
+
+          // 创建新的答案模态框
+          await showAnswersModal();
+
+          // 保存当前问题以供重发使用
+          const answersModal = document.getElementById('ai-answers-modal');
+          if (answersModal) {
+            answersModal.dataset.currentQuestion = fullQuestion;
+          }
+
+          // 立即关闭题目列表模态框
+          if (modal && modal.parentNode) {
+            modal.parentNode.removeChild(modal);
+          }
+
+          sendToAllAIs();
+        } catch (error) {
+          console.error('处理发送请求时出错:', error);
+          alert('发送失败，请刷新页面后重试' + error.message);
         }
-
-        // 保存选中的题目列表到 window 对象
-        window.selectedQuestions = selectedQuestions;
-
-        // 创建新的答案模态框
-        await showAnswersModal();
-
-        // 保存当前问题以供重发使用
-        const answersModal = document.getElementById('ai-answers-modal');
-        if (answersModal) {
-          answersModal.dataset.currentQuestion = fullQuestion;
-        }
-
-        // 立即关闭题目列表模态框
-        if (modal && modal.parentNode) {
-          modal.parentNode.removeChild(modal);
-        }
-
-        sendToAllAIs();
-        // // 发送到启用的 AI
-        // enabledAIs.forEach(([aiType]) => {
-        //   sendToAI(aiType, fullQuestion);
-        // });
       });
 
     } catch (error) {
-      //console.error('处理发送请求时出错:', error);
-      alert('发送失败，请刷新页面后重试');
+      console.error('处理发送请求时出错:', error);
+      alert('发送失败，请刷新页面后重试' + error.message);
     }
   };
 
