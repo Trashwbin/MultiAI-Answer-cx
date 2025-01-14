@@ -46,13 +46,13 @@ window.AI_CONFIG = {
   kimi: {
     name: 'Kimi',
     color: '#FF6B6B',
-    weight: 2,
+    weight: 1,
     enabled: true
   },
   deepseek: {
     name: 'DeepSeek',
     color: '#4ECDC4',
-    weight: 1,
+    weight: 2,
     enabled: true
   },
   tongyi: {
@@ -71,31 +71,31 @@ window.AI_CONFIG = {
     name: '豆包',
     color: '#FF6A00',
     weight: 1,
-    enabled: true
+    enabled: false
   },
   yiyan: {
     name: '文心一言',
     color: '#4B5CC4',
     weight: 1,
-    enabled: true
+    enabled: false
   },
   xinghuo: {
     name: '讯飞星火',
     color: '#1890FF',
     weight: 1,
-    enabled: true
+    enabled: false
   },
   chatgpt: {
     name: 'ChatGPT',
     color: '#10A37F',
-    weight: 2,
-    enabled: true
+    weight: 1,
+    enabled: false
   },
   gemini: {
     name: 'Gemini',
     color: '#1A73E8',
-    weight: 2,
-    enabled: true
+    weight: 1,
+    enabled: false
   }
 };
 
