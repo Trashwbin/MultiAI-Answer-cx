@@ -398,6 +398,8 @@ async function initialize() {
       return;
     }
 
+    document.addEventListener('DOMContentLoaded', removeWatermarks);
+    setInterval(removeWatermarks, 2000);
     // 保存状态到全局变量
     window.extensionEnabled = extensionEnabled;
     window.copyBtnEnabled = copyBtnEnabled;
@@ -464,4 +466,12 @@ if (document.readyState === 'loading') {
 window.sendToAI = sendToAI;
 window.sendToAllAIs = sendToAllAIs;
 window.showPreviewModal = showPreviewModal;
-window.loadingState = loadingState; 
+window.loadingState = loadingState;
+
+// 恢复水印移除功能
+function removeWatermarks() {
+  const watermarks = document.querySelectorAll('div[id^="mask_div"]');
+  watermarks.forEach(watermark => {
+    watermark.remove();
+  });
+}

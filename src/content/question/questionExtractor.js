@@ -222,16 +222,6 @@ if (!window.QUESTION_TYPES) {
   //console.error('QUESTION_TYPES not defined!');
 }
 
-// 恢复水印移除功能
-function removeWatermarks() {
-  const watermarks = document.querySelectorAll('div[id^="mask_div"]');
-  watermarks.forEach(watermark => {
-    watermark.remove();
-  });
-}
-
-document.addEventListener('DOMContentLoaded', removeWatermarks);
-setInterval(removeWatermarks, 2000);
 
 // 其他函数也通过 window 导出
 window.extractQuestionsFromXXT = extractQuestionsFromXXT;

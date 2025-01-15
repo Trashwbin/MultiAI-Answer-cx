@@ -16,7 +16,15 @@ function showPreviewModal() {
     height: 100%;
     background: rgba(0, 0, 0, 0.5);
     z-index: 10000;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    backdrop-filter: blur(3px);
   `;
+
+  // 添加显示动画
+  requestAnimationFrame(() => {
+    modal.style.opacity = '1';
+  });
 
   const previewContent = document.createElement('div');
   previewContent.style.cssText = `
@@ -31,7 +39,113 @@ function showPreviewModal() {
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    animation: modalFadeIn 0.3s ease;
+    transform-origin: center;
   `;
+
+  // 添加全局动画样式
+  const style = document.createElement('style');
+  style.textContent = `
+    @keyframes modalFadeIn {
+      from {
+        opacity: 0;
+        transform: scale(0.95);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+
+    @keyframes modalFadeOut {
+      from {
+        opacity: 1;
+        transform: scale(1);
+      }
+      to {
+        opacity: 0;
+        transform: scale(0.95);
+      }
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .question-item {
+      transition: all 0.2s ease;
+    }
+
+    .question-item:hover {
+      transform: translateX(5px);
+      background-color: #f8f9fa;
+    }
+
+    .answer-card-btn {
+      transition: all 0.2s ease !important;
+    }
+
+    .answer-card-btn:hover {
+      transform: scale(1.1) !important;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+    }
+
+    .answer-card-btn:active {
+      transform: scale(0.95) !important;
+    }
+
+    .hover-scale {
+      transition: transform 0.2s ease !important;
+    }
+
+    .hover-scale:hover {
+      transform: scale(1.02) !important;
+    }
+
+    .click-effect {
+      transition: transform 0.1s ease !important;
+    }
+
+    .click-effect:active {
+      transform: scale(0.95) !important;
+    }
+
+    .ripple {
+      position: relative;
+      overflow: hidden;
+    }
+
+    .ripple:after {
+      content: "";
+      display: block;
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+      background-image: radial-gradient(circle, #fff 10%, transparent 10.01%);
+      background-repeat: no-repeat;
+      background-position: 50%;
+      transform: scale(10, 10);
+      opacity: 0;
+      transition: transform .5s, opacity 1s;
+    }
+
+    .ripple:active:after {
+      transform: scale(0, 0);
+      opacity: .2;
+      transition: 0s;
+    }
+  `;
+  document.head.appendChild(style);
 
   // 创建头部区域
   const previewHeader = document.createElement('div');
@@ -71,7 +185,13 @@ function showPreviewModal() {
     border-radius: 4px;
     cursor: pointer;
   `;
-  closeButton.onclick = () => modal.remove();
+  closeButton.onclick = () => {
+    modal.style.opacity = '0';
+    previewContent.style.animation = 'modalFadeOut 0.3s ease';
+    setTimeout(() => {
+      modal.remove();
+    }, 300);
+  };
 
   const sendSelectedButton = document.createElement('button');
   sendSelectedButton.textContent = '发送选中题目';
@@ -377,6 +497,35 @@ function showPreviewModal() {
         if (typeCheckbox) {
           updateTypeCheckbox(type);
         }
+      }
+    });
+  });
+
+  // 更新所有按钮样式
+  const buttons = [closeButton, sendSelectedButton];
+  buttons.forEach(button => {
+    button.classList.add('ripple', 'hover-scale', 'click-effect');
+  });
+
+  // 更新题目列表动画
+  const questionItems = document.querySelectorAll('.question-item');
+  questionItems.forEach((item, index) => {
+    item.style.animation = `slideIn 0.3s ease ${index * 0.05}s both`;
+  });
+
+  // 更新答题卡按钮动画
+  const answerButtons = document.querySelectorAll('.answer-card-btn');
+  answerButtons.forEach((btn, index) => {
+    btn.style.animation = `slideIn 0.3s ease ${index * 0.02}s both`;
+  });
+
+  // 更新复选框动画
+  const checkboxes = document.querySelectorAll('.question-checkbox');
+  checkboxes.forEach(checkbox => {
+    checkbox.addEventListener('change', () => {
+      const questionItem = checkbox.closest('.question-item');
+      if (checkbox.checked) {
+        questionItem.style.animation = 'pulse 0.3s ease';
       }
     });
   });

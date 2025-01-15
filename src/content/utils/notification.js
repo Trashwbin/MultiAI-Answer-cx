@@ -22,93 +22,160 @@ function createNotificationContainer() {
 
 // 显示通知
 function showNotification(message, type = 'info') {
-  const container = createNotificationContainer();
+  // 添加全局样式
+  const style = document.createElement('style');
+  style.textContent = `
+    @keyframes notificationSlideIn {
+      from {
+        transform: translateY(-100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+
+    @keyframes notificationSlideOut {
+      from {
+        transform: translateY(0);
+        opacity: 1;
+      }
+      to {
+        transform: translateY(-100%);
+        opacity: 0;
+      }
+    }
+
+    @keyframes progressBar {
+      from {
+        width: 100%;
+      }
+      to {
+        width: 0%;
+      }
+    }
+  `;
+  document.head.appendChild(style);
+
+  // 移除现有的通知
+  const existingNotification = document.querySelector('.notification');
+  if (existingNotification) {
+    existingNotification.style.animation = 'notificationSlideOut 0.3s ease forwards';
+    setTimeout(() => {
+      existingNotification.remove();
+    }, 300);
+  }
 
   const notification = document.createElement('div');
+  notification.className = 'notification';
   notification.style.cssText = `
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
     padding: 12px 24px;
     border-radius: 8px;
     color: white;
     font-size: 14px;
-    font-weight: 500;
-    opacity: 0;
-    transform: translateY(-20px);
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    pointer-events: none;
-    text-align: center;
-    min-width: 200px;
-    max-width: 400px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 10002;
     display: flex;
     align-items: center;
-    justify-content: center;
     gap: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    animation: notificationSlideIn 0.3s ease forwards;
+    cursor: pointer;
+    transition: transform 0.2s ease;
   `;
 
   // 根据类型设置样式
   switch (type) {
     case 'success':
       notification.style.background = '#4caf50';
-      notification.innerHTML = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M20 6L9 17l-5-5"/>
-        </svg>
-        ${message}
-      `;
-      break;
-    case 'error':
-      notification.style.background = '#f44336';
-      notification.innerHTML = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10"/>
-          <line x1="15" y1="9" x2="9" y2="15"/>
-          <line x1="9" y1="9" x2="15" y2="15"/>
-        </svg>
-        ${message}
-      `;
       break;
     case 'warning':
       notification.style.background = '#ff9800';
-      notification.innerHTML = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-          <line x1="12" y1="9" x2="12" y2="13"/>
-          <line x1="12" y1="17" x2="12.01" y2="17"/>
-        </svg>
-        ${message}
-      `;
+      break;
+    case 'error':
+      notification.style.background = '#f44336';
       break;
     default:
       notification.style.background = '#2196f3';
-      notification.innerHTML = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10"/>
-          <line x1="12" y1="16" x2="12" y2="12"/>
-          <line x1="12" y1="8" x2="12.01" y2="8"/>
-        </svg>
-        ${message}
-      `;
   }
 
-  container.appendChild(notification);
+  // 添加图标
+  const icon = document.createElement('span');
+  icon.style.cssText = `
+    font-size: 18px;
+    line-height: 1;
+  `;
+  switch (type) {
+    case 'success':
+      icon.textContent = '✓';
+      break;
+    case 'warning':
+      icon.textContent = '⚠';
+      break;
+    case 'error':
+      icon.textContent = '✕';
+      break;
+    default:
+      icon.textContent = 'ℹ';
+  }
 
-  // 触发动画
-  requestAnimationFrame(() => {
-    notification.style.opacity = '1';
-    notification.style.transform = 'translateY(0)';
+  // 添加进度条
+  const progressBar = document.createElement('div');
+  progressBar.style.cssText = `
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 3px;
+    width: 100%;
+    background: rgba(255, 255, 255, 0.3);
+  `;
+
+  const progress = document.createElement('div');
+  progress.style.cssText = `
+    height: 100%;
+    width: 100%;
+    background: rgba(255, 255, 255, 0.7);
+    animation: progressBar 3s linear forwards;
+  `;
+
+  progressBar.appendChild(progress);
+
+  // 添加悬停效果
+  notification.addEventListener('mouseenter', () => {
+    notification.style.transform = 'translateX(-50%) scale(1.02)';
+    progress.style.animationPlayState = 'paused';
   });
 
-  // 3秒后移除通知
-  setTimeout(() => {
-    notification.style.opacity = '0';
-    notification.style.transform = 'translateY(-20px)';
+  notification.addEventListener('mouseleave', () => {
+    notification.style.transform = 'translateX(-50%) scale(1)';
+    progress.style.animationPlayState = 'running';
+  });
+
+  // 点击关闭
+  notification.addEventListener('click', () => {
+    notification.style.animation = 'notificationSlideOut 0.3s ease forwards';
     setTimeout(() => {
       notification.remove();
-      // 如果容器为空，也移除容器
-      if (container.children.length === 0) {
-        container.remove();
-      }
     }, 300);
+  });
+
+  notification.appendChild(icon);
+  notification.appendChild(document.createTextNode(message));
+  notification.appendChild(progressBar);
+  document.body.appendChild(notification);
+
+  // 3秒后自动关闭
+  setTimeout(() => {
+    if (document.body.contains(notification)) {
+      notification.style.animation = 'notificationSlideOut 0.3s ease forwards';
+      setTimeout(() => {
+        notification.remove();
+      }, 300);
+    }
   }, 3000);
 }
 

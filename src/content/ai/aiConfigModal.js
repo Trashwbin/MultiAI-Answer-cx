@@ -12,7 +12,14 @@ function showAIConfigModal(callback) {
     align-items: center;
     z-index: 10001;
     backdrop-filter: blur(3px);
+    opacity: 0;
+    transition: opacity 0.3s ease;
   `;
+
+  // 添加显示动画
+  requestAnimationFrame(() => {
+    modal.style.opacity = '1';
+  });
 
   const content = document.createElement('div');
   content.style.cssText = `
@@ -26,6 +33,7 @@ function showAIConfigModal(callback) {
     grid-template-columns: 280px 1fr;
     grid-template-rows: auto auto;
     gap: 16px;
+    transform-origin: center;
   `;
 
   // 添加动画样式
@@ -40,6 +48,103 @@ function showAIConfigModal(callback) {
         opacity: 1;
         transform: scale(1);
       }
+    }
+
+    @keyframes modalFadeOut {
+      from {
+        opacity: 1;
+        transform: scale(1);
+      }
+      to {
+        opacity: 0;
+        transform: scale(0.95);
+      }
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes pulse {
+      0% {
+        transform: scale(1);
+      }
+      50% {
+        transform: scale(1.05);
+      }
+      100% {
+        transform: scale(1);
+      }
+    }
+
+    @keyframes shake {
+      0%, 100% {
+        transform: translateX(0);
+      }
+      25% {
+        transform: translateX(-5px);
+      }
+      75% {
+        transform: translateX(5px);
+      }
+    }
+
+    @keyframes ripple {
+      to {
+        transform: scale(4);
+        opacity: 0;
+      }
+    }
+
+    .ripple {
+      position: relative;
+      overflow: hidden;
+    }
+
+    .ripple:after {
+      content: "";
+      display: block;
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+      background-image: radial-gradient(circle, #fff 10%, transparent 10.01%);
+      background-repeat: no-repeat;
+      background-position: 50%;
+      transform: scale(10, 10);
+      opacity: 0;
+      transition: transform .5s, opacity 1s;
+    }
+
+    .ripple:active:after {
+      transform: scale(0, 0);
+      opacity: .2;
+      transition: 0s;
+    }
+
+    .hover-scale {
+      transition: transform 0.2s ease;
+    }
+
+    .hover-scale:hover {
+      transform: scale(1.02);
+    }
+
+    .click-effect {
+      transition: transform 0.1s ease;
+    }
+
+    .click-effect:active {
+      transform: scale(0.95);
     }
   `;
   document.head.appendChild(style);
@@ -600,7 +705,13 @@ function showAIConfigModal(callback) {
       border-color: #cbd5e0;
     }
   `;
-  cancelBtn.onclick = () => modal.remove();
+  cancelBtn.onclick = () => {
+    modal.style.opacity = '0';
+    content.style.animation = 'modalFadeOut 0.3s ease';
+    setTimeout(() => {
+      modal.remove();
+    }, 300);
+  };
 
   const confirmBtn = document.createElement('button');
   confirmBtn.textContent = '确定';
@@ -664,12 +775,19 @@ function showAIConfigModal(callback) {
         'ANSWER_MODE_TYPE': selectedAnswerMode.id
       });
 
-      // 关闭配置模态框
-      modal.remove();
-
-      // 如果有回调函数，执行它
-      if (callback) callback();
+      // 添加关闭动画
+      modal.style.opacity = '0';
+      content.style.animation = 'modalFadeOut 0.3s ease';
+      setTimeout(() => {
+        modal.remove();
+        if (callback) callback();
+      }, 300);
     } catch (error) {
+      // 添加错误动画
+      confirmBtn.style.animation = 'shake 0.5s ease';
+      setTimeout(() => {
+        confirmBtn.style.animation = '';
+      }, 500);
       showNotification(error.message, 'error');
     }
   };
