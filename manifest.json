@@ -52,15 +52,18 @@
         "https://*.chaoxing.com/mycourse/studentstudy*"
       ],
       "js": [
+        "lib/html2canvas.min.js",
         "src/config/config.js",
         "src/content/question/questionExtractor.js",
         "src/content/question/handlers/questionHandlers.js",
         "src/content/question/handlers/autoFill.js",
         "src/content/question/handlers/answerFormatter.js",
+        "src/content/question/handlers/questionToImage.js",
         "src/content/ai/aiConfigModal.js",
         "src/content/question/previewModal.js",
         "src/content/question/handlers/answerHandler.js",
-        "src/content/main.js"
+        "src/content/main.js",
+        "src/content/utils/notification.js"
       ],
       "run_at": "document_end"
     },

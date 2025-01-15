@@ -2,6 +2,14 @@
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   try {
     switch (message.action) {
+      case 'toggleExtension':
+        // 切换插件总开关
+        window.extensionEnabled = message.enabled;
+        // 重新加载页面以应用更改
+        window.location.reload();
+        sendResponse({ success: true });
+        break;
+
       case 'showQuestionList':
         // 检查是否在考试页面（通过页面标题和aria-label判断）
         const subNav = document.querySelector('.subNav');
@@ -29,6 +37,36 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       case 'showAnswers':
         // 显示 AI 答案
         showAnswersModal();
+        sendResponse({ success: true });
+        break;
+
+      case 'togglePasteLimit':
+        // 切换粘贴限制
+        if (message.enabled !== window.pasteLimitDisabled) {
+          window.pasteLimitDisabled = message.enabled;
+          // 重新加载页面以应用更改
+          window.location.reload();
+        }
+        sendResponse({ success: true });
+        break;
+
+      case 'toggleCopyBtn':
+        // 切换复制按钮
+        if (message.enabled !== window.copyBtnEnabled) {
+          window.copyBtnEnabled = message.enabled;
+          // 重新加载页面以应用更改
+          window.location.reload();
+        }
+        sendResponse({ success: true });
+        break;
+
+      case 'toggleTextSelect':
+        // 切换文本选择限制
+        if (message.enabled !== window.textSelectEnabled) {
+          window.textSelectEnabled = message.enabled;
+          // 重新加载页面以应用更改
+          window.location.reload();
+        }
         sendResponse({ success: true });
         break;
     }
@@ -71,10 +109,9 @@ function updateLoadingUI(aiType, isLoading) {
 async function sendToAI(aiType, question = null) {
   try {
     if (!question) {
-      // 使用已选择的题目
       const selectedQuestions = window.selectedQuestions;
       if (!selectedQuestions || selectedQuestions.length === 0) {
-        alert('未找到选中的题目');
+        showNotification('未找到选中的题目', 'warning');
         return;
       }
 
@@ -137,10 +174,9 @@ async function sendToAI(aiType, question = null) {
 // 发送到所有AI
 async function sendToAllAIs() {
   try {
-    // 使用已选择的题目
     const selectedQuestions = window.selectedQuestions;
     if (!selectedQuestions || selectedQuestions.length === 0) {
-      alert('未找到选中的题目');
+      showNotification('未找到选中的题目', 'warning');
       return;
     }
 
@@ -173,7 +209,7 @@ async function sendToAllAIs() {
       .map(([aiType]) => aiType);
 
     if (enabledAIs.length === 0) {
-      alert('请至少启用一个 AI');
+      showNotification('请至少启用一个 AI', 'warning');
       return;
     }
 
@@ -208,7 +244,6 @@ async function sendToAllAIs() {
     }
   } catch (error) {
     console.error('发送失败:', error);
-    // 显示错误状态
     enabledAIs.forEach(aiType => {
       updateAnswerPanel(aiType, '发送失败，请点击重试按钮重新发送');
       loadingState.updateUI(aiType, false);
@@ -216,18 +251,167 @@ async function sendToAllAIs() {
   }
 }
 
+// 移除粘贴限制
+function removePasteRestriction() {
+  // 创建一个 MutationObserver 来监听 DOM 变化
+  const observer = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+      if (mutation.addedNodes.length) {
+        mutation.addedNodes.forEach((node) => {
+          // 检查新添加的节点是否包含编辑器
+          if (node.nodeType === 1) {
+            const iframes = node.querySelectorAll('iframe');
+            iframes.forEach(handleEditorIframe);
+          }
+        });
+      }
+    });
+  });
+
+  // 开始观察 DOM 变化
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true
+  });
+
+  // 处理已存在的编辑器
+  document.querySelectorAll('iframe').forEach(handleEditorIframe);
+}
+
+// 处理编辑器 iframe
+function handleEditorIframe(iframe) {
+  try {
+    // 等待 iframe 加载完成
+    if (iframe.contentDocument) {
+      enablePaste(iframe.contentDocument);
+    } else {
+      iframe.addEventListener('load', () => {
+        enablePaste(iframe.contentDocument);
+      });
+    }
+  } catch (error) {
+    // 忽略跨域错误
+    console.error('处理iframe时出错:', error);
+  }
+}
+
+// 启用粘贴功能
+function enablePaste(doc) {
+  if (!doc) return;
+
+  // 移除所有粘贴相关的事件监听器
+  const body = doc.body || doc.documentElement;
+  if (!body) return;
+
+  // 创建一个新的粘贴事件处理函数
+  function handlePaste(e) {
+    e.stopImmediatePropagation();
+    return true;
+  }
+
+  // 添加事件捕获
+  body.addEventListener('paste', handlePaste, true);
+
+  // 移除可能存在的粘贴限制属性
+  body.setAttribute('contenteditable', 'true');
+  body.setAttribute('style', (body.getAttribute('style') || '') + '; user-select: text !important; -webkit-user-select: text !important;');
+
+  // 覆盖可能存在的禁止粘贴函数
+  if (doc.defaultView) {
+    doc.defaultView.onpaste = null;
+    doc.defaultView.addEventListener('paste', handlePaste, true);
+  }
+}
+
+// 移除文本选择限制
+function removeSelectRestriction() {
+  // 添加全局样式
+  const style = document.createElement('style');
+  style.id = 'remove-select-restriction-style';
+  style.textContent = `
+    * {
+      user-select: text !important;
+      -webkit-user-select: text !important;
+      -moz-user-select: text !important;
+      -ms-user-select: text !important;
+    }
+    
+    *::selection {
+      background: #b4d5fe !important;
+      color: inherit !important;
+    }
+  `;
+  document.head.appendChild(style);
+
+  // 移除所有禁止选择和复制的事件监听器
+  document.addEventListener('selectstart', e => e.stopPropagation(), true);
+  document.addEventListener('copy', e => e.stopPropagation(), true);
+  document.addEventListener('contextmenu', e => e.stopPropagation(), true);
+
+  // 处理所有元素
+  const elements = document.querySelectorAll('*');
+  elements.forEach(el => {
+    el.style.userSelect = 'text';
+    el.style.webkitUserSelect = 'text';
+    el.oncontextmenu = null;
+    el.onselectstart = null;
+    el.oncopy = null;
+  });
+}
+
+// 恢复文本选择限制
+function restoreSelectRestriction() {
+  // 移除添加的样式
+  const style = document.getElementById('remove-select-restriction-style');
+  if (style) {
+    style.remove();
+  }
+}
+
 // 初始化函数
 async function initialize() {
   //console.log('开始初始化...');
 
-  // 等待配置和工具加载
-  if (!window.QUESTION_TYPES || !window.AI_CONFIG || !window.RUN_MODES) {
-    //console.error('配置未加载，等待重试...');
-    setTimeout(initialize, 500);
-    return;
-  }
-
   try {
+    // 从存储中加载功能状态
+    const {
+      extensionEnabled = true,
+      pasteLimitDisabled = true,
+      copyBtnEnabled = true,
+      textSelectEnabled = true
+    } = await chrome.storage.local.get([
+      'extensionEnabled',
+      'pasteLimitDisabled',
+      'copyBtnEnabled',
+      'textSelectEnabled'
+    ]);
+
+    // 如果插件被禁用，直接返回
+    if (!extensionEnabled) {
+      return;
+    }
+
+    // 等待配置和工具加载
+    if (!window.QUESTION_TYPES || !window.AI_CONFIG || !window.RUN_MODES) {
+      //console.error('配置未加载，等待重试...');
+      setTimeout(initialize, 500);
+      return;
+    }
+
+    // 保存状态到全局变量
+    window.extensionEnabled = extensionEnabled;
+    window.copyBtnEnabled = copyBtnEnabled;
+    window.pasteLimitDisabled = pasteLimitDisabled;
+    window.textSelectEnabled = textSelectEnabled;
+
+    // 根据存储的状态初始化功能
+    if (pasteLimitDisabled) {
+      removePasteRestriction();
+    }
+    if (textSelectEnabled) {
+      removeSelectRestriction();
+    }
+
     // 从 chrome.storage.local 加载运行模式
     const { runMode = 'stable' } = await chrome.storage.local.get('RUN_MODE');
     window.currentRunMode = runMode;

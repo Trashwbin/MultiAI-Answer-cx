@@ -49,6 +49,73 @@ function getBlankCount(questionDiv) {
   return blankCount;
 }
 
+// 添加复制按钮到题目
+function addCopyButton(questionDiv) {
+  // 检查是否启用复制按钮功能
+  if (!window.copyBtnEnabled) return;
+
+  const copyButton = document.createElement('button');
+  copyButton.className = 'copy-question-btn';
+  copyButton.innerHTML = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+    </svg>
+  `;
+
+  copyButton.style.cssText = `
+    position: absolute;
+    left: -20px;
+    top: 10px;
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
+    color: #666;
+    z-index: 1000;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  `;
+
+  // 添加悬浮效果
+  questionDiv.style.position = 'relative';
+
+  questionDiv.addEventListener('mouseenter', () => {
+    copyButton.style.opacity = '1';
+    copyButton.style.transform = 'scale(1)';
+  });
+
+  questionDiv.addEventListener('mouseleave', () => {
+    copyButton.style.opacity = '0';
+    copyButton.style.transform = 'scale(0.95)';
+  });
+
+  copyButton.addEventListener('mouseenter', () => {
+    copyButton.style.backgroundColor = '#f5f5f5';
+    copyButton.style.transform = 'scale(1.05)';
+  });
+
+  copyButton.addEventListener('mouseleave', () => {
+    copyButton.style.backgroundColor = 'white';
+    copyButton.style.transform = 'scale(1)';
+  });
+
+  // 点击事件
+  copyButton.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (copyButton.disabled) return;
+    await window.copyQuestionAsImage(questionDiv, copyButton);
+  });
+
+  questionDiv.appendChild(copyButton);
+}
+
 // 修改原有的提取题目函数
 function extractQuestionsFromXXT() {
   const questions = [];
@@ -67,6 +134,9 @@ function extractQuestionsFromXXT() {
       //console.log('未找到题目标题元素，跳过');
       return;
     }
+
+    // 添加复制按钮
+    addCopyButton(div);
 
     const titleText = titleElem.textContent.trim();
     const [number, ...rest] = titleText.split('.');

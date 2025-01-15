@@ -636,13 +636,15 @@ function showAIConfigModal(callback) {
       // 检查是否至少选择了一个 AI
       const hasEnabledAI = Object.values(window.AI_CONFIG).some(config => config.enabled);
       if (!hasEnabledAI) {
-        throw new Error('请至少选择一个 AI');
+        showNotification('请至少选择一个 AI', 'warning');
+        return;
       }
 
       // 检查是否选择了权重 AI
       const hasWeightAI = Object.values(window.AI_CONFIG).some(config => config.weight > 1);
       if (!hasWeightAI) {
-        throw new Error('请选择一个权重 AI');
+        showNotification('请选择一个权重 AI', 'warning');
+        return;
       }
 
       // 获取实际的提示词内容
@@ -668,7 +670,7 @@ function showAIConfigModal(callback) {
       // 如果有回调函数，执行它
       if (callback) callback();
     } catch (error) {
-      alert(error.message);
+      showNotification(error.message, 'error');
     }
   };
 

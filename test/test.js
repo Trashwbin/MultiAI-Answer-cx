@@ -345,7 +345,7 @@ async function initSelectedAITabs() {
 async function startTest() {
   const selectedAIs = getSelectedAIs();
   if (selectedAIs.length === 0) {
-    alert('请至少选择一个 AI 进行测试');
+    showNotification('请至少选择一个 AI 进行测试', 'warning');
     return;
   }
 
@@ -353,7 +353,7 @@ async function startTest() {
   const question = input.value.trim();
 
   if (!question) {
-    alert('请输入测试问题');
+    showNotification('请输入测试问题', 'warning');
     return;
   }
 

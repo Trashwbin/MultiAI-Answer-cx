@@ -281,7 +281,6 @@ function showPreviewModal() {
       document.querySelectorAll('.question-checkbox:checked').forEach(cb => {
         const questionDiv = cb.closest('.question-item');
         const questionId = questionDiv.dataset.id;
-        // 从原始的题目列表中找到对应的题目
         const originalQuestions = window.extractedQuestions || [];
         const question = originalQuestions.find(q => q.id === questionId);
         if (question) {
@@ -290,7 +289,7 @@ function showPreviewModal() {
       });
 
       if (selectedQuestions.length === 0) {
-        alert('请至少选择一个题目');
+        showNotification('请至少选择一个题目', 'warning');
         return;
       }
 
@@ -302,7 +301,7 @@ function showPreviewModal() {
           const prompt = result.ANSWER_MODE;
 
           if (!prompt) {
-            alert('未找到回答模式配置');
+            showNotification('未找到回答模式配置', 'error');
             return;
           }
 
@@ -350,13 +349,13 @@ function showPreviewModal() {
           sendToAllAIs();
         } catch (error) {
           console.error('处理发送请求时出错:', error);
-          alert('发送失败，请刷新页面后重试' + error.message);
+          showNotification('发送失败，请刷新页面后重试: ' + error.message, 'error');
         }
       });
 
     } catch (error) {
       console.error('处理发送请求时出错:', error);
-      alert('发送失败，请刷新页面后重试' + error.message);
+      showNotification('发送失败，请刷新页面后重试: ' + error.message, 'error');
     }
   };
 

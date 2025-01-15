@@ -22,52 +22,6 @@ async function getEnabledAIs() {
   }
 }
 
-// 发送消息到 AI
-async function sendMessageToAI(aiType, message) {
-  return await retryOperation(async () => {
-    try {
-      // 设置超时时间为 5 分钟
-      const timeout = 300000;
-
-      const response = await Promise.race([
-        chrome.runtime.sendMessage({
-          type: 'ASK_QUESTION',
-          aiType: aiType,
-          question: message
-        }),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('请求超时')), timeout)
-        )
-      ]);
-
-      if (!response) {
-        throw new Error('未收到响应');
-      }
-
-      if (response.error) {
-        throw new Error(response.error);
-      }
-
-      return response;
-    } catch (error) {
-      if (error.message.includes('Extension context invalidated') ||
-        error.message.includes('message channel closed')) {
-        //console.log('连接断开，尝试重新连接...');
-        // 等待一段时间后重试
-        await new Promise(resolve => setTimeout(resolve, 2000));
-
-        // 尝试重新建立连接
-        try {
-          await chrome.runtime.connect();
-        } catch (connectError) {
-          //console.error('重新连接失败:', connectError);
-        }
-      }
-      throw error;
-    }
-  }, 5, 2000); // 最多重试5次，每次间隔2秒
-}
-
 // 将 enableButtons 函数移到全局作用域
 let autoFillBtn, collapseBtn;
 
@@ -583,7 +537,8 @@ async function updateFinalAnswer(questionNum) {
     // 获取启用的 AI 列表
     const enabledAIs = await getEnabledAIs();
     if (!Array.isArray(enabledAIs) || enabledAIs.length === 0) {
-      throw new Error('无效的 AI 列表');
+      showNotification('无效的 AI 列表', 'error');
+      return;
     }
 
     // 收集所有 AI 的答案
@@ -666,7 +621,8 @@ async function updateFinalAnswer(questionNum) {
     finalAnswerCol.innerHTML = ''; // 清空原有内容
     finalAnswerCol.appendChild(editableAnswer);
   } catch (error) {
-    //console.error('更新最终答案时出错:', error);
+    console.error('更新最终答案失败:', error);
+    showNotification('更新最终答案失败: ' + error.message, 'error');
   }
 }
 
@@ -763,16 +719,16 @@ window.saveQuestionInfo = saveQuestionInfo;
 
 // 修改 showAnswersModal 函数为异步函数
 async function showAnswersModal() {
-  //console.log('Showing answers modal');
-
-  // 检查是否已存在模态框
-  const existingModal = document.getElementById('ai-answers-modal');
-  if (existingModal) {
-    existingModal.style.display = 'flex';
-    return;
-  }
-
   try {
+    //console.log('Showing answers modal');
+
+    // 检查是否已存在模态框
+    const existingModal = document.getElementById('ai-answers-modal');
+    if (existingModal) {
+      existingModal.style.display = 'flex';
+      return;
+    }
+
     // 获取启用的 AI 列表
     const enabledAIs = await getEnabledAIs();
     //console.log('启用的 AI:', enabledAIs);
@@ -1939,8 +1895,8 @@ async function showAnswersModal() {
     };
 
   } catch (error) {
-    //console.error('显示答案模态框时出错:', error);
-    alert('显示答案模态框时出错: ' + error.message);
+    console.error('显示答案模态框失败:', error);
+    showNotification('显示答案模态框失败: ' + error.message, 'error');
   }
 }
 

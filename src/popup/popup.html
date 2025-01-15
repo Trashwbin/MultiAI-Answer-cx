@@ -3,11 +3,165 @@
 
 <head>
   <meta charset="UTF-8">
+  <title>MultiAI Answer</title>
+  <script src="../content/utils/notification.js"></script>
   <style>
     body {
-      width: 200px;
+      width: 280px;
       padding: 16px;
       font-family: system-ui, -apple-system, sans-serif;
+      margin: 0;
+      position: relative;
+    }
+
+    /* 主开关样式 */
+    .master-switch-container {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      z-index: 1000;
+    }
+
+    .master-switch {
+      width: 32px;
+      height: 32px;
+      border: none;
+      border-radius: 50%;
+      background: linear-gradient(145deg, #ff6b6b, #ff4d4f);
+      color: white;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 2px 8px rgba(255, 77, 79, 0.2);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .master-switch::before {
+      content: '';
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(45deg, #ff4d4f, #ff7875);
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .master-switch:hover {
+      transform: scale(1.1);
+      box-shadow: 0 4px 12px rgba(255, 77, 79, 0.3);
+    }
+
+    .master-switch:hover::before {
+      opacity: 1;
+    }
+
+    .master-switch svg {
+      width: 16px;
+      height: 16px;
+      transition: transform 0.3s ease;
+      z-index: 1;
+    }
+
+    .master-switch:hover svg {
+      transform: rotate(180deg);
+    }
+
+    /* 大开关样式 */
+    .big-switch-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 200px;
+      text-align: center;
+    }
+
+    .big-switch {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: linear-gradient(145deg, #f0f0f0, #e6e6e6);
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 20px 20px 60px #bebebe,
+        -20px -20px 60px #ffffff;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .big-switch::before {
+      content: '';
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(45deg, #4CAF50, #45a049);
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .big-switch:hover {
+      transform: scale(1.05);
+    }
+
+    .big-switch:hover::before {
+      opacity: 1;
+    }
+
+    .big-switch svg {
+      width: 32px;
+      height: 32px;
+      color: #666;
+      transition: all 0.3s ease;
+      z-index: 1;
+    }
+
+    .big-switch:hover svg {
+      color: #fff;
+      transform: rotate(90deg);
+    }
+
+    .big-switch-text {
+      font-size: 16px;
+      color: #666;
+      margin-top: 16px;
+      font-weight: 500;
+      text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
+      position: relative;
+    }
+
+    .big-switch-text::after {
+      content: '';
+      position: absolute;
+      bottom: -4px;
+      left: 0;
+      width: 100%;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #4CAF50, transparent);
+      transform: scaleX(0);
+      transition: transform 0.3s ease;
+    }
+
+    .big-switch-container:hover .big-switch-text::after {
+      transform: scaleX(1);
+    }
+
+    /* 主内容区域 */
+    .main-content {
+      opacity: 1;
+      transition: opacity 0.3s ease;
+    }
+
+    .main-content.disabled {
+      display: none;
     }
 
     .button-container {
@@ -67,28 +221,365 @@
     .github-badge img {
       display: inline-block;
     }
+
+    /* 添加功能开关样式 */
+    .features-container {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 16px;
+      padding: 12px;
+      background: #f5f5f5;
+      border-radius: 6px;
+    }
+
+    .feature-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #666;
+      text-align: center;
+    }
+
+    /* 开关样式 */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 36px;
+      height: 20px;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #ccc;
+      transition: .3s;
+      border-radius: 20px;
+      box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 16px;
+      width: 16px;
+      left: 2px;
+      bottom: 2px;
+      background-color: white;
+      transition: .3s;
+      border-radius: 50%;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+    }
+
+    input:checked+.slider {
+      background-color: #4CAF50;
+    }
+
+    input:checked+.slider:before {
+      transform: translateX(16px);
+    }
+
+    .feature-item span {
+      white-space: nowrap;
+      line-height: 1.2;
+    }
+
+    /* 使用说明样式 */
+    .usage-modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 2000;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .usage-modal.show {
+      display: flex;
+      opacity: 1;
+    }
+
+    .usage-content {
+      background: white;
+      width: 90%;
+      max-width: 400px;
+      margin: auto;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      position: relative;
+      transform: translateY(-20px);
+      transition: transform 0.3s ease;
+      display: flex;
+      flex-direction: column;
+      max-height: 90vh;
+    }
+
+    .usage-modal.show .usage-content {
+      transform: translateY(0);
+    }
+
+    .usage-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid #eee;
+      position: sticky;
+      top: 0;
+      background: white;
+      border-radius: 8px 8px 0 0;
+      z-index: 1;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .usage-header h2 {
+      margin: 0;
+      font-size: 18px;
+      color: #333;
+    }
+
+    .usage-body {
+      padding: 20px;
+      overflow-y: auto;
+      flex: 1;
+      /* 自定义滚动条样式 */
+      scrollbar-width: thin;
+      scrollbar-color: #ccc transparent;
+    }
+
+    /* Webkit滚动条样式 */
+    .usage-body::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .usage-body::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .usage-body::-webkit-scrollbar-thumb {
+      background-color: #ccc;
+      border-radius: 3px;
+    }
+
+    .usage-body::-webkit-scrollbar-thumb:hover {
+      background-color: #999;
+    }
+
+    .usage-content ul {
+      margin: 0;
+      padding-left: 20px;
+      color: #666;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .usage-content li {
+      margin-bottom: 12px;
+    }
+
+    .usage-content li:last-child {
+      margin-bottom: 0;
+    }
+
+    .usage-content li strong {
+      color: #333;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .usage-content li ul {
+      margin-top: 8px;
+    }
+
+    .usage-content li ul li {
+      margin-bottom: 8px;
+      position: relative;
+    }
+
+    .usage-content li ul li::before {
+      content: "•";
+      color: #4CAF50;
+      position: absolute;
+      left: -15px;
+    }
+
+    .close-usage {
+      width: 24px;
+      height: 24px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      padding: 0;
+      color: #999;
+      transition: color 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .close-usage:hover {
+      color: #666;
+    }
+
+    .close-usage svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    .github-badge {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      align-items: center;
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid #eee;
+    }
+
+    .github-badge img {
+      display: block;
+    }
+
+    .github-badge a {
+      text-decoration: none;
+    }
   </style>
 </head>
 
 <body>
-  <h1 class="title">MultiAI Answer v1.0.2</h1>
-  <div class="button-container">
-    <button class="show-questions">
-      <span class="icon">📝</span>
-      显示题目列表
+  <!-- 大开关 -->
+  <div id="bigSwitchContainer" class="big-switch-container" style="display: none;">
+    <button class="big-switch" id="enableExtension">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+      </svg>
     </button>
-    <button class="show-answers">
-      <span class="icon">🤖</span>
-      显示AI答案
-    </button>
+    <div class="big-switch-text">点击启用插件</div>
   </div>
-  <div class="github-badge">
-    <a href="https://github.com/trashwbin">
-      <img src="https://img.shields.io/badge/Trashwbin-C71D23?logo=github&color=%23181717">
-    </a>
-    <a href="https://gitee.com/trashwbin">
-      <img src="https://img.shields.io/badge/Trashwbin-C71D23?logo=gitee&color=%23C71D23">
-    </a>
+
+  <!-- 主要内容区域 -->
+  <div id="mainContent" class="main-content">
+    <!-- 总开关按钮 -->
+    <div class="master-switch-container">
+      <button class="master-switch" id="disableExtension">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+    </div>
+
+    <h1 class="title">MultiAI Answer v1.0.2</h1>
+    <div class="features-container">
+      <div class="feature-item">
+        <label class="switch">
+          <input type="checkbox" id="remove-paste-limit">
+          <span class="slider"></span>
+        </label>
+        <span>解除粘贴限制</span>
+      </div>
+      <div class="feature-item">
+        <label class="switch">
+          <input type="checkbox" id="enable-copy-btn">
+          <span class="slider"></span>
+        </label>
+        <span>题目复制按钮</span>
+      </div>
+      <div class="feature-item">
+        <label class="switch">
+          <input type="checkbox" id="enable-text-select">
+          <span class="slider"></span>
+        </label>
+        <span>解除选择限制</span>
+      </div>
+    </div>
+    <div class="button-container">
+      <button class="show-questions">
+        <span class="icon">📝</span>
+        显示题目列表
+      </button>
+      <button class="show-answers">
+        <span class="icon">🤖</span>
+        显示AI答案
+      </button>
+    </div>
+    <div class="github-badge">
+      <a href="https://github.com/trashwbin">
+        <img src="https://img.shields.io/badge/Trashwbin-C71D23?logo=github&color=%23181717">
+      </a>
+      <a href="#" id="showUsage">
+        <img src="https://img.shields.io/badge/使用说明-4CAF50?logo=bookstack&logoColor=white">
+      </a>
+      <a href="https://gitee.com/trashwbin">
+        <img src="https://img.shields.io/badge/Trashwbin-C71D23?logo=gitee&color=%23C71D23">
+      </a>
+    </div>
+
+    <!-- 使用说明模态框 -->
+    <div id="usageModal" class="usage-modal">
+      <div class="usage-content">
+        <div class="usage-header">
+          <h2>使用说明</h2>
+          <button class="close-usage" id="closeUsage">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div class="usage-body">
+          <ul>
+            <li>
+              <strong>总开关</strong>
+              点击右上角按钮可以快速开启/关闭插件，所有功能将同时被启用或禁用
+            </li>
+            <li>
+              <strong>解除粘贴限制</strong>
+              允许在答题区域自由粘贴文本，无需手动输入
+            </li>
+            <li>
+              <strong>题目复制按钮</strong>
+              在每道题目旁显示复制按钮，方便快速复制题目内容
+            </li>
+            <li>
+              <strong>解除选择限制</strong>
+              允许选择和复制页面上的任何文本内容
+            </li>
+            <li>
+              <strong>显示题目列表</strong>
+              快速查看当前试卷的所有题目，支持批量选择和复制
+            </li>
+            <li>
+              <strong>显示AI答案</strong>
+              使用多个AI助手解答选中的题目，支持多种解答模式
+            </li>
+            <li>
+              <strong>注意事项</strong>
+              <ul>
+                <li>切换开关后需要刷新页面才能使更改生效</li>
+                <li>在考试页面点击显示题目列表会询问是否跳转到整卷预览</li>
+                <li>使用AI答案前请先在题目列表中选择需要解答的题目</li>
+                <li>AI答案仅供参考，请自行判断答案的准确性</li>
+                <li>请合理使用插件功能，遵守相关规定</li>
+              </ul>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
   </div>
   <script src="popup.js"></script>
 </body>
