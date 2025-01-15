@@ -1565,7 +1565,16 @@ async function showAnswersModal() {
     closeBtn.onclick = () => {
       const modal = document.getElementById('ai-answers-modal');
       if (modal) {
-        modal.style.display = 'none';
+        // 添加淡出动画
+        modal.style.transition = 'opacity 0.3s ease';
+        modal.style.opacity = '0';
+
+        // 等待动画完成后隐藏
+        setTimeout(() => {
+          modal.style.display = 'none';
+          // 重置透明度,以便下次打开
+          modal.style.opacity = '1';
+        }, 300);
       }
     };
 
