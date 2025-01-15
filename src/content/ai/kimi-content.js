@@ -15,7 +15,7 @@ class KimiChatAssistant {
 
   async checkReady() {
     // 等待输入框加载
-    while (!document.querySelector('[data-testid="msh-chatinput-editor"]')) {
+    while (!document.querySelector('.chat-input-editor')) {
       await new Promise(resolve => setTimeout(resolve, 500));
     }
     this.ready = true;
@@ -24,13 +24,13 @@ class KimiChatAssistant {
 
   async updateEditorContent(message) {
     try {
-      const editorDiv = document.querySelector('[data-testid="msh-chatinput-editor"]');
+      const editorDiv = document.querySelector('.chat-input-editor');
       if (!editorDiv) {
         throw new Error('找不到输入框');
       }
 
       editorDiv.focus();
-      const formattedHTML = `<p dir="ltr"><span data-lexical-text="true">${message}</span></p>`;
+      const formattedHTML = `<p>${message}</p>`;
       const clipboardData = new DataTransfer();
       clipboardData.setData('text/html', formattedHTML);
       clipboardData.setData('text/plain', message);
@@ -49,6 +49,7 @@ class KimiChatAssistant {
         editorDiv.innerHTML = formattedHTML;
       }
 
+      // 触发input事件
       editorDiv.dispatchEvent(new Event('input', { bubbles: true }));
       await new Promise(resolve => setTimeout(resolve, 100));
 
@@ -64,10 +65,9 @@ class KimiChatAssistant {
     const retryInterval = 500;
 
     while (retryCount < maxRetries) {
+      const editor = document.querySelector('.chat-input-editor');
       const segments = document.querySelectorAll('div[id^="chat-segment-"]');
       const lastSegment = segments[segments.length - 1];
-      const editor = document.querySelector('[data-testid="msh-chatinput-editor"]');
-
       // 检查是否有停止按钮或输入框已清空
       if (lastSegment) {
         const stopBlock = lastSegment.querySelector('div[class*="stopBlock"]');
@@ -105,7 +105,7 @@ class KimiChatAssistant {
 
       while (!sendSuccess && retryCount < maxRetries) {
         // 尝试回车发送
-        const editor = document.querySelector('[data-testid="msh-chatinput-textarea"]');
+        const editor = document.querySelector('.chat-input-editor');
         if (editor) {
           editor.dispatchEvent(new KeyboardEvent('keydown', {
             key: 'Enter',
@@ -121,8 +121,9 @@ class KimiChatAssistant {
 
         // 如果回车发送失败，尝试点击发送按钮
         if (!sendSuccess) {
-          const sendButton = document.querySelector('[data-testid="msh-chatinput-send-button"]');
-          if (sendButton && !sendButton.disabled) {
+          // 点击发送按钮
+          const sendButton = document.querySelector('.send-button');
+          if (sendButton && !sendButton.classList.contains('disabled')) {
             sendButton.click();
             sendSuccess = await this.checkSendSuccess();
           }
@@ -162,7 +163,7 @@ class KimiChatAssistant {
 
           try {
             // 获取最后一个回复内容
-            const segments = document.querySelectorAll('div[id^="chat-segment-"]');
+            const segments = document.querySelectorAll('.segment-assistant');
             if (segments.length > 0) {
               const lastSegment = segments[segments.length - 1];
               if (lastSegment) {
@@ -170,9 +171,10 @@ class KimiChatAssistant {
                 const stopButton = stopBlock?.querySelector('button');
                 const isTyping = stopButton && stopButton.textContent === '停止输出';
 
+
                 if (!isTyping) {
                   // 获取完整内容
-                  const contentDiv = lastSegment.querySelector('.markdown___vuBDJ');
+                  const contentDiv = lastSegment.querySelector('.markdown');
                   let content = '';
 
                   if (contentDiv) {
@@ -277,7 +279,7 @@ const init = () => {
   let attempts = 0;
 
   const tryInit = () => {
-    if (document.querySelector('[data-testid="msh-chatinput-editor"]')) {
+    if (document.querySelector('.chat-input-editor')) {
       new KimiChatAssistant();
     } else if (attempts < maxAttempts) {
       attempts++;
