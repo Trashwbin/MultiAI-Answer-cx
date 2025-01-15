@@ -70,9 +70,8 @@ class KimiChatAssistant {
       const lastSegment = segments[segments.length - 1];
       // 检查是否有停止按钮或输入框已清空
       if (lastSegment) {
-        const stopBlock = lastSegment.querySelector('div[class*="stopBlock"]');
-        const stopButton = stopBlock?.querySelector('button');
-        if (stopButton && stopButton.textContent === '停止输出') {
+        const stopButton = lastSegment.querySelector('.stop-message-btn');
+        if (stopButton && stopButton.textContent.includes('停止输出')) {
           return true;
         }
       }
@@ -167,10 +166,8 @@ class KimiChatAssistant {
             if (segments.length > 0) {
               const lastSegment = segments[segments.length - 1];
               if (lastSegment) {
-                const stopBlock = lastSegment.querySelector('div[class*="stopBlock"]');
-                const stopButton = stopBlock?.querySelector('button');
-                const isTyping = stopButton && stopButton.textContent === '停止输出';
-
+                const stopButton = lastSegment.querySelector('.stop-message-btn');
+                const isTyping = stopButton && stopButton.textContent.includes('停止输出');
 
                 if (!isTyping) {
                   // 获取完整内容
