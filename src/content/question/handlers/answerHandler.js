@@ -140,7 +140,6 @@ async function updateAnswerPanel(aiType, answer) {
     //console.error('Answers container not found!');
     return;
   }
-
   try {
     if (answer === 'loading') {
       // 处理 loading 状态
@@ -150,7 +149,10 @@ async function updateAnswerPanel(aiType, answer) {
       });
       return;
     }
-
+    if (!window.aiFullAnswers) {
+      window.aiFullAnswers = {};
+    }
+    window.aiFullAnswers[aiType] = answer;
     // 解析答案
     const answers = [];
     const regex = /问题\s*(\d+)\s*答案[:：]([^问]*?)(?=问题\s*\d+\s*答案[:：]|$)/gs;
@@ -906,6 +908,31 @@ async function showAnswersModal() {
       align-items: center;
       gap: 10px;
     `;
+
+    // 添加查看完整回答按钮
+    const viewFullAnswerBtn = document.createElement('button');
+    viewFullAnswerBtn.id = 'view-full-answer-btn';
+    viewFullAnswerBtn.textContent = '查看完整回答';
+    viewFullAnswerBtn.style.cssText = `
+      padding: 6px 12px;
+      background: #673ab7;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+    `;
+
+    viewFullAnswerBtn.onmouseover = () => viewFullAnswerBtn.style.background = '#5e35b1';
+    viewFullAnswerBtn.onmouseout = () => viewFullAnswerBtn.style.background = '#673ab7';
+
+    // 添加查看完整回答的点击事件
+    viewFullAnswerBtn.onclick = () => {
+      showFullAnswerModal();
+    };
+
+    rightGroup.appendChild(viewFullAnswerBtn);
 
     // 重发按钮和下拉菜单容器
     const retryContainer = document.createElement('div');
@@ -1791,6 +1818,7 @@ async function showAnswersModal() {
       const retryContainer = document.getElementById('retry-container');
       const deleteContainer = document.getElementById('delete-container');
       const weightContainer = document.getElementById('weight-container');
+      const viewFullAnswerBtn = document.getElementById('view-full-answer-btn');
 
       if (isCollapsed) {
         // 展开状态
@@ -1801,6 +1829,7 @@ async function showAnswersModal() {
         if (retryContainer) retryContainer.style.display = 'inline-block';
         if (deleteContainer) deleteContainer.style.display = 'inline-block';
         if (weightContainer) weightContainer.style.display = 'inline-block';
+        if (viewFullAnswerBtn) viewFullAnswerBtn.style.display = 'inline-block';
 
         // 恢复 AI 名称行的列数
         const enabledAIs = await getEnabledAIs();
@@ -1824,6 +1853,7 @@ async function showAnswersModal() {
             div.style.display = 'flex';
           }
         });
+
       } else {
         // 收起状态
         modal.style.width = '500px';
@@ -1833,6 +1863,8 @@ async function showAnswersModal() {
         if (retryContainer) retryContainer.style.display = 'none';
         if (deleteContainer) deleteContainer.style.display = 'none';
         if (weightContainer) weightContainer.style.display = 'none';
+        if (viewFullAnswerBtn) viewFullAnswerBtn.style.display = 'none';
+
         // 修改 AI 名称行的列数
         aiNamesRow.style.gridTemplateColumns = '200px 1fr';
 
@@ -1850,6 +1882,7 @@ async function showAnswersModal() {
             div.style.display = 'none';
           }
         });
+
       }
     };
 
@@ -1867,10 +1900,13 @@ async function showAnswersModal() {
       const retryContainer = document.getElementById('retry-container');
       const deleteContainer = document.getElementById('delete-container');
       const weightContainer = document.getElementById('weight-container');
+      const viewFullAnswerBtn = document.getElementById('view-full-answer-btn');
+
       // 隐藏三个主要按钮
       if (retryContainer) retryContainer.style.display = 'none';
       if (deleteContainer) deleteContainer.style.display = 'none';
       if (weightContainer) weightContainer.style.display = 'none';
+      if (viewFullAnswerBtn) viewFullAnswerBtn.style.display = 'none';
 
       // 收起状态
       modal.style.width = '500px';
@@ -2029,3 +2065,241 @@ async function clickWithDelay(element) {
   // 添加点击后的延迟
   await new Promise(resolve => setTimeout(resolve, 1000));
 }
+
+// 添加显示完整回答模态框的函数
+function showFullAnswerModal() {
+  const modal = document.createElement('div');
+  modal.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10002;
+  `;
+
+  const content = document.createElement('div');
+  content.style.cssText = `
+    background: white;
+    width: 80%;
+    height: 80%;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+  `;
+
+  // 创建头部
+  const header = document.createElement('div');
+  header.style.cssText = `
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+  `;
+
+  const titleContainer = document.createElement('div');
+  titleContainer.style.cssText = `
+    display: flex;
+    align-items: center;
+    gap: 15px;
+  `;
+
+  const title = document.createElement('h3');
+  title.textContent = 'AI完整回答';
+  title.style.cssText = `
+    margin: 0;
+    font-size: 18px;
+    color: #333;
+  `;
+
+  // 创建AI选择下拉框
+  const aiSelect = document.createElement('select');
+  aiSelect.style.cssText = `
+    padding: 6px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    color: #333;
+    background: #f8f9fa;
+    cursor: pointer;
+    outline: none;
+  `;
+
+  // 获取所有启用的AI
+  const enabledAIs = Object.entries(window.AI_CONFIG).filter(([_, config]) => config.enabled);
+  enabledAIs.forEach(([aiType, config]) => {
+    const option = document.createElement('option');
+    option.value = aiType;
+    option.textContent = config.name;
+    option.style.color = config.color;
+    aiSelect.appendChild(option);
+  });
+
+  titleContainer.appendChild(title);
+  titleContainer.appendChild(aiSelect);
+
+  // 创建按钮组
+  const buttonGroup = document.createElement('div');
+  buttonGroup.style.cssText = `
+    display: flex;
+    gap: 10px;
+  `;
+
+  // 保存按钮
+  const saveBtn = document.createElement('button');
+  saveBtn.textContent = '保存并重新解析';
+  saveBtn.style.cssText = `
+    padding: 6px 12px;
+    background: #4caf50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.2s;
+  `;
+  saveBtn.onmouseover = () => saveBtn.style.background = '#45a049';
+  saveBtn.onmouseout = () => saveBtn.style.background = '#4caf50';
+
+  // 关闭按钮
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = '关闭';
+  closeBtn.style.cssText = `
+    padding: 6px 12px;
+    background: #666;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.2s;
+  `;
+  closeBtn.onmouseover = () => closeBtn.style.background = '#555';
+  closeBtn.onmouseout = () => closeBtn.style.background = '#666';
+
+  buttonGroup.appendChild(saveBtn);
+  buttonGroup.appendChild(closeBtn);
+
+  header.appendChild(titleContainer);
+  header.appendChild(buttonGroup);
+
+  // 创建内容区域
+  const answersContainer = document.createElement('div');
+  answersContainer.style.cssText = `
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+  `;
+
+  // 创建编辑区域
+  function createAnswerEditor(aiType, config) {
+    const aiAnswer = document.createElement('div');
+    aiAnswer.className = `ai-answer-editor-${aiType}`;
+    aiAnswer.style.cssText = `
+      display: none;
+      height: 100%;
+    `;
+
+    const textarea = document.createElement('textarea');
+    textarea.className = `ai-answer-${aiType}-full`;
+    textarea.value = window.aiFullAnswers?.[aiType] || '';
+    textarea.style.cssText = `
+      width: 100%;
+      height: 100%;
+      padding: 15px;
+      border: 1px solid ${config.color}20;
+      border-radius: 8px;
+      resize: none;
+      font-family: inherit;
+      font-size: 14px;
+      line-height: 1.5;
+      background: ${config.color}05;
+      outline: none;
+      transition: border-color 0.2s;
+    `;
+
+    textarea.onfocus = () => {
+      textarea.style.borderColor = `${config.color}50`;
+    };
+
+    textarea.onblur = () => {
+      textarea.style.borderColor = `${config.color}20`;
+    };
+
+    aiAnswer.appendChild(textarea);
+    return aiAnswer;
+  }
+
+  // 为每个AI创建编辑区域
+  enabledAIs.forEach(([aiType, config]) => {
+    const editor = createAnswerEditor(aiType, config);
+    answersContainer.appendChild(editor);
+  });
+
+  // 显示第一个AI的编辑器
+  if (enabledAIs.length > 0) {
+    const firstAIType = enabledAIs[0][0];
+    const firstEditor = answersContainer.querySelector(`.ai-answer-editor-${firstAIType}`);
+    if (firstEditor) {
+      firstEditor.style.display = 'block';
+    }
+  }
+
+  // 下拉框切换事件
+  aiSelect.onchange = () => {
+    // 隐藏所有编辑器
+    enabledAIs.forEach(([aiType]) => {
+      const editor = answersContainer.querySelector(`.ai-answer-editor-${aiType}`);
+      if (editor) {
+        editor.style.display = 'none';
+      }
+    });
+
+    // 显示选中的AI编辑器
+    const selectedEditor = answersContainer.querySelector(`.ai-answer-editor-${aiSelect.value}`);
+    if (selectedEditor) {
+      selectedEditor.style.display = 'block';
+    }
+  };
+
+  // 保存按钮点击事件
+  saveBtn.onclick = async () => {
+    try {
+      // 保存所有编辑后的完整回答
+      const newAnswers = {};
+      enabledAIs.forEach(([aiType]) => {
+        const textarea = document.querySelector(`.ai-answer-${aiType}-full`);
+        if (textarea) {
+          newAnswers[aiType] = textarea.value;
+        }
+      });
+
+      // 更新全局存储
+      window.aiFullAnswers = newAnswers;
+
+      // 重新解析所有答案
+      for (const [aiType, answer] of Object.entries(newAnswers)) {
+        await updateAnswerPanel(aiType, answer);
+      }
+
+      // 关闭模态框
+      modal.remove();
+    } catch (error) {
+      console.error('保存并重新解析答案时出错:', error);
+      alert('保存失败: ' + error.message);
+    }
+  };
+
+  // 关闭按钮点击事件
+  closeBtn.onclick = () => modal.remove();
+
+  content.appendChild(header);
+  content.appendChild(answersContainer);
+  modal.appendChild(content);
+  document.body.appendChild(modal);
+}
+

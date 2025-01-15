@@ -37,13 +37,22 @@ function showPreviewModal() {
   const previewHeader = document.createElement('div');
   previewHeader.style.cssText = `
     display: flex;
-    justify-content: end;
+    justify-content: space-between;
     align-items: center;
     margin-bottom: 20px;
     padding: 0 20px;
     border-bottom: 1px solid #eee;
     padding-bottom: 15px;
   `;
+
+  // 添加左侧标题
+  const titleDiv = document.createElement('div');
+  titleDiv.style.cssText = `
+    font-size: 18px;
+    font-weight: 500;
+    color: #333;
+  `;
+  titleDiv.textContent = '题目预览';
 
   // 创建按钮区域
   const actionButtons = document.createElement('div');
@@ -79,6 +88,7 @@ function showPreviewModal() {
   actionButtons.appendChild(sendSelectedButton);
 
   // 组装头部
+  previewHeader.appendChild(titleDiv);
   previewHeader.appendChild(actionButtons);
 
   // 创建内容区域
