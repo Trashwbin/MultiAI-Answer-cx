@@ -285,8 +285,8 @@ async function autoFillQA(questionId, answer) {
 
 async function fillQAAnswers(questionDiv, answer) {
   try {
-    // 1. 找到答题区域
-    const answerDiv = questionDiv.querySelector('.stem_answer.examAnswer');
+    // 1. 找到答题区域 - 兼容考试和作业模块
+    const answerDiv = questionDiv.querySelector('.stem_answer.examAnswer, .stem_answer');
     if (!answerDiv) {
       //console.error('未找到答题区域');
       return;
@@ -324,13 +324,38 @@ async function fillQAAnswers(questionDiv, answer) {
       cancelable: true
     }));
 
-    // 6. 找到并点击保存按钮
+    // 6. 查找textarea并更新其值（作业模块需要）
+    const textarea = answerDiv.querySelector('textarea[name^="answer"]');
+    if (textarea) {
+      textarea.value = formattedAnswer;
+      // 触发textarea的change事件
+      textarea.dispatchEvent(new Event('change', {
+        bubbles: true,
+        cancelable: true
+      }));
+    }
+
+    // 7. 触发contentChange事件（作业模块特有）
+    const editorInstance = window.UE.getEditor(textarea?.id);
+    if (editorInstance) {
+      editorInstance.fireEvent('contentChange');
+    }
+
+    // 8. 处理保存
+    // 对于考试页面，使用保存按钮
     const saveBtn = answerDiv.querySelector('.savebtndiv .jb_btn');
     if (saveBtn) {
       //console.log('点击保存按钮');
       saveBtn.click();
     } else {
-      //console.error('未找到保存按钮');
+      // 对于作业页面，触发答案变更函数
+      if (typeof window.loadEditorAnswerd === 'function') {
+        const questionId = questionDiv.getAttribute('data');
+        window.loadEditorAnswerd(questionId, 4); // 4表示简答题类型
+      }
+      if (typeof window.answerContentChange === 'function') {
+        window.answerContentChange();
+      }
     }
 
     // 等待保存完成
@@ -358,93 +383,120 @@ async function fillBlankAnswers(questionDiv, answers) {
         .filter(Boolean);
     }
 
-    //console.log('处理后的答案:', processedAnswers);
+    console.log('处理后的答案:', processedAnswers);
 
     // 查找所有填空的编辑器区域
     // 支持考试和作业页面的不同结构
     const answerDivs = questionDiv.querySelectorAll('.sub_que_div, .Answer');
-    //console.log('找到填空数量:', answerDivs.length);
+    console.log('找到填空数量:', answerDivs.length);
 
     for (let i = 0; i < answerDivs.length; i++) {
-      const answerDiv = answerDivs[i];
-      const answer = processedAnswers[i];
-      if (!answer) continue;
+      try {
+        const answerDiv = answerDivs[i];
+        const answer = processedAnswers[i];
+        console.log(`处理第 ${i + 1} 空，答案:`, answer);
 
-      // 添加随机延迟
-      const delay = Math.floor(Math.random() * 1000) + 500;
-      await new Promise(resolve => setTimeout(resolve, delay));
+        if (!answer) {
+          console.log(`第 ${i + 1} 空没有答案，跳过`);
+          continue;
+        }
 
-      // 1. 找到答题区域 - 支持不同的页面结构
-      const examAnswerDiv = answerDiv.querySelector('.divText.examAnswer, .divText.fl.wid750');
-      if (!examAnswerDiv) {
-        //console.error('未找到答题区域');
-        continue;
-      }
+        // 添加随机延迟
+        const delay = Math.floor(Math.random() * 1000) + 500;
+        await new Promise(resolve => setTimeout(resolve, delay));
 
-      // 2. 找到编辑器的 iframe
-      const editorFrame = examAnswerDiv.querySelector('.edui-editor-iframeholder iframe');
-      if (!editorFrame) {
-        //console.error('未找到编辑器 iframe');
-        continue;
-      }
+        // 1. 找到答题区域 - 支持不同的页面结构
+        const examAnswerDiv = answerDiv.querySelector('.divText.examAnswer, .divText.fl.wid750');
+        if (!examAnswerDiv) {
+          console.log(`第 ${i + 1} 空未找到答题区域`);
+          continue;
+        }
 
-      // 3. 点击编辑区域激活编辑器
-      editorFrame.click();
-      //console.log('点击编辑区域');
-      await new Promise(resolve => setTimeout(resolve, 100));
+        // 2. 找到编辑器的 iframe
+        const editorFrame = examAnswerDiv.querySelector('.edui-editor-iframeholder iframe');
+        if (!editorFrame) {
+          console.log(`第 ${i + 1} 空未找到编辑器 iframe`);
+          continue;
+        }
 
-      // 4. 在编辑器中输入内容
-      const editorDoc = editorFrame.contentDocument || editorFrame.contentWindow.document;
-      const editorBody = editorDoc.body;
-      editorBody.innerHTML = `<p>${answer}</p>`;
-      //console.log(`设置第 ${i + 1} 空的答案:`, answer);
+        console.log(`开始填写第 ${i + 1} 空，答案: ${answer}`);
 
-      // 5. 触发编辑器的 input 事件
-      editorBody.dispatchEvent(new Event('input', {
-        bubbles: true,
-        cancelable: true
-      }));
+        // 3. 点击编辑区域激活编辑器
+        editorFrame.click();
+        //console.log('点击编辑区域');
+        await new Promise(resolve => setTimeout(resolve, 100));
 
-      // 6. 查找textarea并更新其值
-      const textarea = examAnswerDiv.querySelector('textarea[name^="answerEditor"]');
-      if (textarea) {
-        textarea.value = `<p>${answer}</p>`;
-        // 触发textarea的change事件
-        textarea.dispatchEvent(new Event('change', {
+        // 4. 在编辑器中输入内容
+        const editorDoc = editorFrame.contentDocument || editorFrame.contentWindow.document;
+        const editorBody = editorDoc.body;
+        editorBody.innerHTML = `<p>${answer}</p>`;
+        //console.log(`设置第 ${i + 1} 空的答案:`, answer);
+
+        // 5. 触发编辑器的 input 事件
+        editorBody.dispatchEvent(new Event('input', {
           bubbles: true,
           cancelable: true
         }));
-      }
 
-      // 7. 触发contentChange事件（作业模块特有）
-      const editorInstance = window.UE.getEditor(textarea?.id);
-      if (editorInstance) {
-        editorInstance.fireEvent('contentChange');
-      }
+        // 6. 查找textarea并更新其值（作业模块需要）
+        const questionId = questionDiv.getAttribute('data');
+        let textarea = examAnswerDiv.querySelector('textarea[name^="answerEditor"]');
 
-      // 8. 处理保存
-      // 对于考试页面，使用保存按钮
-      const saveBtn = answerDiv.querySelector('.savebtndiv .jb_btn, .saveAnswer');
-      if (saveBtn) {
-        //console.log('点击保存按钮');
-        saveBtn.click();
-      } else {
-        // 对于作业页面，触发答案变更函数
-        if (typeof window.loadEditorAnswerd === 'function') {
-          const questionId = questionDiv.getAttribute('data');
-          window.loadEditorAnswerd(questionId, 2);
+        // 对于作业模块的多空题，尝试精确匹配textarea
+        if (!textarea && questionId) {
+          // 构建精确的textarea name: answerEditor{questionId}{空序号}
+          const textareaName = `answerEditor${questionId}${i + 1}`;
+          textarea = examAnswerDiv.querySelector(`textarea[name="${textareaName}"]`);
         }
-        if (typeof window.answerContentChange === 'function') {
-          window.answerContentChange();
-        }
-      }
 
-      // 等待保存完成
-      await new Promise(resolve => setTimeout(resolve, 200));
+        if (textarea) {
+          textarea.value = `<p>${answer}</p>`;
+          // 触发textarea的change事件
+          textarea.dispatchEvent(new Event('change', {
+            bubbles: true,
+            cancelable: true
+          }));
+
+          // 7. 触发contentChange事件（作业模块特有）
+          if (window.UE && typeof window.UE.getEditor === 'function') {
+            const editorInstance = window.UE.getEditor(textarea.id);
+            if (editorInstance) {
+              editorInstance.fireEvent('contentChange');
+            }
+          } else {
+            console.log('UEditor不可用，跳过contentChange事件');
+          }
+        }
+
+        // 8. 处理保存
+        // 对于考试页面，使用保存按钮
+        const saveBtn = answerDiv.querySelector('.savebtndiv .jb_btn, .saveAnswer');
+        if (saveBtn) {
+          //console.log('点击保存按钮');
+          saveBtn.click();
+        } else {
+          // 对于作业页面，触发答案变更函数
+          if (typeof window.loadEditorAnswerd === 'function') {
+            const questionId = questionDiv.getAttribute('data');
+            window.loadEditorAnswerd(questionId, 2);
+          }
+          if (typeof window.answerContentChange === 'function') {
+            window.answerContentChange();
+          }
+        }
+
+        // 等待保存完成
+        await new Promise(resolve => setTimeout(resolve, 200));
+        console.log(`第 ${i + 1} 空处理完成`);
+      } catch (singleError) {
+        console.error(`第 ${i + 1} 空处理失败:`, singleError);
+      }
     }
 
+    console.log('所有填空处理完成');
+
   } catch (error) {
-    //console.error('填写填空题答案失败:', error);
+    console.error('填写填空题答案失败:', error);
   }
 }
 
