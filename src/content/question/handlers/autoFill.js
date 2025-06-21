@@ -87,6 +87,21 @@ async function autoFillAnswers() {
       //console.error('处理题目时出错:', error);
     }
   }
+
+  // 填写完所有题目后，检查是否为作业模块并调用暂时保存
+  try {
+    // 检查是否存在作业模块的暂时保存按钮
+    const saveWorkBtn = document.querySelector('a[onclick="saveWork();"]');
+    if (saveWorkBtn) {
+      //console.log('检测到作业模块，调用暂时保存');
+      // 添加延迟确保所有填写操作完成
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      saveWorkBtn.click();
+      //console.log('已调用暂时保存按钮');
+    }
+  } catch (error) {
+    //console.error('调用暂时保存失败:', error);
+  }
 }
 
 // 添加自动填写的具体实现函数
@@ -346,7 +361,8 @@ async function fillBlankAnswers(questionDiv, answers) {
     //console.log('处理后的答案:', processedAnswers);
 
     // 查找所有填空的编辑器区域
-    const answerDivs = questionDiv.querySelectorAll('.sub_que_div');
+    // 支持考试和作业页面的不同结构
+    const answerDivs = questionDiv.querySelectorAll('.sub_que_div, .Answer');
     //console.log('找到填空数量:', answerDivs.length);
 
     for (let i = 0; i < answerDivs.length; i++) {
@@ -358,8 +374,8 @@ async function fillBlankAnswers(questionDiv, answers) {
       const delay = Math.floor(Math.random() * 1000) + 500;
       await new Promise(resolve => setTimeout(resolve, delay));
 
-      // 1. 找到答题区域
-      const examAnswerDiv = answerDiv.querySelector('.divText.examAnswer');
+      // 1. 找到答题区域 - 支持不同的页面结构
+      const examAnswerDiv = answerDiv.querySelector('.divText.examAnswer, .divText.fl.wid750');
       if (!examAnswerDiv) {
         //console.error('未找到答题区域');
         continue;
@@ -389,13 +405,38 @@ async function fillBlankAnswers(questionDiv, answers) {
         cancelable: true
       }));
 
-      // 6. 找到并点击保存按钮
-      const saveBtn = answerDiv.querySelector('.savebtndiv .jb_btn');
+      // 6. 查找textarea并更新其值
+      const textarea = examAnswerDiv.querySelector('textarea[name^="answerEditor"]');
+      if (textarea) {
+        textarea.value = `<p>${answer}</p>`;
+        // 触发textarea的change事件
+        textarea.dispatchEvent(new Event('change', {
+          bubbles: true,
+          cancelable: true
+        }));
+      }
+
+      // 7. 触发contentChange事件（作业模块特有）
+      const editorInstance = window.UE.getEditor(textarea?.id);
+      if (editorInstance) {
+        editorInstance.fireEvent('contentChange');
+      }
+
+      // 8. 处理保存
+      // 对于考试页面，使用保存按钮
+      const saveBtn = answerDiv.querySelector('.savebtndiv .jb_btn, .saveAnswer');
       if (saveBtn) {
         //console.log('点击保存按钮');
         saveBtn.click();
       } else {
-        //console.error('未找到保存按钮');
+        // 对于作业页面，触发答案变更函数
+        if (typeof window.loadEditorAnswerd === 'function') {
+          const questionId = questionDiv.getAttribute('data');
+          window.loadEditorAnswerd(questionId, 2);
+        }
+        if (typeof window.answerContentChange === 'function') {
+          window.answerContentChange();
+        }
       }
 
       // 等待保存完成
