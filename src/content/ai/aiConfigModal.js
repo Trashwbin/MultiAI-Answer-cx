@@ -332,13 +332,13 @@ function showAIConfigModal(callback) {
   const chatStrategyList = createOptionList();
 
   Object.values(window.CHAT_STRATEGIES).forEach(strategy => {
-    const label = createOptionLabel(strategy.id === 'single');
+    const label = createOptionLabel(strategy.id === 'continuous');
 
     const radio = document.createElement('input');
     radio.type = 'radio';
     radio.name = 'chat-strategy';
     radio.value = strategy.id;
-    radio.checked = strategy.id === 'single';
+    radio.checked = strategy.id === 'continuous';
     radio.style.cssText = `
       width: 16px;
       height: 16px;
@@ -525,6 +525,7 @@ function showAIConfigModal(callback) {
 
     // 创建 AI 卡片
     const aiCard = document.createElement('div');
+    aiCard.id = `ai-card-${aiType}`;  // 添加ID以便后续查找
     aiCard.style.cssText = `
       position: relative;
       padding: 12px;
@@ -594,6 +595,7 @@ function showAIConfigModal(callback) {
     aiIcon.textContent = config.name[0];
 
     const nameLabel = document.createElement('div');
+    nameLabel.className = 'ai-name';  // 添加class以便后续查找
     nameLabel.textContent = config.name;
     nameLabel.style.cssText = `
       font-weight: 500;
@@ -675,6 +677,64 @@ function showAIConfigModal(callback) {
   rightPanel.appendChild(aiDesc);
   rightPanel.appendChild(weightSelector);
   rightPanel.appendChild(aiGrid);
+
+  // 从本地存储加载已保存的AI配置
+  async function loadSavedAIConfig() {
+    try {
+      const result = await chrome.storage.local.get('AI_CONFIG');
+      const savedConfig = result.AI_CONFIG;
+
+      if (savedConfig) {
+        // 更新AI配置
+        Object.entries(savedConfig).forEach(([aiType, savedAiConfig]) => {
+          if (window.AI_CONFIG[aiType]) {
+            // 更新全局配置
+            window.AI_CONFIG[aiType].enabled = savedAiConfig.enabled;
+            window.AI_CONFIG[aiType].weight = savedAiConfig.weight;
+
+            // 更新UI状态
+            const aiCard = document.getElementById(`ai-card-${aiType}`);
+            if (aiCard) {
+              const enableCheck = aiCard.querySelector('input[type="checkbox"]');
+              const nameLabel = aiCard.querySelector('.ai-name');
+
+              // 更新复选框状态
+              if (enableCheck) {
+                enableCheck.checked = savedAiConfig.enabled;
+              }
+
+              // 更新卡片样式
+              const config = window.AI_CONFIG[aiType];
+              aiCard.style.border = `2px solid ${savedAiConfig.enabled ? config.color : '#e2e8f0'}`;
+              aiCard.style.opacity = savedAiConfig.enabled ? '1' : '0.6';
+              if (nameLabel) {
+                nameLabel.style.color = savedAiConfig.enabled ? config.color : '#94a3b8';
+              }
+
+              // 更新权重选择器
+              const option = weightSelect.querySelector(`option[value="${aiType}"]`);
+              if (option) {
+                option.disabled = !savedAiConfig.enabled;
+                if (savedAiConfig.weight > 1) {
+                  weightSelect.value = aiType;
+                }
+              }
+            }
+          }
+        });
+
+        console.log('已加载保存的AI配置');
+      } else {
+        console.log('未找到保存的AI配置，使用默认配置');
+      }
+    } catch (error) {
+      console.error('加载AI配置失败:', error);
+      // 加载失败时使用默认配置，不影响模态框显示
+    }
+  }
+
+  // 异步加载配置，不阻塞模态框显示
+  setTimeout(loadSavedAIConfig, 100);
 
   // 按钮区域
   const buttons = document.createElement('div');

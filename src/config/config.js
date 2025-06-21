@@ -115,15 +115,15 @@ window.RUN_MODES = {
 
 // 对话策略配置
 window.CHAT_STRATEGIES = {
-  single: {
-    id: 'single',
-    name: '单次对话',
-    description: '接收完答案后关闭AI窗口'
-  },
   continuous: {
     id: 'continuous',
     name: '连续对话',
     description: '保持AI窗口开启以便继续对话'
+  },
+  single: {
+    id: 'single',
+    name: '单次对话',
+    description: '接收完答案后关闭AI窗口'
   }
 };
 
