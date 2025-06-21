@@ -14,8 +14,8 @@ class TongyiChatAssistant {
   }
 
   async checkReady() {
-    // 等待输入框加载，使用类名前缀查找
-    while (!document.querySelector('textarea[class*="textarea--"]')) {
+    // 等待输入框加载，使用类名前缀和placeholder进行匹配
+    while (!document.querySelector('textarea[class*="textarea--"], textarea[placeholder*="通义"]')) {
       await new Promise(resolve => setTimeout(resolve, 500));
     }
     this.ready = true;
@@ -24,28 +24,33 @@ class TongyiChatAssistant {
 
   async updateEditorContent(message) {
     try {
-      const editor = document.querySelector('textarea[class*="textarea--"]');
+      // 使用类名前缀选择器，避免硬编码随机后缀
+      const editor = document.querySelector('textarea[class*="textarea--"], textarea[placeholder*="通义"]');
       if (!editor) {
         throw new Error('找不到输入框');
       }
 
       editor.value = message;
       editor.dispatchEvent(new Event('input', { bubbles: true }));
+      editor.dispatchEvent(new Event('change', { bubbles: true }));
 
-      // 等待发送按钮启用
+      // 等待发送按钮启用并点击
       await new Promise(resolve => {
         const checkButton = setInterval(() => {
-          // 查找不带 disabled 类的发送按钮容器
+          // 使用类名前缀，查找不带 disabled 类的发送按钮
           const sendButtonContainer = document.querySelector('div[class*="operateBtn--"]:not([class*="disabled--"])');
           if (sendButtonContainer) {
+            this.log('找到启用的发送按钮，准备点击');
             clearInterval(checkButton);
             sendButtonContainer.click();
             resolve();
           }
         }, 100);
 
+        // 5秒超时保护
         setTimeout(() => {
           clearInterval(checkButton);
+          this.log('等待发送按钮启用超时');
           resolve();
         }, 5000);
       });
@@ -207,7 +212,8 @@ const init = () => {
   let attempts = 0;
 
   const tryInit = () => {
-    if (document.querySelector('textarea[placeholder="千事不决问通义"]')) {
+    // 使用类名前缀和placeholder进行初始化检测
+    if (document.querySelector('textarea[class*="textarea--"], textarea[placeholder*="通义"]')) {
       new TongyiChatAssistant();
     } else if (attempts < maxAttempts) {
       attempts++;
