@@ -1726,39 +1726,7 @@ async function showAnswersModal() {
       position: relative;
     `;
 
-    // 添加初始的整体 loading 状态
-    const initialLoadingDiv = document.createElement('div');
-    initialLoadingDiv.id = 'initial-loading';
-    initialLoadingDiv.style.cssText = `
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: white;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      z-index: 100;
-    `;
-    initialLoadingDiv.innerHTML = `
-      <div class="ai-loading" style="transform: scale(1.5);">
-        <div class="loading-dots">
-          <div></div>
-          <div></div>
-          <div></div>
-        </div>
-        <div class="timeout-tips" style="margin-top: 30px;">
-          <div class="timeout-icon" style="font-size: 24px;">⏳</div>
-          <div class="timeout-text">
-            <p>正在等待 AI 响应</p>
-            <p>请稍候...</p>
-          </div>
-        </div>
-      </div>
-    `;
-    answersContainer.appendChild(initialLoadingDiv);
+    // 移除全局loading，改为每个AI独立显示loading状态
 
 
 
@@ -1766,6 +1734,32 @@ async function showAnswersModal() {
     modal.appendChild(answersContainer);
 
     document.body.appendChild(modal);
+
+    // 立即创建所有题目行并显示AI独立loading状态
+    if (window.selectedQuestions) {
+      const questionNumbers = window.selectedQuestions.map(q => q.number.replace(/\./g, ''));
+
+      for (const questionNum of questionNumbers) {
+        const questionInfo = getQuestionInfo(questionNum);
+        if (!questionInfo) continue;
+
+        // 创建题目行
+        const questionRow = createQuestionRow(questionNum, questionInfo.type, enabledAIs);
+        answersContainer.appendChild(questionRow);
+      }
+
+      // 确保所有AI列都显示loading状态（createAIAnswerColumn已经默认设置了loading）
+      setTimeout(() => {
+        enabledAIs.forEach(([aiType]) => {
+          const aiAnswers = answersContainer.querySelectorAll(`.ai-answer-${aiType} .answer-content`);
+          aiAnswers.forEach(answerCol => {
+            if (!answerCol.innerHTML.includes('ai-loading')) {
+              answerCol.innerHTML = createLoadingHTML(aiType);
+            }
+          });
+        });
+      }, 100);
+    }
 
     //console.log('Answers modal created');
 
