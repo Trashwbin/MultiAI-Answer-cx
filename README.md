@@ -4,7 +4,7 @@
   <img src="icons/icon.png" alt="MultiAI Answer Logo" width="128">
   <p>基于多模型 AI 投票的智能答题助手，让答题更轻松、更准确</p>
   <p>
-    <img src="https://img.shields.io/badge/version-1.0.3-blue.svg" alt="version">
+    <img src="https://img.shields.io/badge/version-1.0.4-blue.svg" alt="version">
     <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="license">
   </p>
 </div>
@@ -125,6 +125,17 @@ https://github.com/user-attachments/assets/e84fd061-df37-4767-8a38-5fedd8e6e54d
 - AI 对话内容仅在对应平台进行
 
 ## 🔄 更新日志
+
+### v1.0.4
+- 🎯 **新增 AI 选择记忆功能**：自动记住用户上次选择的 AI 配置，下次打开时自动恢复
+- 📝 **扩展自动填写功能**：完全适配作业模块，支持作业页面的各种题型自动填写
+- 🔧 **修复多空填空题问题**：解决作业模块中多空题只填写第一个空的问题，现在所有空位都能正确填写
+- 💫 **优化答案加载体验**：改进答案模态框的加载状态显示，用户可实时看到每个 AI 的响应进度
+- 🤖 **更新 AI 平台适配**：
+  - 适配 Kimi 新版 Lexical 编辑器界面
+  - 更新通义千问页面结构变化，解决界面元素识别问题
+- ⚙️ **改进默认设置**：将对话策略默认设置为"连续对话"，提供更好的使用体验
+- 🛠️ **技术优化**：使用智能选择器匹配，提高对页面结构变化的适应性
 
 ### v1.0.3
 - 新增 ChatGPT、Gemini 和讯飞星火模型支持
