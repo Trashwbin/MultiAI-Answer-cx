@@ -1,7 +1,7 @@
 // AI 配置
 const AI_CONFIG = {
   kimi: {
-    url: 'https://kimi.moonshot.cn/',
+    url: 'https://www.kimi.com/',
     tabId: null,
     windowId: null
   },

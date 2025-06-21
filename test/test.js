@@ -3,7 +3,7 @@ const AI_CONFIG = {
   kimi: {
     name: 'Kimi',
     color: '#FF6B6B',
-    url: 'https://kimi.moonshot.cn/'
+    url: 'https://www.kimi.com/'
   },
   deepseek: {
     name: 'DeepSeek',

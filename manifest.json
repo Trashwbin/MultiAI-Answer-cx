@@ -27,7 +27,7 @@
   "host_permissions": [
     "https://*.chaoxing.com/*",
     "https://chat.deepseek.com/*",
-    "https://kimi.moonshot.cn/*",
+    "https://www.kimi.com/*",
     "https://tongyi.aliyun.com/*",
     "https://chatglm.cn/*",
     "https://doubao.com/*",
@@ -69,7 +69,7 @@
     },
     {
       "matches": [
-        "https://kimi.moonshot.cn/*"
+        "https://www.kimi.com/*"
       ],
       "js": [
         "src/content/ai/debugPanel.js",
