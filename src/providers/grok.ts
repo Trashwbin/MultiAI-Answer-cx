@@ -1,123 +1,50 @@
 import { parseAIResponse } from '../core/json-parser';
 import type { ProviderResponse, Question } from '../types';
-import { proxyFetch } from '../utils/page-proxy';
 import { BaseProvider } from './base-provider';
 
 export class GrokProvider extends BaseProvider {
   async query(question: Question): Promise<ProviderResponse> {
-    const prompt = this.buildPrompt(question);
-
     try {
-      const rawText = await this.queryViaApi(prompt);
-      const parsed = parseAIResponse(rawText, this.config.id);
-      return { ...parsed, rawText };
-    } catch (apiError) {
-      const msg = apiError instanceof Error ? apiError.message : String(apiError);
+      const prompt = this.buildPrompt(question);
+      const tabId = await this.ensureGrokTab();
 
-      if (msg.includes('403') || msg.includes('anti-bot') || msg.includes('Forbidden')) {
-        console.warn('[Grok] API 403 — falling back to DOM simulation');
-        try {
-          const rawText = await this.queryViaDom(prompt);
-          const parsed = parseAIResponse(rawText, this.config.id);
-          return { ...parsed, rawText };
-        } catch (domError) {
-          return {
-            providerId: this.config.id,
-            answers: [],
-            rawText: '',
-            error: `API: ${msg} | DOM: ${domError instanceof Error ? domError.message : String(domError)}`,
-          };
-        }
+      const apiResults = await chrome.scripting.executeScript({
+        target: { tabId },
+        world: 'MAIN',
+        func: grokApiQuery,
+        args: [prompt],
+      });
+
+      const apiResult = apiResults[0]?.result as
+        | { ok: true; text: string }
+        | { ok: false; error: string; is403: boolean }
+        | undefined;
+
+      if (!apiResult) throw new Error('Grok: executeScript 无返回');
+
+      if (apiResult.ok) {
+        const rawText = apiResult.text;
+        const parsed = parseAIResponse(rawText, this.config.id);
+        return { ...parsed, rawText };
       }
 
+      if (!apiResult.is403) {
+        return { providerId: this.config.id, answers: [], rawText: '', error: apiResult.error };
+      }
+
+      console.warn('[Grok] API 403 — falling back to DOM simulation');
+      return await this.queryViaDom(prompt, tabId);
+    } catch (error) {
       return {
         providerId: this.config.id,
         answers: [],
         rawText: '',
-        error: msg,
+        error: error instanceof Error ? error.message : String(error),
       };
     }
   }
 
-  private async queryViaApi(prompt: string): Promise<string> {
-    const conversationId = await this.createConversation();
-
-    const body = JSON.stringify({
-      message: prompt,
-      parentResponseId: crypto.randomUUID(),
-      disableSearch: false,
-      enableImageGeneration: false,
-      imageAttachments: [],
-      returnImageBytes: false,
-      returnRawGrokInXaiRequest: false,
-      fileAttachments: [],
-      enableImageStreaming: false,
-      imageGenerationCount: 0,
-      forceConcise: false,
-      toolOverrides: {},
-      enableSideBySide: false,
-      sendFinalMetadata: true,
-      isReasoning: false,
-      metadata: { request_metadata: { mode: 'auto' } },
-      disableTextFollowUps: true,
-      disableArtifact: true,
-      isFromGrokFiles: false,
-      disableMemory: true,
-      forceSideBySide: false,
-      modelMode: 'MODEL_MODE_AUTO',
-      isAsyncChat: false,
-      skipCancelCurrentInflightRequests: false,
-      isRegenRequest: false,
-      disableSelfHarmShortCircuit: false,
-      deviceEnvInfo: {
-        darkModeEnabled: false,
-        devicePixelRatio: 1,
-        screenWidth: 2560,
-        screenHeight: 1440,
-        viewportWidth: 1440,
-        viewportHeight: 719,
-      },
-    });
-
-    const res = await proxyFetch(
-      'grok.com',
-      `https://grok.com/rest/app-chat/conversations/${conversationId}/responses`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body,
-      },
-    );
-
-    if (!res.ok) {
-      throw new Error(`Grok API ${res.status}: ${res.body.slice(0, 300)}`);
-    }
-
-    return this.parseNdjson(res.body);
-  }
-
-  private async createConversation(): Promise<string> {
-    const res = await proxyFetch('grok.com', 'https://grok.com/rest/app-chat/conversations', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
-    });
-
-    if (!res.ok) {
-      throw new Error(`Grok create conversation ${res.status}: ${res.body.slice(0, 200)}`);
-    }
-
-    const data = JSON.parse(res.body) as { conversationId?: string; id?: string };
-    const conversationId = data.conversationId ?? data.id;
-    if (!conversationId) {
-      throw new Error('Grok: conversationId missing — 请先登录 grok.com');
-    }
-    return conversationId;
-  }
-
-  private async queryViaDom(prompt: string): Promise<string> {
-    const tabId = await this.ensureGrokTab();
-
+  private async queryViaDom(prompt: string, tabId: number): Promise<ProviderResponse> {
     const sendResults = await chrome.scripting.executeScript({
       target: { tabId },
       world: 'MAIN',
@@ -127,10 +54,13 @@ export class GrokProvider extends BaseProvider {
 
     const sendResult = sendResults[0]?.result as { ok: boolean; error?: string } | undefined;
     if (!sendResult?.ok) {
-      throw new Error(`Grok DOM send failed: ${sendResult?.error ?? 'no result'}`);
+      return {
+        providerId: this.config.id,
+        answers: [],
+        rawText: '',
+        error: `Grok DOM: ${sendResult?.error ?? '无法发送消息'}`,
+      };
     }
-
-    console.log('[Grok] DOM: message sent, polling for response...');
 
     const MAX_WAIT_MS = 90_000;
     const POLL_INTERVAL_MS = 2_000;
@@ -149,7 +79,6 @@ export class GrokProvider extends BaseProvider {
       const poll = pollResults[0]?.result as
         | { text: string; isStreaming: boolean }
         | undefined;
-
       if (!poll) continue;
 
       if (poll.text && poll.text !== lastText) {
@@ -157,41 +86,37 @@ export class GrokProvider extends BaseProvider {
         stableCount = 0;
       } else if (poll.text) {
         stableCount++;
-        if (!poll.isStreaming && stableCount >= 2) {
-          break;
-        }
+        if (!poll.isStreaming && stableCount >= 2) break;
       }
     }
 
     if (!lastText) {
-      throw new Error(
-        'Grok DOM: 未检测到回复。请确保 grok.com 页面已打开、已登录，且输入框可见。',
-      );
+      return {
+        providerId: this.config.id,
+        answers: [],
+        rawText: '',
+        error: 'Grok DOM: 90s 内未检测到回复',
+      };
     }
 
-    return lastText;
+    const parsed = parseAIResponse(lastText, this.config.id);
+    return { ...parsed, rawText: lastText };
   }
 
   private async ensureGrokTab(): Promise<number> {
     for (const pattern of ['https://grok.com/*', 'https://www.grok.com/*']) {
       const tabs = await chrome.tabs.query({ url: pattern });
       const tab = tabs.find((t) => t.id !== undefined);
-      if (tab?.id !== undefined) {
-        console.log(`[Grok] Reusing tab ${tab.id}`);
-        return tab.id;
-      }
+      if (tab?.id !== undefined) return tab.id;
     }
 
-    console.log('[Grok] Creating background tab for grok.com');
     const tab = await chrome.tabs.create({ url: 'https://grok.com/', active: false });
-    if (tab.id === undefined) {
-      throw new Error('[Grok] chrome.tabs.create returned no id');
-    }
+    if (tab.id === undefined) throw new Error('Grok: chrome.tabs.create 无 id');
 
     await new Promise<void>((resolve, reject) => {
       const timer = setTimeout(() => {
         chrome.tabs.onUpdated.removeListener(listener);
-        reject(new Error('[Grok] Tab load timeout'));
+        reject(new Error('Grok: tab 加载超时'));
       }, 15_000);
 
       function listener(id: number, info: chrome.tabs.TabChangeInfo) {
@@ -206,41 +131,134 @@ export class GrokProvider extends BaseProvider {
 
     return tab.id;
   }
-
-  private parseNdjson(ndjson: string): string {
-    let finalMessage = '';
-    const deltas: string[] = [];
-
-    for (const line of ndjson.split('\n')) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-      try {
-        const data = JSON.parse(trimmed) as Record<string, unknown>;
-        const delta =
-          (typeof data.contentDelta === 'string' ? data.contentDelta : undefined) ??
-          (typeof data.textDelta === 'string' ? data.textDelta : undefined) ??
-          (typeof data.content === 'string' ? data.content : undefined) ??
-          (typeof data.text === 'string' ? data.text : undefined) ??
-          (typeof data.delta === 'string' ? data.delta : undefined);
-        if (delta) deltas.push(delta);
-
-        const nested = data.result as Record<string, unknown> | undefined;
-        const msg = (nested?.response as Record<string, unknown> | undefined)?.modelResponse as
-          | Record<string, unknown>
-          | undefined;
-        if (typeof msg?.message === 'string' && msg.message.length > 0) {
-          finalMessage = msg.message;
-        }
-      } catch {}
-    }
-
-    if (finalMessage) return finalMessage;
-    return deltas.join('');
-  }
 }
 
-// These functions are serialised into grok.com's MAIN world via executeScript.
+// All functions below run inside grok.com's MAIN world via executeScript.
 // They MUST be fully self-contained — no outer-scope references allowed.
+
+// Ported from reference grok-web-client-browser.ts:282-471
+// Runs the entire API flow in one call: conversation resolution → message → NDJSON parse.
+function grokApiQuery(
+  message: string,
+): Promise<{ ok: true; text: string } | { ok: false; error: string; is403: boolean }> {
+  return (async () => {
+    try {
+      let convId: string | null = null;
+
+      const pathMatch = window.location.pathname.match(/\/c\/([a-f0-9-]{36})/);
+      convId = pathMatch?.[1] ?? null;
+
+      if (!convId) {
+        for (const url of [
+          'https://grok.com/rest/app-chat/conversations?limit=1',
+          'https://grok.com/rest/app-chat/conversations',
+        ]) {
+          const listRes = await fetch(url, { credentials: 'include' });
+          if (listRes.ok) {
+            const list = await listRes.json();
+            convId = list?.conversations?.[0]?.conversationId ?? null;
+            if (convId) break;
+          }
+        }
+      }
+
+      if (!convId) {
+        const createRes = await fetch('https://grok.com/rest/app-chat/conversations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({}),
+        });
+        if (createRes.ok) {
+          const d = await createRes.json();
+          convId = d?.conversationId ?? d?.id ?? null;
+        }
+      }
+
+      if (!convId) {
+        return { ok: false as const, error: 'Grok: 无法获取 conversationId — 请先登录 grok.com', is403: false };
+      }
+
+      const body = {
+        message,
+        parentResponseId: crypto.randomUUID(),
+        disableSearch: false,
+        enableImageGeneration: false,
+        imageAttachments: [],
+        returnImageBytes: false,
+        returnRawGrokInXaiRequest: false,
+        fileAttachments: [],
+        enableImageStreaming: false,
+        imageGenerationCount: 0,
+        forceConcise: false,
+        toolOverrides: {},
+        enableSideBySide: false,
+        sendFinalMetadata: true,
+        isReasoning: false,
+        metadata: { request_metadata: { mode: 'auto' } },
+        disableTextFollowUps: true,
+        disableArtifact: true,
+        isFromGrokFiles: false,
+        disableMemory: true,
+        forceSideBySide: false,
+        modelMode: 'MODEL_MODE_AUTO',
+        isAsyncChat: false,
+        skipCancelCurrentInflightRequests: false,
+        isRegenRequest: false,
+        disableSelfHarmShortCircuit: false,
+        deviceEnvInfo: {
+          darkModeEnabled: false,
+          devicePixelRatio: 1,
+          screenWidth: 2560,
+          screenHeight: 1440,
+          viewportWidth: 1440,
+          viewportHeight: 719,
+        },
+      };
+
+      const res = await fetch(
+        `https://grok.com/rest/app-chat/conversations/${convId}/responses`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(body),
+        },
+      );
+
+      if (!res.ok) {
+        const errText = await res.text();
+        const is403 = res.status === 403 || errText.includes('anti-bot');
+        return { ok: false as const, error: `Grok API ${res.status}: ${errText.slice(0, 300)}`, is403 };
+      }
+
+      const ndjson = await res.text();
+      let finalMessage = '';
+      const deltas: string[] = [];
+
+      for (const line of ndjson.split('\n')) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        try {
+          const data = JSON.parse(trimmed);
+          const delta = data.contentDelta ?? data.textDelta ?? data.content ?? data.text ?? data.delta;
+          if (typeof delta === 'string') deltas.push(delta);
+
+          const msg = data.result?.response?.modelResponse;
+          if (msg?.message && typeof msg.message === 'string' && msg.message.length > 0) {
+            finalMessage = msg.message;
+          }
+        } catch {}
+      }
+
+      return { ok: true as const, text: finalMessage || deltas.join('') };
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const is403 = msg.includes('403') || msg.includes('anti-bot');
+      return { ok: false as const, error: msg, is403 };
+    }
+  })();
+}
 
 // Ported from reference grok-web-client-browser.ts:120-178
 function grokDomSend(message: string): { ok: boolean; error?: string } {
@@ -257,7 +275,7 @@ function grokDomSend(message: string): { ok: boolean; error?: string } {
       inputEl = document.querySelector(sel);
       if (inputEl && inputEl.offsetParent !== null) break;
     }
-    if (!inputEl) return { ok: false, error: '找不到输入框' };
+    if (!inputEl) return { ok: false, error: '找不到输入框 — 请在 grok.com 打开一个对话页面' };
 
     inputEl.focus();
     if (inputEl.tagName === 'TEXTAREA' || inputEl.tagName === 'INPUT') {
