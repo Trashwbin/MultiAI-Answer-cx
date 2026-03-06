@@ -1,5 +1,5 @@
 import { parseAIResponse } from '../core/json-parser';
-import type { AuthCredentials, ProviderResponse, Question } from '../types';
+import type { ProviderResponse, Question } from '../types';
 import { BaseProvider } from './base-provider';
 
 const SIGN_SECRET = '8a1317a7468aa3ad86e997d08f3f31cb';
@@ -18,11 +18,86 @@ export class ChatGLMProvider extends BaseProvider {
 
   async query(question: Question): Promise<ProviderResponse> {
     try {
-      const auth = await this.getAuth();
-      const accessToken = await this.resolveAccessToken(auth);
       const prompt = this.buildPrompt(question);
+      const tabId = await this.ensureChatGLMTab();
       const signData = createSign();
       const requestId = crypto.randomUUID();
+
+      const results = await chrome.scripting.executeScript({
+        target: { tabId },
+        world: 'MAIN',
+        func: chatglmPageQuery,
+        args: [prompt, signData, this.deviceId, requestId, X_EXP_GROUPS],
+      });
+
+      const result = results[0]?.result as
+        | { ok: true; text: string }
+        | { ok: false; error: string }
+        | undefined;
+
+      if (!result) throw new Error('ChatGLM: executeScript 无返回');
+      if (!result.ok) throw new Error(result.error);
+
+      const rawText = result.text;
+      const parsed = parseAIResponse(rawText, this.config.id);
+      return { ...parsed, rawText };
+    } catch (error) {
+      return {
+        providerId: this.config.id,
+        answers: [],
+        rawText: '',
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  private async ensureChatGLMTab(): Promise<number> {
+    for (const pattern of ['https://chatglm.cn/*', 'https://www.chatglm.cn/*']) {
+      const tabs = await chrome.tabs.query({ url: pattern });
+      const tab = tabs.find((t) => t.id !== undefined);
+      if (tab?.id !== undefined) return tab.id;
+    }
+
+    const tab = await chrome.tabs.create({ url: 'https://chatglm.cn/', active: false });
+    if (tab.id === undefined) throw new Error('ChatGLM: chrome.tabs.create 无 id');
+
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        chrome.tabs.onUpdated.removeListener(listener);
+        reject(new Error('ChatGLM: tab 加载超时'));
+      }, 15_000);
+
+      function listener(id: number, info: chrome.tabs.TabChangeInfo) {
+        if (id === tab.id && info.status === 'complete') {
+          clearTimeout(timer);
+          chrome.tabs.onUpdated.removeListener(listener);
+          resolve();
+        }
+      }
+      chrome.tabs.onUpdated.addListener(listener);
+    });
+
+    return tab.id;
+  }
+}
+
+// Runs inside chatglm.cn MAIN world — MUST be fully self-contained.
+// Sign data + deviceId passed as args (MD5 stays in service worker).
+// Reads chatglm_token from document.cookie.
+function chatglmPageQuery(
+  prompt: string,
+  signData: { sign: string; nonce: string; timestamp: string },
+  deviceId: string,
+  requestId: string,
+  xExpGroups: string,
+): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
+  return (async () => {
+    try {
+      const tokenMatch = document.cookie.match(/(?:^|;\s*)chatglm_token=([^;]+)/);
+      const accessToken = tokenMatch?.[1] ?? '';
+      if (!accessToken) {
+        return { ok: false as const, error: 'ChatGLM: 未找到 chatglm_token Cookie — 请先登录 chatglm.cn' };
+      }
 
       const res = await fetch('https://chatglm.cn/chatglm/backend-api/assistant/stream', {
         method: 'POST',
@@ -31,19 +106,15 @@ export class ChatGLMProvider extends BaseProvider {
           Accept: 'text/event-stream',
           Authorization: `Bearer ${accessToken}`,
           'App-Name': 'chatglm',
-          Origin: 'https://chatglm.cn',
           'X-App-Platform': 'pc',
           'X-App-Version': '0.0.1',
-          'X-Device-Id': this.deviceId,
+          'X-Device-Id': deviceId,
           'X-Lang': 'zh',
           'X-Request-Id': requestId,
-          ...(Object.keys(auth.cookies).length > 0
-            ? { Cookie: this.buildCookieHeader(auth.cookies) }
-            : {}),
           'X-Sign': signData.sign,
           'X-Nonce': signData.nonce,
           'X-Timestamp': signData.timestamp,
-          'X-Exp-Groups': X_EXP_GROUPS,
+          'X-Exp-Groups': xExpGroups,
           'X-App-fr': 'default',
           'X-Device-Brand': '',
           'X-Device-Model': '',
@@ -64,134 +135,62 @@ export class ChatGLMProvider extends BaseProvider {
             quote_log_id: '',
             platform: 'pc',
           },
-          messages: [
-            {
-              role: 'user',
-              content: [{ type: 'text', text: prompt }],
-            },
-          ],
+          messages: [{ role: 'user', content: [{ type: 'text', text: prompt }] }],
         }),
       });
 
       if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(`ChatGLM API ${res.status}: ${errorText.slice(0, 300)}`);
+        const errText = await res.text();
+        return { ok: false as const, error: `ChatGLM API ${res.status}: ${errText.slice(0, 300)}` };
       }
 
       const sse = await res.text();
-      const rawText = this.parseSse(sse);
-      const parsed = parseAIResponse(rawText, this.config.id);
-      return { ...parsed, rawText };
-    } catch (error) {
-      return {
-        providerId: this.config.id,
-        answers: [],
-        rawText: '',
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
-  }
+      const chunks: string[] = [];
+      for (const line of sse.split('\n')) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith('data:')) continue;
+        const payload = trimmed.slice(5).trim();
+        if (!payload || payload === '[DONE]') continue;
+        try {
+          const obj = JSON.parse(payload);
+          let text = '';
 
-  private async resolveAccessToken(auth: AuthCredentials): Promise<string> {
-    const accessToken = auth.bearerToken ?? auth.cookies['chatglm_token'] ?? '';
-    if (accessToken) {
-      return accessToken;
-    }
-
-    const refreshToken = auth.cookies['chatglm_refresh_token'];
-    if (!refreshToken) {
-      throw new Error('ChatGLM: 未登录 — 缺少 chatglm_token 和 chatglm_refresh_token');
-    }
-
-    const signData = createSign();
-    const res = await fetch('https://chatglm.cn/chatglm/user-api/user/refresh', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${refreshToken}`,
-        'App-Name': 'chatglm',
-        'X-App-Platform': 'pc',
-        'X-App-Version': '0.0.1',
-        'X-Device-Id': this.deviceId,
-        'X-Request-Id': crypto.randomUUID(),
-        'X-Sign': signData.sign,
-        'X-Nonce': signData.nonce,
-        'X-Timestamp': signData.timestamp,
-      },
-      body: JSON.stringify({}),
-    });
-
-    if (!res.ok) {
-      throw new Error(`ChatGLM token refresh ${res.status}`);
-    }
-    const data = (await res.json()) as { result?: { access_token?: string } };
-    const token = data.result?.access_token;
-    if (!token) {
-      throw new Error('ChatGLM: token refresh returned no access_token');
-    }
-    return token;
-  }
-
-  private parseSse(sse: string): string {
-    const chunks: string[] = [];
-    for (const line of sse.split('\n')) {
-      const trimmed = line.trim();
-      if (!trimmed.startsWith('data:')) continue;
-      const payload = trimmed.slice(5).trim();
-      if (!payload || payload === '[DONE]') continue;
-      try {
-        const obj = JSON.parse(payload) as Record<string, unknown>;
-        let text = '';
-
-        // Primary: parts[].content[] format (new ChatGLM)
-        const parts = obj.parts;
-        if (Array.isArray(parts)) {
-          for (const part of parts) {
-            if (part && typeof part === 'object') {
-              const content = (part as Record<string, unknown>).content;
-              if (Array.isArray(content)) {
-                for (const c of content) {
-                  if (c && typeof c === 'object') {
-                    const cc = c as Record<string, unknown>;
-                    if (cc.type === 'text' && typeof cc.text === 'string') {
-                      text = cc.text;
-                      break;
-                    }
+          if (Array.isArray(obj.parts)) {
+            for (const part of obj.parts) {
+              if (part && Array.isArray(part.content)) {
+                for (const c of part.content) {
+                  if (c?.type === 'text' && typeof c.text === 'string') {
+                    text = c.text;
+                    break;
                   }
                 }
               }
-            }
-            if (text) break;
-          }
-        }
-
-        // Fallback: legacy data.parts[].content format
-        if (!text) {
-          const dataParts = obj.data;
-          if (dataParts && typeof dataParts === 'object') {
-            const dp = dataParts as Record<string, unknown>;
-            const dpParts = dp.parts;
-            if (Array.isArray(dpParts)) {
-              const partContent = (dpParts[0] as Record<string, unknown> | undefined)?.content;
-              if (typeof partContent === 'string') {
-                text = partContent;
-              }
+              if (text) break;
             }
           }
-        }
 
-        // Fallback: simple fields
-        if (!text) {
-          text = (typeof obj.text === 'string' ? obj.text : '') ||
-                 (typeof obj.content === 'string' ? obj.content : '') ||
-                 (typeof obj.delta === 'string' ? obj.delta : '');
-        }
+          if (!text && obj.data && typeof obj.data === 'object') {
+            const dpParts = obj.data.parts;
+            if (Array.isArray(dpParts) && dpParts[0]?.content) {
+              text = typeof dpParts[0].content === 'string' ? dpParts[0].content : '';
+            }
+          }
 
-        if (text) chunks.push(text);
-      } catch {}
+          if (!text) {
+            text = (typeof obj.text === 'string' ? obj.text : '') ||
+                   (typeof obj.content === 'string' ? obj.content : '') ||
+                   (typeof obj.delta === 'string' ? obj.delta : '');
+          }
+
+          if (text) chunks.push(text);
+        } catch {}
+      }
+
+      return { ok: true as const, text: chunks.join('') };
+    } catch (e: unknown) {
+      return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
     }
-    return chunks.join('');
-  }
+  })();
 }
 
 function createSign(): { timestamp: string; nonce: string; sign: string } {
