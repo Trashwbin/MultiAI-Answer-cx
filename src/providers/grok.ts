@@ -16,7 +16,7 @@ export class GrokProvider extends BaseProvider {
       });
 
       const apiResult = apiResults[0]?.result as
-        | { ok: true; text: string }
+        | { ok: true; text: string; debug?: string }
         | { ok: false; error: string; is403: boolean }
         | undefined;
 
@@ -25,7 +25,8 @@ export class GrokProvider extends BaseProvider {
       if (apiResult.ok) {
         const rawText = apiResult.text;
         const parsed = parseAIResponse(rawText, this.config.id);
-        return { ...parsed, rawText };
+        const debugSuffix = apiResult.debug ? ` [grok: ${apiResult.debug}]` : '';
+        return { ...parsed, rawText: rawText + debugSuffix };
       }
 
       if (!apiResult.is403) {
@@ -136,14 +137,15 @@ export class GrokProvider extends BaseProvider {
 // All functions below run inside grok.com's MAIN world via executeScript.
 // They MUST be fully self-contained — no outer-scope references allowed.
 
-// Adapted from grok2api processor.ts + conversation.ts
+// Adapted from grok2api processor.ts + fount grokAPI.mjs + openai-grok worker.js
 // Uses /conversations/new (temporary) — single request, no conversation management.
-// Parses NDJSON using result.response.token (streaming) and result.response.modelResponse.message (final).
+// Parses NDJSON: result.response.token (streaming deltas), result.response.modelResponse.message (final).
 function grokApiQuery(
   message: string,
-): Promise<{ ok: true; text: string } | { ok: false; error: string; is403: boolean }> {
+): Promise<{ ok: true; text: string; debug?: string } | { ok: false; error: string; is403: boolean }> {
   return (async () => {
     try {
+      // Payload aligned with grok2api + fount + openai-grok (all active Grok reverse-proxy projects)
       const body = {
         temporary: true,
         modelName: 'grok-3',
@@ -151,22 +153,19 @@ function grokApiQuery(
         fileAttachments: [] as string[],
         imageAttachments: [] as string[],
         disableSearch: false,
-        enableImageGeneration: false,
+        enableImageGeneration: true,
         returnImageBytes: false,
         returnRawGrokInXaiRequest: false,
-        enableImageStreaming: false,
-        imageGenerationCount: 0,
+        enableImageStreaming: true,
+        imageGenerationCount: 2,
         forceConcise: false,
         toolOverrides: {},
-        enableSideBySide: false,
+        enableSideBySide: true,
+        isPreset: false,
         sendFinalMetadata: true,
+        customInstructions: '',
+        deepsearchPreset: '',
         isReasoning: false,
-        webpageUrls: [] as string[],
-        disableTextFollowUps: true,
-        disableMemory: true,
-        forceSideBySide: false,
-        modelMode: 'MODEL_MODE_AUTO',
-        isAsyncChat: false,
       };
 
       const res = await fetch('https://grok.com/rest/app-chat/conversations/new', {
@@ -183,16 +182,19 @@ function grokApiQuery(
       }
 
       const ndjson = await res.text();
+      const ndjsonPreview = ndjson.slice(0, 500);
+
       let finalMessage = '';
       const tokens: string[] = [];
+      let parsedLines = 0;
 
       for (const line of ndjson.split('\n')) {
         const trimmed = line.trim();
         if (!trimmed) continue;
         try {
           const data = JSON.parse(trimmed) as Record<string, unknown>;
+          parsedLines++;
 
-          // Error check
           const err = (data as Record<string, Record<string, unknown>>).error;
           if (err?.message) {
             return { ok: false as const, error: `Grok: ${String(err.message)}`, is403: false };
@@ -224,9 +226,13 @@ function grokApiQuery(
 
       const text = finalMessage || tokens.join('');
       if (!text) {
-        return { ok: false as const, error: 'Grok: 响应为空 — 未解析到 token 或 modelResponse', is403: false };
+        return {
+          ok: false as const,
+          error: `Grok: 响应为空 (parsed=${parsedLines} lines, len=${ndjson.length}). NDJSON preview: ${ndjsonPreview}`,
+          is403: false,
+        };
       }
-      return { ok: true as const, text };
+      return { ok: true as const, text, debug: `parsed=${parsedLines}, tokens=${tokens.length}, hasFinal=${!!finalMessage}` };
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       const is403 = msg.includes('403') || msg.includes('anti-bot');
