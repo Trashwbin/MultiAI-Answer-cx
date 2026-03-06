@@ -38,6 +38,16 @@ interface AuthStatusAllMessage {
   type: 'AUTH_STATUS_ALL';
 }
 
+interface QueryStartMessage {
+  type: 'QUERY_START';
+  providerIds: string[];
+}
+
+interface QueryCompleteMessage {
+  type: 'QUERY_COMPLETE';
+  durationMs: number;
+}
+
 interface QuestionPageReadyMessage {
   type: 'QUESTION_PAGE_READY';
 }
@@ -46,6 +56,8 @@ export type ExtensionMessage =
   | QueryAIMessage
   | QueryAllAIMessage
   | ShowAnswerMessage
+  | QueryStartMessage
+  | QueryCompleteMessage
   | AuthLoginMessage
   | AuthStatusMessage
   | AuthLogoutMessage

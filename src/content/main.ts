@@ -1,13 +1,14 @@
-import type { Question, FinalAnswer, ExtensionMessage } from '../types';
+import type { Question, FinalAnswer, ProviderResponse, ExtensionMessage } from '../types';
 import { extractQuestionsFromXXT } from './extractor/extractor';
 import { autoFillAnswers } from './auto-fill/auto-fill';
-import { showAnswerPanel, updateAnswerPanel, setAutoFillCallback } from './panel/panel';
+import { showAnswerPanel, updateAnswerPanel, updateProviderStatus, setAutoFillCallback } from './panel/panel';
 import { showQuestionList as showQuestionListModal, initQuestionList, setQuestionListSendCallback, hideQuestionList } from './panel/question-list';
 import { showAISelector } from './panel/ai-selector';
 
 let extensionEnabled = true;
 let questions: Question[] = [];
 let finalAnswers: FinalAnswer[] = [];
+const providerResponses = new Map<string, ProviderResponse | 'querying'>();
 let keepAlivePort: chrome.runtime.Port | null = null;
 
 function connectKeepAlive(): void {
@@ -29,29 +30,75 @@ function connectKeepAlive(): void {
   }
 }
 
-function handleShowAnswer(message: ExtensionMessage): void {
-  if (message.type !== 'SHOW_ANSWER') return;
+function handleBackgroundMessage(message: ExtensionMessage): void {
+  switch (message.type) {
+    case 'QUERY_START': {
+      console.log('[CX] Query started:', message.providerIds.join(', '));
+      providerResponses.clear();
+      finalAnswers = [];
+      for (const id of message.providerIds) {
+        providerResponses.set(id, 'querying');
+      }
+      updateProviderStatus(providerResponses);
+      break;
+    }
 
-  const providerAnswers = message.response.answers;
-  for (const pa of providerAnswers) {
-    const existing = finalAnswers.find(
-      (fa) => fa.questionNumber === pa.questionNumber,
-    );
-    if (existing) {
-      existing.answer = pa.answer;
-      existing.votes += 1;
-      existing.totalProviders += 1;
-    } else {
-      finalAnswers.push({
-        questionNumber: pa.questionNumber,
-        answer: pa.answer,
-        votes: 1,
-        totalProviders: 1,
-      });
+    case 'SHOW_ANSWER': {
+      const { providerId, response } = message;
+      if (response.error) {
+        console.warn(`[CX] ${providerId}: error — ${response.error}`);
+      } else {
+        console.log(`[CX] ${providerId}: OK, ${response.answers.length} answers`);
+      }
+
+      providerResponses.set(providerId, response);
+      finalAnswers = aggregateFinalAnswers(providerResponses);
+
+      updateAnswerPanel(finalAnswers, providerResponses);
+      break;
+    }
+
+    case 'QUERY_COMPLETE':
+      console.log(`[CX] All queries done in ${message.durationMs}ms`);
+      break;
+
+    default:
+      break;
+  }
+}
+
+function aggregateFinalAnswers(
+  responses: Map<string, ProviderResponse | 'querying'>,
+): FinalAnswer[] {
+  const answerMap = new Map<string, FinalAnswer>();
+
+  for (const entry of responses.values()) {
+    if (entry === 'querying') continue;
+    if (entry.error) continue;
+
+    for (const pa of entry.answers) {
+      const existing = answerMap.get(pa.questionNumber);
+      if (existing) {
+        const answerKey = Array.isArray(pa.answer) ? pa.answer.join(',') : pa.answer;
+        const existingKey = Array.isArray(existing.answer) ? existing.answer.join(',') : existing.answer;
+        if (answerKey === existingKey) {
+          existing.votes += 1;
+        } else if (existing.votes <= 1) {
+          existing.answer = pa.answer;
+        }
+        existing.totalProviders += 1;
+      } else {
+        answerMap.set(pa.questionNumber, {
+          questionNumber: pa.questionNumber,
+          answer: pa.answer,
+          votes: 1,
+          totalProviders: 1,
+        });
+      }
     }
   }
 
-  updateAnswerPanel(finalAnswers);
+  return Array.from(answerMap.values());
 }
 
 function safeSendMessage(message: ExtensionMessage): void {
@@ -117,6 +164,7 @@ function handlePopupMessage(
       }
       showAISelector((providerIds) => {
         finalAnswers = [];
+        providerResponses.clear();
         showAnswerPanel({ questions, finalAnswers, isLoading: true });
         sendQueryAllAI(providerIds);
       });
@@ -171,6 +219,7 @@ function initialize(): void {
     hideQuestionList();
     showAISelector((providerIds) => {
       finalAnswers = [];
+      providerResponses.clear();
       showAnswerPanel({ questions, finalAnswers, isLoading: true });
       sendQueryAllAI(providerIds);
     });
@@ -180,7 +229,7 @@ function initialize(): void {
 
   chrome.runtime.onMessage.addListener(
     (message: ExtensionMessage, _sender, _sendResponse) => {
-      handleShowAnswer(message);
+      handleBackgroundMessage(message);
     },
   );
 

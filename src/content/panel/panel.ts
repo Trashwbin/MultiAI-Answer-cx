@@ -1,4 +1,5 @@
-import type { Question, FinalAnswer } from '../../types';
+import type { Question, FinalAnswer, ProviderResponse } from '../../types';
+import { getProviderById } from '../../config/ai-config';
 import { createEditor } from '../editors/factory';
 import { showLoading, hideLoading } from './loading';
 
@@ -31,7 +32,10 @@ export function showAnswerPanel(state: AnswerPanelState): void {
   }
 }
 
-export function updateAnswerPanel(finalAnswers: FinalAnswer[]): void {
+export function updateAnswerPanel(
+  finalAnswers: FinalAnswer[],
+  providerResponses?: Map<string, ProviderResponse | 'querying'>,
+): void {
   hideLoading();
 
   const body = currentPanel?.querySelector<HTMLElement>('.ai-panel-body');
@@ -40,7 +44,57 @@ export function updateAnswerPanel(finalAnswers: FinalAnswer[]): void {
   const questions = getQuestionsFromPanel(currentPanel);
 
   body.innerHTML = '';
-  renderQuestionRows(body, questions, finalAnswers);
+  renderQuestionRows(body, questions, finalAnswers, providerResponses);
+
+  if (providerResponses) {
+    updateProviderStatus(providerResponses);
+  }
+}
+
+export function updateProviderStatus(
+  providerResponses: Map<string, ProviderResponse | 'querying'>,
+): void {
+  if (!currentPanel) return;
+
+  storeProviderResponsesOnPanel(currentPanel, providerResponses);
+
+  let statusBar = currentPanel.querySelector<HTMLElement>('.ai-panel-status-bar');
+  if (!statusBar) {
+    statusBar = document.createElement('div');
+    statusBar.className = 'ai-panel-status-bar';
+    statusBar.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px;padding:8px 16px;border-bottom:1px solid #e2e8f0;background:#fafbfc;min-height:32px;';
+    const body = currentPanel.querySelector('.ai-panel-body');
+    if (body) {
+      currentPanel.insertBefore(statusBar, body);
+    } else {
+      currentPanel.appendChild(statusBar);
+    }
+  }
+
+  statusBar.innerHTML = '';
+
+  for (const [providerId, value] of providerResponses) {
+    const config = getProviderById(providerId);
+    const providerName = config?.name ?? providerId;
+    const providerColor = config?.color ?? '#718096';
+
+    const pill = document.createElement('span');
+    pill.style.cssText = 'display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:10px;background:#f7fafc;border:1px solid #e2e8f0;font-size:12px;white-space:nowrap;';
+
+    if (value === 'querying') {
+      pill.style.borderLeft = `3px solid ${providerColor}`;
+      pill.textContent = `\u23F3 ${providerName}`;
+    } else if (value.error) {
+      pill.style.color = '#e53e3e';
+      pill.textContent = `\u2717 ${providerName}`;
+      pill.title = value.error;
+    } else {
+      pill.style.color = '#38a169';
+      pill.textContent = `\u2713 ${providerName}`;
+    }
+
+    statusBar.appendChild(pill);
+  }
 }
 
 export function hideAnswerPanel(): void {
@@ -70,6 +124,11 @@ function buildPanel(state: AnswerPanelState): HTMLElement {
   ].join(';');
 
   panel.appendChild(buildHeader());
+
+  const statusBar = document.createElement('div');
+  statusBar.className = 'ai-panel-status-bar';
+  statusBar.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px;padding:8px 16px;border-bottom:1px solid #e2e8f0;background:#fafbfc;min-height:32px;';
+  panel.appendChild(statusBar);
 
   const body = document.createElement('div');
   body.className = 'ai-panel-body';
@@ -165,15 +224,20 @@ function renderQuestionRows(
   container: HTMLElement,
   questions: Question[],
   finalAnswers: FinalAnswer[],
+  providerResponses?: ProviderResponseMap,
 ): void {
   for (const question of questions) {
     const answer = finalAnswers.find(a => a.questionNumber === question.number) ?? null;
-    const row = buildQuestionRow(question, answer);
+    const row = buildQuestionRow(question, answer, providerResponses);
     container.appendChild(row);
   }
 }
 
-function buildQuestionRow(question: Question, answer: FinalAnswer | null): HTMLElement {
+function buildQuestionRow(
+  question: Question,
+  answer: FinalAnswer | null,
+  providerResponses?: ProviderResponseMap,
+): HTMLElement {
   const row = document.createElement('div');
   row.className = 'ai-panel-row';
   row.dataset['questionId'] = question.id;
@@ -246,6 +310,36 @@ function buildQuestionRow(question: Question, answer: FinalAnswer | null): HTMLE
   const editor = createEditor(question, answer);
   row.appendChild(editor.render());
 
+  if (providerResponses) {
+    const aiDetails = document.createElement('div');
+    aiDetails.style.cssText = 'font-size:12px;margin-top:6px;display:flex;flex-wrap:wrap;gap:4px 12px;color:#718096;';
+
+    for (const [providerId, value] of providerResponses) {
+      if (value === 'querying') continue;
+      if (value.error) continue;
+
+      const matched = value.answers.find(a => a.questionNumber === question.number);
+      if (!matched) continue;
+
+      const config = getProviderById(providerId);
+      const providerName = config?.name ?? providerId;
+      const providerColor = config?.color ?? '#718096';
+
+      const answerText = Array.isArray(matched.answer)
+        ? matched.answer.join(',')
+        : matched.answer;
+
+      const detail = document.createElement('span');
+      detail.style.cssText = `display:inline;color:${providerColor};`;
+      detail.textContent = `${providerName}: ${answerText}`;
+      aiDetails.appendChild(detail);
+    }
+
+    if (aiDetails.childElementCount > 0) {
+      row.appendChild(aiDetails);
+    }
+  }
+
   return row;
 }
 
@@ -257,6 +351,13 @@ function storeQuestionsOnPanel(panel: HTMLElement, questions: Question[]): void 
 
 function getQuestionsFromPanel(panel: HTMLElement): Question[] {
   return ((panel as HTMLElement & { [QUESTIONS_DATA_KEY]?: Question[] })[QUESTIONS_DATA_KEY]) ?? [];
+}
+
+type ProviderResponseMap = Map<string, ProviderResponse | 'querying'>;
+const PROVIDER_RESPONSES_DATA_KEY = '__aiPanelProviderResponses';
+
+function storeProviderResponsesOnPanel(panel: HTMLElement, responses: ProviderResponseMap): void {
+  (panel as HTMLElement & { [PROVIDER_RESPONSES_DATA_KEY]: ProviderResponseMap })[PROVIDER_RESPONSES_DATA_KEY] = responses;
 }
 
 let panelStylesInjected = false;

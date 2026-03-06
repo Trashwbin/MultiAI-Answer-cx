@@ -1,6 +1,5 @@
 import type { ExtensionMessage, Question, QuestionAnswer, ProviderResponse } from '../types';
-import { queryAllProviders } from '../core/orchestrator';
-import { getProviderById } from '../providers/registry';
+import { getProviderById, getProvidersByIds, getEnabledProviders } from '../providers/registry';
 import { AI_PROVIDERS } from '../config/ai-config';
 import { startGuidedLogin } from '../auth/guided-login';
 import { clearCredentials } from '../auth/token-manager';
@@ -91,6 +90,8 @@ chrome.runtime.onMessage.addListener(
         break;
 
       case 'SHOW_ANSWER':
+      case 'QUERY_START':
+      case 'QUERY_COMPLETE':
         break;
     }
 
@@ -128,15 +129,70 @@ async function handleQueryAllAI(
   senderTabId: number,
   providerIds?: string[],
 ): Promise<void> {
-  const result = await queryAllProviders(questions, { providerIds });
+  const providers = providerIds?.length
+    ? getProvidersByIds(providerIds)
+    : getEnabledProviders();
 
-  for (const response of result.responses) {
-    await safeSendToTab(senderTabId, {
-      type: 'SHOW_ANSWER' as const,
-      providerId: response.providerId,
-      response,
-    });
-  }
+  const ids = providers.map((p) => p.config.id);
+  console.log('[SW] QUERY_ALL_AI: querying', ids.join(', '));
+
+  await safeSendToTab(senderTabId, {
+    type: 'QUERY_START' as const,
+    providerIds: ids,
+  });
+
+  const start = performance.now();
+
+  await Promise.allSettled(
+    providers.map(async (provider) => {
+      const pid = provider.config.id;
+      console.log(`[SW] ${pid}: starting query...`);
+
+      try {
+        const allAnswers: QuestionAnswer[] = [];
+        const rawTexts: string[] = [];
+
+        for (const question of questions) {
+          const resp = await provider.query(question);
+          allAnswers.push(...resp.answers);
+          rawTexts.push(resp.rawText);
+        }
+
+        const response: ProviderResponse = {
+          providerId: pid,
+          answers: allAnswers,
+          rawText: rawTexts.join('\n---\n'),
+        };
+
+        console.log(`[SW] ${pid}: OK, ${allAnswers.length} answers`);
+        await safeSendToTab(senderTabId, {
+          type: 'SHOW_ANSWER' as const,
+          providerId: pid,
+          response,
+        });
+      } catch (err: unknown) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        console.error(`[SW] ${pid}: FAIL -`, errMsg);
+        await safeSendToTab(senderTabId, {
+          type: 'SHOW_ANSWER' as const,
+          providerId: pid,
+          response: {
+            providerId: pid,
+            answers: [],
+            rawText: '',
+            error: errMsg,
+          },
+        });
+      }
+    }),
+  );
+
+  const durationMs = Math.round(performance.now() - start);
+  console.log(`[SW] QUERY_ALL_AI: done in ${durationMs}ms`);
+  await safeSendToTab(senderTabId, {
+    type: 'QUERY_COMPLETE' as const,
+    durationMs,
+  });
 }
 
 async function handleQuerySingleAI(
