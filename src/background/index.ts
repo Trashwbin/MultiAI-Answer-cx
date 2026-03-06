@@ -1,6 +1,7 @@
 import type { ExtensionMessage, Question, QuestionAnswer, ProviderResponse } from '../types';
 import { queryAllProviders } from '../core/orchestrator';
 import { getProviderById } from '../providers/registry';
+import { AI_PROVIDERS } from '../config/ai-config';
 import { startGuidedLogin } from '../auth/guided-login';
 import { clearCredentials } from '../auth/token-manager';
 
@@ -32,7 +33,7 @@ chrome.runtime.onMessage.addListener(
           sendResponse({ success: false, error: 'No sender tab' });
           break;
         }
-        handleQueryAllAI(message.questions, tabId).catch((err: unknown) => {
+        handleQueryAllAI(message.questions, tabId, message.providerIds).catch((err: unknown) => {
           console.error('[SW] QUERY_ALL_AI failed:', err);
         });
         sendResponse({ success: true });
@@ -79,6 +80,12 @@ chrome.runtime.onMessage.addListener(
           .catch((err: unknown) => sendResponse({ success: false, error: errorMessage(err) }));
         break;
 
+      case 'AUTH_STATUS_ALL':
+        handleAuthStatusAll()
+          .then((statuses) => sendResponse({ success: true, statuses }))
+          .catch((err: unknown) => sendResponse({ success: false, error: errorMessage(err) }));
+        break;
+
       case 'QUESTION_PAGE_READY':
         sendResponse({ success: true });
         break;
@@ -97,8 +104,31 @@ async function safeSendToTab(tabId: number, message: Record<string, unknown>): P
   } catch {}
 }
 
-async function handleQueryAllAI(questions: Question[], senderTabId: number): Promise<void> {
-  const result = await queryAllProviders(questions);
+async function handleAuthStatusAll(): Promise<Record<string, string>> {
+  const statuses: Record<string, string> = {};
+  await Promise.all(
+    AI_PROVIDERS.map(async (config) => {
+      const provider = getProviderById(config.id);
+      if (provider) {
+        try {
+          statuses[config.id] = await provider.checkAuth();
+        } catch {
+          statuses[config.id] = 'error';
+        }
+      } else {
+        statuses[config.id] = 'error';
+      }
+    }),
+  );
+  return statuses;
+}
+
+async function handleQueryAllAI(
+  questions: Question[],
+  senderTabId: number,
+  providerIds?: string[],
+): Promise<void> {
+  const result = await queryAllProviders(questions, { providerIds });
 
   for (const response of result.responses) {
     await safeSendToTab(senderTabId, {

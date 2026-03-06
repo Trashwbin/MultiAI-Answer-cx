@@ -1,11 +1,16 @@
 import type { AIProvider, Question, QuestionAnswer, ProviderResponse, FinalAnswer } from '../types';
-import { getEnabledProviders } from '../providers/registry';
+import { getEnabledProviders, getProvidersByIds } from '../providers/registry';
 import { aggregateAnswers } from './answer-aggregator';
 
 export interface OrchestratorResult {
   responses: ProviderResponse[];
   finalAnswers: FinalAnswer[];
   durationMs: number;
+}
+
+export interface QueryOptions {
+  providerIds?: string[];
+  timeoutMs?: number;
 }
 
 const DEFAULT_TIMEOUT_MS = 60_000;
@@ -36,10 +41,13 @@ async function queryProviderQuestions(
 
 export async function queryAllProviders(
   questions: Question[],
-  timeoutMs: number = DEFAULT_TIMEOUT_MS,
+  options?: QueryOptions,
 ): Promise<OrchestratorResult> {
   const start = performance.now();
-  const providers = getEnabledProviders();
+  const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const providers = options?.providerIds?.length
+    ? getProvidersByIds(options.providerIds)
+    : getEnabledProviders();
 
   const settled = await Promise.allSettled(
     providers.map((provider) => {

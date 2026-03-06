@@ -2,7 +2,8 @@ import type { Question, FinalAnswer, ExtensionMessage } from '../types';
 import { extractQuestionsFromXXT } from './extractor/extractor';
 import { autoFillAnswers } from './auto-fill/auto-fill';
 import { showAnswerPanel, updateAnswerPanel, setAutoFillCallback } from './panel/panel';
-import { showQuestionList as showQuestionListModal, initQuestionList, setQuestionListSendCallback } from './panel/question-list';
+import { showQuestionList as showQuestionListModal, initQuestionList, setQuestionListSendCallback, hideQuestionList } from './panel/question-list';
+import { showAISelector } from './panel/ai-selector';
 
 let extensionEnabled = true;
 let questions: Question[] = [];
@@ -58,10 +59,10 @@ function safeSendMessage(message: ExtensionMessage): void {
   chrome.runtime.sendMessage(message).catch(() => {});
 }
 
-function sendQueryAllAI(): void {
+function sendQueryAllAI(providerIds?: string[]): void {
   if (questions.length === 0) return;
 
-  safeSendMessage({ type: 'QUERY_ALL_AI', questions });
+  safeSendMessage({ type: 'QUERY_ALL_AI', questions, providerIds });
 }
 
 function handlePopupMessage(
@@ -110,9 +111,15 @@ function handlePopupMessage(
       if (questions.length === 0) {
         questions = extractQuestionsFromXXT();
       }
-      finalAnswers = [];
-      showAnswerPanel({ questions, finalAnswers, isLoading: true });
-      sendQueryAllAI();
+      if (questions.length === 0) {
+        sendResponse({ success: false, error: '\u5F53\u524D\u9875\u9762\u672A\u627E\u5230\u9898\u76EE' });
+        break;
+      }
+      showAISelector((providerIds) => {
+        finalAnswers = [];
+        showAnswerPanel({ questions, finalAnswers, isLoading: true });
+        sendQueryAllAI(providerIds);
+      });
       sendResponse({ success: true });
       break;
 
@@ -161,9 +168,12 @@ function initialize(): void {
 
   setQuestionListSendCallback((selected) => {
     questions = selected;
-    finalAnswers = [];
-    showAnswerPanel({ questions, finalAnswers, isLoading: true });
-    sendQueryAllAI();
+    hideQuestionList();
+    showAISelector((providerIds) => {
+      finalAnswers = [];
+      showAnswerPanel({ questions, finalAnswers, isLoading: true });
+      sendQueryAllAI(providerIds);
+    });
   });
 
   connectKeepAlive();

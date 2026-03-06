@@ -10,6 +10,7 @@ interface QueryAIMessage {
 interface QueryAllAIMessage {
   type: 'QUERY_ALL_AI';
   questions: Question[];
+  providerIds?: string[];
 }
 
 interface ShowAnswerMessage {
@@ -33,6 +34,10 @@ interface AuthLogoutMessage {
   providerId: string;
 }
 
+interface AuthStatusAllMessage {
+  type: 'AUTH_STATUS_ALL';
+}
+
 interface QuestionPageReadyMessage {
   type: 'QUESTION_PAGE_READY';
 }
@@ -44,4 +49,5 @@ export type ExtensionMessage =
   | AuthLoginMessage
   | AuthStatusMessage
   | AuthLogoutMessage
+  | AuthStatusAllMessage
   | QuestionPageReadyMessage;
