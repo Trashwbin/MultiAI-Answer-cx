@@ -1,35 +1,64 @@
 import { parseAIResponse } from '../core/json-parser';
 import type { ProviderResponse, Question } from '../types';
+import { proxyFetch } from '../utils/page-proxy';
 import { BaseProvider } from './base-provider';
 
+/**
+ * Doubao Samantha API SSE format (triple-nested JSON):
+ *   event_type 2001 → event_data → message.content → {text}
+ *   event_type 2003 → end
+ *   event_type 2005 → error (rate limit / captcha)
+ *
+ * Reference: openclaw-zero-token/src/providers/doubao-web-client.ts:473-497
+ */
 export class DoubaoProvider extends BaseProvider {
-  private parseSse(sse: string): string {
-    const parts: string[] = [];
+  private parseSamanthaSse(sse: string): string {
+    const chunks: string[] = [];
     for (const line of sse.split('\n')) {
       const trimmed = line.trim();
-      if (!trimmed.startsWith('data:')) continue;
-      const payload = trimmed.slice(5).trim();
-      if (!payload || payload === '[DONE]') continue;
+      if (!trimmed) continue;
+      const jsonStr = trimmed.startsWith('data:') ? trimmed.slice(5).trim() : trimmed;
+      if (!jsonStr || jsonStr === '[DONE]') continue;
       try {
-        const data = JSON.parse(payload) as {
-          text?: string;
-          content?: string;
-          delta?: string;
-          choices?: Array<{
-            delta?: { content?: string };
-            message?: { content?: string };
-          }>;
+        const raw = JSON.parse(jsonStr) as {
+          event_type?: number;
+          event_data?: string;
+          code?: number;
         };
-        const text =
-          data.choices?.[0]?.delta?.content ??
-          data.choices?.[0]?.message?.content ??
-          data.text ??
-          data.content ??
-          data.delta;
-        if (typeof text === 'string') parts.push(text);
-      } catch {}
+
+        if (raw.code != null && raw.code !== 0) continue;
+
+        if (raw.event_type === 2005 && raw.event_data) {
+          const errData = JSON.parse(raw.event_data) as {
+            code?: number;
+            message?: string;
+            error_detail?: { message?: string };
+          };
+          const msg = errData.error_detail?.message ?? errData.message ?? `code ${errData.code}`;
+          throw new Error(`Doubao 风控拦截: ${msg}`);
+        }
+
+        if (raw.event_type === 2003) continue;
+        if (raw.event_type !== 2001 || !raw.event_data) continue;
+
+        const result = JSON.parse(raw.event_data) as {
+          message?: { content?: string; content_type?: number };
+          is_finish?: boolean;
+        };
+        if (result.is_finish) continue;
+
+        const message = result.message;
+        if (!message || ![2001, 2008].includes(message.content_type ?? 0) || !message.content) {
+          continue;
+        }
+
+        const content = JSON.parse(message.content) as { text?: string };
+        if (content.text) chunks.push(content.text);
+      } catch (e) {
+        if (e instanceof Error && e.message.startsWith('Doubao 风控')) throw e;
+      }
     }
-    return parts.join('');
+    return chunks.join('');
   }
 
   async query(question: Question): Promise<ProviderResponse> {
@@ -37,51 +66,57 @@ export class DoubaoProvider extends BaseProvider {
       const auth = await this.getAuth();
       const prompt = this.buildPrompt(question);
 
-      const res = await fetch(
-        'https://www.doubao.com/samantha/chat/completion?aid=497858&device_platform=web&language=zh&pkg_type=release_version&real_aid=497858&region=CN&samantha_web=1&sys_region=CN&use_olympus_account=1&version_code=20800',
-        {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'text/event-stream',
-          Cookie: this.buildCookieHeader(auth.cookies),
-          Referer: 'https://www.doubao.com/chat/',
-          Origin: 'https://www.doubao.com',
-          'Agw-js-conv': 'str',
-        },
-        body: JSON.stringify({
-          messages: [
-            {
-              content: JSON.stringify({ text: `<|im_start|>user\n${prompt}<|im_end|>\n` }),
-              content_type: 2001,
-              attachments: [],
-              references: [],
-            },
-          ],
-          completion_option: {
-            is_regen: false,
-            with_suggest: true,
-            need_create_conversation: true,
-            launch_stage: 1,
-            is_replace: false,
-            is_delete: false,
-            message_from: 0,
-            event_id: '0',
-          },
-          conversation_id: '0',
-          local_conversation_id: `local_16${Date.now().toString()}`,
-          local_message_id: crypto.randomUUID(),
-        }),
-      },
-      );
+      const url =
+        'https://www.doubao.com/samantha/chat/completion?aid=497858&device_platform=web&language=zh&pkg_type=release_version&real_aid=497858&region=CN&samantha_web=1&sys_region=CN&use_olympus_account=1&version_code=20800';
 
-      if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(`Doubao API ${res.status}: ${errorText.slice(0, 300)}`);
+      const body = JSON.stringify({
+        messages: [
+          {
+            content: JSON.stringify({ text: `<|im_start|>user\n${prompt}<|im_end|>\n` }),
+            content_type: 2001,
+            attachments: [],
+            references: [],
+          },
+        ],
+        completion_option: {
+          is_regen: false,
+          with_suggest: true,
+          need_create_conversation: true,
+          launch_stage: 1,
+          is_replace: false,
+          is_delete: false,
+          message_from: 0,
+          event_id: '0',
+        },
+        conversation_id: '0',
+        local_conversation_id: `local_16${Date.now().toString()}`,
+        local_message_id: crypto.randomUUID(),
+      });
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+        Referer: 'https://www.doubao.com/chat/',
+        Origin: 'https://www.doubao.com',
+        'Agw-js-conv': 'str',
+      };
+
+      const cookieHeader = this.buildCookieHeader(auth.cookies);
+      if (cookieHeader) {
+        headers['Cookie'] = cookieHeader;
       }
 
-      const sse = await res.text();
-      const rawText = this.parseSse(sse);
+      const res = await proxyFetch('www.doubao.com', url, {
+        method: 'POST',
+        headers,
+        body,
+      });
+
+      if (!res.ok) {
+        throw new Error(`Doubao API ${res.status}: ${res.body.slice(0, 300)}`);
+      }
+
+      const rawText = this.parseSamanthaSse(res.body);
       const parsed = parseAIResponse(rawText, this.config.id);
       return { ...parsed, rawText };
     } catch (error) {
