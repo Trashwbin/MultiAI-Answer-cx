@@ -19,7 +19,16 @@ interface GrokNdjsonLine {
 }
 
 export class GrokProvider extends BaseProvider {
-  async query(question: Question): Promise<ProviderResponse> {
+  async query(_question: Question): Promise<ProviderResponse> {
+    return {
+      providerId: this.config.id,
+      answers: [],
+      rawText: '',
+      error: 'Grok 暂不支持 — grok.com 使用 Cloudflare 保护，无法从扩展后台直接调用 API',
+    };
+  }
+
+  async queryDirect(question: Question): Promise<ProviderResponse> {
     try {
       const auth = await this.getAuth();
       const prompt = this.buildPrompt(question);

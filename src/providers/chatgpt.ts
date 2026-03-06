@@ -3,7 +3,18 @@ import type { ProviderResponse, Question } from '../types';
 import { BaseProvider } from './base-provider';
 
 export class ChatGPTProvider extends BaseProvider {
-  async query(question: Question): Promise<ProviderResponse> {
+  async query(_question: Question): Promise<ProviderResponse> {
+    return {
+      providerId: this.config.id,
+      answers: [],
+      rawText: '',
+      error:
+        'ChatGPT 暂不支持 — chatgpt.com 需要 Sentinel 反机器人令牌，无法从扩展后台直接调用 API',
+    };
+  }
+
+  /** Original direct-fetch implementation — kept for future page-injection migration */
+  async queryDirect(question: Question): Promise<ProviderResponse> {
     try {
       const auth = await this.getAuth();
       const prompt = this.buildPrompt(question);
@@ -15,11 +26,24 @@ export class ChatGPTProvider extends BaseProvider {
           Accept: 'text/event-stream',
           Cookie: this.buildCookieHeader(auth.cookies),
           ...(auth.bearerToken ? { Authorization: `Bearer ${auth.bearerToken}` } : {}),
+          'oai-language': 'en-US',
         },
         body: JSON.stringify({
+          action: 'next',
+          messages: [
+            {
+              id: crypto.randomUUID(),
+              author: { role: 'user' },
+              content: { content_type: 'text', parts: [prompt] },
+            },
+          ],
+          parent_message_id: crypto.randomUUID(),
           model: 'gpt-4o',
-          messages: [{ role: 'user', content: prompt }],
-          stream: true,
+          timezone_offset_min: new Date().getTimezoneOffset(),
+          history_and_training_disabled: false,
+          conversation_mode: { kind: 'primary_assistant', plugin_ids: null },
+          force_paragen: false,
+          force_use_sse: true,
         }),
       });
 
@@ -62,24 +86,17 @@ export class ChatGPTProvider extends BaseProvider {
 
       try {
         const data = JSON.parse(payload) as {
-          choices?: Array<{ delta?: { content?: string } }>;
           message?: {
             content?: {
               parts?: string[];
             };
           };
         };
-        const delta = data.choices?.[0]?.delta?.content;
-        if (typeof delta === 'string') {
-          chunks.push(delta);
-          continue;
-        }
         const messagePart = data.message?.content?.parts?.[0];
         if (typeof messagePart === 'string') {
           chunks.push(messagePart);
         }
-      } catch {
-      }
+      } catch {}
     }
     return chunks.join('');
   }

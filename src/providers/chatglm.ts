@@ -1,5 +1,5 @@
 import { parseAIResponse } from '../core/json-parser';
-import type { ProviderResponse, Question } from '../types';
+import type { AuthCredentials, ProviderResponse, Question } from '../types';
 import { BaseProvider } from './base-provider';
 
 const SIGN_SECRET = '8a1317a7468aa3ad86e997d08f3f31cb';
@@ -22,18 +22,29 @@ interface ChatGlmSseLine {
 }
 
 export class ChatGLMProvider extends BaseProvider {
+  private deviceId = crypto.randomUUID();
+
   async query(question: Question): Promise<ProviderResponse> {
     try {
       const auth = await this.getAuth();
+      const accessToken = await this.resolveAccessToken(auth);
       const prompt = this.buildPrompt(question);
       const signData = createSign();
+      const requestId = crypto.randomUUID();
 
       const res = await fetch('https://chatglm.cn/chatglm/backend-api/assistant/stream', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Accept: 'text/event-stream',
-          ...(auth.bearerToken ? { Authorization: `Bearer ${auth.bearerToken}` } : {}),
+          Authorization: `Bearer ${accessToken}`,
+          'App-Name': 'chatglm',
+          Origin: 'https://chatglm.cn',
+          'X-App-Platform': 'pc',
+          'X-App-Version': '0.0.1',
+          'X-Device-Id': this.deviceId,
+          'X-Lang': 'zh',
+          'X-Request-Id': requestId,
           ...(Object.keys(auth.cookies).length > 0
             ? { Cookie: this.buildCookieHeader(auth.cookies) }
             : {}),
@@ -44,6 +55,20 @@ export class ChatGLMProvider extends BaseProvider {
         },
         body: JSON.stringify({
           assistant_id: '65940acff94777010aa6b796',
+          conversation_id: '',
+          project_id: '',
+          chat_type: 'user_chat',
+          meta_data: {
+            cogview: { rm_label_watermark: false },
+            is_test: false,
+            input_question_type: 'xxxx',
+            channel: '',
+            draft_id: '',
+            chat_mode: 'zero',
+            is_networking: false,
+            quote_log_id: '',
+            platform: 'pc',
+          },
           messages: [
             {
               role: 'user',
@@ -70,6 +95,46 @@ export class ChatGLMProvider extends BaseProvider {
         error: error instanceof Error ? error.message : String(error),
       };
     }
+  }
+
+  private async resolveAccessToken(auth: AuthCredentials): Promise<string> {
+    const accessToken = auth.bearerToken ?? auth.cookies['chatglm_token'] ?? '';
+    if (accessToken) {
+      return accessToken;
+    }
+
+    const refreshToken = auth.cookies['chatglm_refresh_token'];
+    if (!refreshToken) {
+      throw new Error('ChatGLM: 未登录 — 缺少 chatglm_token 和 chatglm_refresh_token');
+    }
+
+    const signData = createSign();
+    const res = await fetch('https://chatglm.cn/chatglm/user-api/user/refresh', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${refreshToken}`,
+        'App-Name': 'chatglm',
+        'X-App-Platform': 'pc',
+        'X-App-Version': '0.0.1',
+        'X-Device-Id': this.deviceId,
+        'X-Request-Id': crypto.randomUUID(),
+        'X-Sign': signData.sign,
+        'X-Nonce': signData.nonce,
+        'X-Timestamp': signData.timestamp,
+      },
+      body: JSON.stringify({}),
+    });
+
+    if (!res.ok) {
+      throw new Error(`ChatGLM token refresh ${res.status}`);
+    }
+    const data = (await res.json()) as { result?: { access_token?: string } };
+    const token = data.result?.access_token;
+    if (!token) {
+      throw new Error('ChatGLM: token refresh returned no access_token');
+    }
+    return token;
   }
 
   private parseSse(sse: string): string {

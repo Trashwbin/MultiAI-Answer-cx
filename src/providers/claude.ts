@@ -12,6 +12,7 @@ interface ClaudeConversation {
 
 export class ClaudeProvider extends BaseProvider {
   private cachedOrgId: string | null = null;
+  private cachedDeviceId: string | null = null;
 
   async query(question: Question): Promise<ProviderResponse> {
     try {
@@ -19,6 +20,7 @@ export class ClaudeProvider extends BaseProvider {
       const prompt = this.buildPrompt(question);
       const orgId = await this.resolveOrganizationId(auth);
       const conversationId = await this.createConversation(auth, orgId);
+      const deviceId = this.resolveDeviceId(auth.cookies);
 
       const completionRes = await fetch(
         `https://claude.ai/api/organizations/${orgId}/chat_conversations/${conversationId}/completion`,
@@ -27,12 +29,22 @@ export class ClaudeProvider extends BaseProvider {
           headers: {
             'Content-Type': 'application/json',
             Accept: 'text/event-stream',
+            'anthropic-client-platform': 'web_claude_ai',
+            'anthropic-device-id': deviceId,
             Cookie: this.buildCookieHeader(auth.cookies),
           },
           body: JSON.stringify({
             prompt,
-            model: 'claude-opus-4-5',
-            timezone: 'UTC',
+            parent_message_uuid: '00000000-0000-4000-8000-000000000000',
+            model: 'claude-sonnet-4-6',
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            rendering_mode: 'messages',
+            attachments: [],
+            files: [],
+            locale: 'en-US',
+            personalized_styles: [],
+            sync_sources: [],
+            tools: [],
           }),
         },
       );
@@ -64,10 +76,13 @@ export class ClaudeProvider extends BaseProvider {
       return known;
     }
 
+    const deviceId = this.resolveDeviceId(auth.cookies);
     const res = await fetch('https://claude.ai/api/organizations', {
       method: 'GET',
       headers: {
         Accept: 'application/json',
+        'anthropic-client-platform': 'web_claude_ai',
+        'anthropic-device-id': deviceId,
         Cookie: this.buildCookieHeader(auth.cookies),
       },
     });
@@ -89,15 +104,18 @@ export class ClaudeProvider extends BaseProvider {
   }
 
   private async createConversation(auth: AuthCredentials, orgId: string): Promise<string> {
+    const deviceId = this.resolveDeviceId(auth.cookies);
     const res = await fetch(`https://claude.ai/api/organizations/${orgId}/chat_conversations`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
+        'anthropic-client-platform': 'web_claude_ai',
+        'anthropic-device-id': deviceId,
         Cookie: this.buildCookieHeader(auth.cookies),
       },
       body: JSON.stringify({
-        name: '',
+        name: `Conversation ${new Date().toISOString()}`,
         uuid: crypto.randomUUID(),
       }),
     });
@@ -113,6 +131,10 @@ export class ClaudeProvider extends BaseProvider {
       throw new Error('Claude conversation uuid missing');
     }
     return conversationId;
+  }
+
+  private resolveDeviceId(cookies: Record<string, string>): string {
+    return cookies['anthropic-device-id'] || (this.cachedDeviceId ??= crypto.randomUUID());
   }
 
   private parseCompletionSse(sse: string): string {
