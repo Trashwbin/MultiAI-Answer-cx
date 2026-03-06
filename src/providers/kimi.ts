@@ -128,6 +128,8 @@ function kimiConnectRpc(
       const decoder = new TextDecoder();
       const texts: string[] = [];
       let o = 0;
+      let frameCount = 0;
+      let firstFramePreview = '';
 
       while (o + 5 <= u8.length) {
         const len = new DataView(u8.buffer, u8.byteOffset + o + 1, 4).getUint32(0, false);
@@ -135,7 +137,11 @@ function kimiConnectRpc(
 
         const chunk = u8.slice(o + 5, o + 5 + len);
         try {
-          const obj = JSON.parse(decoder.decode(chunk));
+          const raw = decoder.decode(chunk);
+          frameCount++;
+          if (!firstFramePreview) firstFramePreview = raw.slice(0, 300);
+
+          const obj = JSON.parse(raw);
           if (obj.error) {
             return {
               ok: false as const,
@@ -151,7 +157,14 @@ function kimiConnectRpc(
         o += 5 + len;
       }
 
-      return { ok: true as const, text: texts.join('') };
+      const text = texts.join('');
+      if (!text) {
+        return {
+          ok: false as const,
+          error: `Kimi: 响应为空 (bytes=${u8.length}, frames=${frameCount}, firstFrame=${firstFramePreview})`,
+        };
+      }
+      return { ok: true as const, text };
     } catch (e: unknown) {
       return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
     }
