@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>v2 连通性测试</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f0f2f5;
+      color: #333;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .header h1 {
+      font-size: 22px;
+      font-weight: 600;
+      color: #1a1a1a;
+    }
+
+    .header p {
+      font-size: 13px;
+      color: #888;
+      margin-top: 4px;
+    }
+
+    /* Global controls */
+    .controls {
+      background: #fff;
+      border-radius: 10px;
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .controls label {
+      font-size: 13px;
+      font-weight: 500;
+      color: #555;
+      white-space: nowrap;
+    }
+
+    .controls input[type="text"] {
+      flex: 1;
+      min-width: 200px;
+      padding: 8px 12px;
+      border: 1px solid #d9d9d9;
+      border-radius: 6px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .controls input[type="text"]:focus {
+      border-color: #4D6BFE;
+    }
+
+    .btn {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+
+    .btn:active {
+      transform: scale(0.97);
+    }
+
+    .btn-primary {
+      background: #4D6BFE;
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background: #3b57e0;
+    }
+
+    .btn-secondary {
+      background: #f0f0f0;
+      color: #333;
+    }
+
+    .btn-secondary:hover {
+      background: #e0e0e0;
+    }
+
+    .btn-success {
+      background: #52c41a;
+      color: #fff;
+    }
+
+    .btn-success:hover {
+      background: #45a916;
+    }
+
+    .btn-warning {
+      background: #faad14;
+      color: #fff;
+    }
+
+    .btn-warning:hover {
+      background: #e09d10;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Provider grid */
+    .provider-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+      gap: 16px;
+    }
+
+    .provider-card {
+      background: #fff;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+      transition: box-shadow 0.2s;
+    }
+
+    .provider-card:hover {
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+    }
+
+    .provider-card.disabled {
+      opacity: 0.5;
+    }
+
+    .card-header {
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .card-header-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .provider-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .provider-name {
+      font-weight: 600;
+      font-size: 15px;
+    }
+
+    .provider-id {
+      font-size: 11px;
+      color: #aaa;
+      font-family: monospace;
+    }
+
+    .card-header-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Auth badge */
+    .auth-badge {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 10px;
+      font-weight: 500;
+    }
+
+    .auth-badge.checking {
+      background: #e6f7ff;
+      color: #1890ff;
+    }
+
+    .auth-badge.authenticated {
+      background: #f6ffed;
+      color: #52c41a;
+    }
+
+    .auth-badge.unauthenticated {
+      background: #fff2e8;
+      color: #fa8c16;
+    }
+
+    .auth-badge.expired {
+      background: #fff1f0;
+      color: #ff4d4f;
+    }
+
+    .auth-badge.error {
+      background: #fff1f0;
+      color: #ff4d4f;
+    }
+
+    .card-actions {
+      padding: 10px 16px;
+      display: flex;
+      gap: 8px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .card-actions .btn {
+      font-size: 12px;
+      padding: 5px 12px;
+    }
+
+    /* Result area */
+    .card-result {
+      padding: 12px 16px;
+      min-height: 60px;
+      max-height: 350px;
+      overflow-y: auto;
+    }
+
+    .result-placeholder {
+      color: #ccc;
+      font-size: 13px;
+      font-style: italic;
+    }
+
+    .result-timing {
+      font-size: 11px;
+      color: #999;
+      margin-bottom: 6px;
+    }
+
+    .result-error {
+      color: #ff4d4f;
+      font-size: 13px;
+      font-family: monospace;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .result-success {
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .result-raw {
+      margin-top: 8px;
+      padding: 8px;
+      background: #fafafa;
+      border: 1px solid #f0f0f0;
+      border-radius: 6px;
+      font-family: monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 200px;
+      overflow-y: auto;
+      color: #666;
+    }
+
+    .result-answers {
+      margin-top: 6px;
+    }
+
+    .result-answer-item {
+      padding: 4px 0;
+      font-size: 13px;
+      border-bottom: 1px solid #f5f5f5;
+    }
+
+    .result-answer-item:last-child {
+      border-bottom: none;
+    }
+
+    .result-answer-q {
+      font-weight: 500;
+      color: #333;
+    }
+
+    .result-answer-a {
+      color: #52c41a;
+      margin-left: 8px;
+    }
+
+    /* Loading spinner */
+    .spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid #e0e0e0;
+      border-top-color: #4D6BFE;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      vertical-align: middle;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    /* Console log area */
+    .console-section {
+      margin-top: 24px;
+      background: #1e1e1e;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .console-header {
+      padding: 10px 16px;
+      background: #2d2d2d;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .console-header span {
+      color: #aaa;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .console-body {
+      padding: 12px 16px;
+      max-height: 250px;
+      overflow-y: auto;
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .console-body:empty::after {
+      content: '等待操作...';
+      color: #555;
+    }
+
+    .log-entry {
+      color: #d4d4d4;
+    }
+
+    .log-entry.info {
+      color: #4fc1ff;
+    }
+
+    .log-entry.success {
+      color: #6a9955;
+    }
+
+    .log-entry.error {
+      color: #f48771;
+    }
+
+    .log-entry.warn {
+      color: #cca700;
+    }
+
+    .log-time {
+      color: #666;
+      margin-right: 8px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="header">
+    <h1>MultiAI v2 连通性测试</h1>
+    <p>测试各 AI Provider 的登录状态和 API 连通性 (Service Worker 直连)</p>
+  </div>
+
+  <div class="controls">
+    <label>测试问题：</label>
+    <input type="text" id="testQuestion" value="1+1等于几？选项：A.1 B.2 C.3 D.4" placeholder="输入测试问题...">
+    <button class="btn btn-primary" id="btnCheckAllAuth">全部检查登录</button>
+    <button class="btn btn-success" id="btnTestAll">全部测试</button>
+    <button class="btn btn-secondary" id="btnClearAll">清除结果</button>
+    <button class="btn btn-warning" id="btnClearAllCreds">清除所有缓存凭证</button>
+  </div>
+
+  <div class="provider-grid" id="providerGrid">
+    <!-- Cards generated by JS -->
+  </div>
+
+  <div class="console-section">
+    <div class="console-header">
+      <span>Console</span>
+      <button class="btn btn-secondary" id="btnClearConsole" style="padding:3px 10px;font-size:11px;">清除</button>
+    </div>
+    <div class="console-body" id="consoleBody"></div>
+  </div>
+
+  <script src="connectivity.js"></script>
+</body>
+
+</html>
