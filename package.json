@@ -1,0 +1,17 @@
+{
+  "name": "multiai-answer-cx",
+  "version": "2.0.0",
+  "description": "Multi-AI voting answer assistant for Chaoxing (学习通) - TypeScript rewrite",
+  "private": true,
+  "scripts": {
+    "build": "tsup",
+    "build:watch": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.268",
+    "tsup": "^8.0.0",
+    "typescript": "^5.4.0"
+  }
+}
