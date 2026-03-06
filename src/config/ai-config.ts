@@ -55,7 +55,7 @@ export const AI_PROVIDERS: readonly ProviderConfig[] = [
     domain: 'grok.com',
     color: '#000000',
     weight: 1.0,
-    enabled: false,
+    enabled: true,
   },
   {
     id: 'qwen-cn',

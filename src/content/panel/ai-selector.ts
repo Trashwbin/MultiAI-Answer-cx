@@ -12,8 +12,7 @@ interface CardState {
 }
 
 let cards: CardState[] = [];
-
-/* ── Public API ──────────────────────────────────────── */
+let visibilityHandler: (() => void) | null = null;
 
 export function showAISelector(onConfirm: SelectCallback, onCancel?: () => void): void {
   hideAISelector();
@@ -32,10 +31,21 @@ export function showAISelector(onConfirm: SelectCallback, onCancel?: () => void)
   });
 
   void fetchAuthStatuses(modal);
+
+  visibilityHandler = () => {
+    if (document.visibilityState === 'visible' && document.getElementById(MODAL_ID)) {
+      void fetchAuthStatuses(modal);
+    }
+  };
+  document.addEventListener('visibilitychange', visibilityHandler);
 }
 
 export function hideAISelector(): void {
   document.getElementById(MODAL_ID)?.remove();
+  if (visibilityHandler) {
+    document.removeEventListener('visibilitychange', visibilityHandler);
+    visibilityHandler = null;
+  }
 }
 
 /* ── Auth check ──────────────────────────────────────── */
@@ -91,7 +101,7 @@ function buildModal(onConfirm: SelectCallback, onCancel?: () => void): HTMLEleme
 
   /* hint */
   const hint = mkEl('div', { style: 'padding:10px 20px 0;color:#718096;font-size:13px;' });
-  hint.textContent = '\u4EC5\u5DF2\u767B\u5F55\u8BA4\u8BC1\u7684 AI \u53EF\u9009\u62E9\u4F7F\u7528\uFF0C\u8BF7\u5148\u5728\u8BBE\u7F6E\u9875\u9762\u5B8C\u6210\u767B\u5F55';
+  hint.textContent = '\u70B9\u51FB\u300C\u767B\u5F55\u300D\u6253\u5F00 AI \u7F51\u7AD9\u5B8C\u6210\u767B\u5F55\uFF0C\u767B\u5F55\u540E\u8FD4\u56DE\u6B64\u9875\u81EA\u52A8\u5237\u65B0\u72B6\u6001';
   box.appendChild(hint);
 
   /* grid */
@@ -105,7 +115,18 @@ function buildModal(onConfirm: SelectCallback, onCancel?: () => void): HTMLEleme
   countText.textContent = '\u68C0\u67E5\u8BA4\u8BC1\u72B6\u6001\u4E2D...';
   footer.appendChild(countText);
 
-  const actions = mkEl('div', { style: 'display:flex;gap:8px;' });
+  const actions = mkEl('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;' });
+
+  actions.appendChild(
+    mkBtn('\u5237\u65B0\u72B6\u6001', '#e8f5e9', '#2e7d32', () => {
+      for (const c of cards) {
+        c.auth = 'checking';
+      }
+      refreshGrid(modal);
+      refreshFooter(modal);
+      void fetchAuthStatuses(modal);
+    }),
+  );
 
   actions.appendChild(
     mkBtn('\u5168\u9009\u53EF\u7528', '#edf2f7', '#4a5568', () => {
@@ -188,15 +209,37 @@ function buildCard(state: CardState, modal: HTMLElement): HTMLElement {
   nameRow.appendChild(name);
   info.appendChild(nameRow);
 
+  const statusRow = mkEl('div', { style: 'display:flex;align-items:center;gap:6px;' });
   const badge = mkEl('span', { style: statusBadgeStyle(state) });
   badge.textContent = statusLabel(state);
-  info.appendChild(badge);
+  statusRow.appendChild(badge);
+
+  const needsLogin = state.config.enabled && state.auth !== 'authenticated' && state.auth !== 'checking';
+  if (needsLogin) {
+    const loginBtn = mkEl('button', {
+      style: `padding:2px 10px;font-size:11px;background:${state.config.color};color:#fff;border:none;border-radius:4px;cursor:pointer;transition:opacity 0.2s;`,
+    });
+    loginBtn.textContent = '\u767B\u5F55';
+    loginBtn.addEventListener('mouseenter', () => { loginBtn.style.opacity = '0.8'; });
+    loginBtn.addEventListener('mouseleave', () => { loginBtn.style.opacity = '1'; });
+    loginBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      chrome.runtime.sendMessage({ type: 'AUTH_LOGIN', providerId: state.config.id });
+      badge.textContent = '\u767B\u5F55\u4E2D...';
+      badge.style.cssText = 'display:inline-block;font-size:12px;padding:1px 6px;border-radius:4px;color:#718096;background:#edf2f7;';
+      loginBtn.remove();
+    });
+    statusRow.appendChild(loginBtn);
+  }
+
+  info.appendChild(statusRow);
 
   card.appendChild(cb);
   card.appendChild(info);
 
   card.addEventListener('click', (e) => {
-    if ((e.target as HTMLElement).tagName === 'INPUT') return;
+    const tag = (e.target as HTMLElement).tagName;
+    if (tag === 'INPUT' || tag === 'BUTTON') return;
     if (!canSelect) return;
     cb.checked = !cb.checked;
     state.selected = cb.checked;

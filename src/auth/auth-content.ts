@@ -15,6 +15,7 @@
   const DOMAIN_TO_PROVIDER: Record<string, string> = {
     'chat.deepseek.com': 'deepseek',
     'kimi.com': 'kimi',
+    'kimi.moonshot.cn': 'kimi',
     'claude.ai': 'claude',
     'chatgpt.com': 'chatgpt',
     'gemini.google.com': 'gemini',
