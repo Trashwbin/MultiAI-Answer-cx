@@ -12,7 +12,7 @@ export const AI_PROVIDERS: readonly ProviderConfig[] = [
   {
     id: 'kimi',
     name: 'Kimi',
-    domain: 'kimi.com',
+    domain: 'kimi.moonshot.cn',
     color: '#1A73E8',
     weight: 1.0,
     enabled: true,
@@ -60,7 +60,7 @@ export const AI_PROVIDERS: readonly ProviderConfig[] = [
   {
     id: 'qwen-cn',
     name: '通义千问',
-    domain: 'chat.qwen.ai',
+    domain: 'qianwen.com',
     color: '#FF6A00',
     weight: 1.0,
     enabled: true,
@@ -87,7 +87,7 @@ export const AI_PROVIDERS: readonly ProviderConfig[] = [
     domain: 'localhost',
     color: '#9333EA',
     weight: 1.0,
-    enabled: true,
+    enabled: false,
   },
   {
     id: 'mock-slow',
@@ -95,7 +95,7 @@ export const AI_PROVIDERS: readonly ProviderConfig[] = [
     domain: 'localhost',
     color: '#0891B2',
     weight: 1.0,
-    enabled: true,
+    enabled: false,
   },
   {
     id: 'mock-fail',
@@ -103,7 +103,7 @@ export const AI_PROVIDERS: readonly ProviderConfig[] = [
     domain: 'localhost',
     color: '#DC2626',
     weight: 1.0,
-    enabled: true,
+    enabled: false,
   },
 ] as const satisfies readonly ProviderConfig[];
 

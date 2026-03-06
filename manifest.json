@@ -44,9 +44,13 @@
     "https://claude.ai/*",
     "https://grok.com/*",
     "https://chat.qwen.ai/*",
+    "https://*.qianwen.com/*",
     "http://127.0.0.1:*/*",
     "http://localhost:*/*"
   ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
   "background": {
     "service_worker": "dist/background.js"
   },
@@ -78,6 +82,7 @@
         "https://www.doubao.com/*",
         "https://grok.com/*",
         "https://chat.qwen.ai/*",
+        "https://*.qianwen.com/*",
         "https://chatglm.cn/*"
       ],
       "js": ["dist/auth-content.js"],
