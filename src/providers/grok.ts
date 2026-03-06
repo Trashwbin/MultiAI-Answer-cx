@@ -136,58 +136,24 @@ export class GrokProvider extends BaseProvider {
 // All functions below run inside grok.com's MAIN world via executeScript.
 // They MUST be fully self-contained — no outer-scope references allowed.
 
-// Ported from reference grok-web-client-browser.ts:282-471
-// Runs the entire API flow in one call: conversation resolution → message → NDJSON parse.
+// Adapted from grok2api processor.ts + conversation.ts
+// Uses /conversations/new (temporary) — single request, no conversation management.
+// Parses NDJSON using result.response.token (streaming) and result.response.modelResponse.message (final).
 function grokApiQuery(
   message: string,
 ): Promise<{ ok: true; text: string } | { ok: false; error: string; is403: boolean }> {
   return (async () => {
     try {
-      let convId: string | null = null;
-
-      const pathMatch = window.location.pathname.match(/\/c\/([a-f0-9-]{36})/);
-      convId = pathMatch?.[1] ?? null;
-
-      if (!convId) {
-        for (const url of [
-          'https://grok.com/rest/app-chat/conversations?limit=1',
-          'https://grok.com/rest/app-chat/conversations',
-        ]) {
-          const listRes = await fetch(url, { credentials: 'include' });
-          if (listRes.ok) {
-            const list = await listRes.json();
-            convId = list?.conversations?.[0]?.conversationId ?? null;
-            if (convId) break;
-          }
-        }
-      }
-
-      if (!convId) {
-        const createRes = await fetch('https://grok.com/rest/app-chat/conversations', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({}),
-        });
-        if (createRes.ok) {
-          const d = await createRes.json();
-          convId = d?.conversationId ?? d?.id ?? null;
-        }
-      }
-
-      if (!convId) {
-        return { ok: false as const, error: 'Grok: 无法获取 conversationId — 请先登录 grok.com', is403: false };
-      }
-
       const body = {
+        temporary: true,
+        modelName: 'grok-3',
         message,
-        parentResponseId: crypto.randomUUID(),
+        fileAttachments: [] as string[],
+        imageAttachments: [] as string[],
         disableSearch: false,
         enableImageGeneration: false,
-        imageAttachments: [],
         returnImageBytes: false,
         returnRawGrokInXaiRequest: false,
-        fileAttachments: [],
         enableImageStreaming: false,
         imageGenerationCount: 0,
         forceConcise: false,
@@ -195,36 +161,20 @@ function grokApiQuery(
         enableSideBySide: false,
         sendFinalMetadata: true,
         isReasoning: false,
-        metadata: { request_metadata: { mode: 'auto' } },
+        webpageUrls: [] as string[],
         disableTextFollowUps: true,
-        disableArtifact: true,
-        isFromGrokFiles: false,
         disableMemory: true,
         forceSideBySide: false,
         modelMode: 'MODEL_MODE_AUTO',
         isAsyncChat: false,
-        skipCancelCurrentInflightRequests: false,
-        isRegenRequest: false,
-        disableSelfHarmShortCircuit: false,
-        deviceEnvInfo: {
-          darkModeEnabled: false,
-          devicePixelRatio: 1,
-          screenWidth: 2560,
-          screenHeight: 1440,
-          viewportWidth: 1440,
-          viewportHeight: 719,
-        },
       };
 
-      const res = await fetch(
-        `https://grok.com/rest/app-chat/conversations/${convId}/responses`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify(body),
-        },
-      );
+      const res = await fetch('https://grok.com/rest/app-chat/conversations/new', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(body),
+      });
 
       if (!res.ok) {
         const errText = await res.text();
@@ -234,24 +184,49 @@ function grokApiQuery(
 
       const ndjson = await res.text();
       let finalMessage = '';
-      const deltas: string[] = [];
+      const tokens: string[] = [];
 
       for (const line of ndjson.split('\n')) {
         const trimmed = line.trim();
         if (!trimmed) continue;
         try {
-          const data = JSON.parse(trimmed);
-          const delta = data.contentDelta ?? data.textDelta ?? data.content ?? data.text ?? data.delta;
-          if (typeof delta === 'string') deltas.push(delta);
+          const data = JSON.parse(trimmed) as Record<string, unknown>;
 
-          const msg = data.result?.response?.modelResponse;
-          if (msg?.message && typeof msg.message === 'string' && msg.message.length > 0) {
-            finalMessage = msg.message;
+          // Error check
+          const err = (data as Record<string, Record<string, unknown>>).error;
+          if (err?.message) {
+            return { ok: false as const, error: `Grok: ${String(err.message)}`, is403: false };
+          }
+
+          const grok = (data as Record<string, Record<string, unknown>>).result?.response as
+            | Record<string, unknown>
+            | undefined;
+          if (!grok) continue;
+
+          // Streaming token delta: result.response.token
+          const rawToken = grok.token;
+          if (typeof rawToken === 'string' && rawToken && !grok.isThinking) {
+            tokens.push(rawToken);
+          }
+
+          // Final complete response: result.response.modelResponse.message
+          const modelResp = grok.modelResponse as Record<string, unknown> | undefined;
+          if (modelResp) {
+            if (typeof modelResp.error === 'string' && modelResp.error) {
+              return { ok: false as const, error: `Grok: ${modelResp.error}`, is403: false };
+            }
+            if (typeof modelResp.message === 'string' && modelResp.message.length > 0) {
+              finalMessage = modelResp.message;
+            }
           }
         } catch {}
       }
 
-      return { ok: true as const, text: finalMessage || deltas.join('') };
+      const text = finalMessage || tokens.join('');
+      if (!text) {
+        return { ok: false as const, error: 'Grok: 响应为空 — 未解析到 token 或 modelResponse', is403: false };
+      }
+      return { ok: true as const, text };
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       const is403 = msg.includes('403') || msg.includes('anti-bot');
