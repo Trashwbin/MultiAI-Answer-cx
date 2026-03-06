@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "MultiAI Answer",
   "description": "基于多模型 AI 投票的智能答题助手，让答题更轻松、更准确。支持多个主流 AI 模型，智能分析题目，自动生成答案。",
-  "version": "1.0.3",
+  "version": "2.0.0",
   "icons": {
     "16": "icons/icon.png",
     "48": "icons/icon.png",
@@ -22,12 +22,16 @@
     "clipboardRead",
     "clipboardWrite",
     "storage",
-    "system.display"
+    "system.display",
+    "cookies",
+    "webRequest",
+    "scripting"
   ],
   "host_permissions": [
     "https://*.chaoxing.com/*",
     "https://chat.deepseek.com/*",
     "https://www.kimi.com/*",
+    "https://kimi.moonshot.cn/*",
     "https://tongyi.aliyun.com/*",
     "https://chatglm.cn/*",
     "https://doubao.com/*",
@@ -35,10 +39,13 @@
     "https://yiyan.baidu.com/*",
     "https://xinghuo.xfyun.cn/*",
     "https://chatgpt.com/*",
-    "https://gemini.google.com/*"
+    "https://gemini.google.com/*",
+    "https://claude.ai/*",
+    "https://grok.com/*",
+    "https://chat.qwen.ai/*"
   ],
   "background": {
-    "service_worker": "src/background/background.js"
+    "service_worker": "dist/background.js"
   },
   "content_scripts": [
     {
@@ -51,103 +58,23 @@
         "https://*.chaoxing.com/*/mooc2/test*",
         "https://*.chaoxing.com/mycourse/studentstudy*"
       ],
-      "js": [
-        "lib/html2canvas.min.js",
-        "src/config/config.js",
-        "src/content/question/questionExtractor.js",
-        "src/content/question/handlers/questionHandlers.js",
-        "src/content/question/handlers/autoFill.js",
-        "src/content/question/handlers/answerFormatter.js",
-        "src/content/question/handlers/questionToImage.js",
-        "src/content/ai/aiConfigModal.js",
-        "src/content/question/previewModal.js",
-        "src/content/question/handlers/answerHandler.js",
-        "src/content/main.js",
-        "src/content/utils/notification.js"
-      ],
+      "js": ["dist/content.js"],
       "run_at": "document_end"
     },
     {
       "matches": [
-        "https://www.kimi.com/*"
-      ],
-      "js": [
-        "src/content/ai/debugPanel.js",
-        "src/content/ai/kimi-content.js"
-      ]
-    },
-    {
-      "matches": [
-        "https://chat.deepseek.com/*"
-      ],
-      "js": [
-        "src/content/ai/debugPanel.js",
-        "src/content/ai/deepseek-content.js"
-      ]
-    },
-    {
-      "matches": [
-        "https://tongyi.aliyun.com/*"
-      ],
-      "js": [
-        "src/content/ai/debugPanel.js",
-        "src/content/ai/tongyi-content.js"
-      ]
-    },
-    {
-      "matches": [
+        "https://chat.deepseek.com/*",
+        "https://kimi.moonshot.cn/*",
+        "https://claude.ai/*",
+        "https://chatgpt.com/*",
+        "https://gemini.google.com/*",
+        "https://www.doubao.com/*",
+        "https://grok.com/*",
+        "https://chat.qwen.ai/*",
         "https://chatglm.cn/*"
       ],
-      "js": [
-        "src/content/ai/debugPanel.js",
-        "src/content/ai/chatglm-content.js"
-      ]
-    },
-    {
-      "matches": [
-        "https://doubao.com/*",
-        "https://www.doubao.com/*"
-      ],
-      "js": [
-        "src/content/ai/debugPanel.js",
-        "src/content/ai/doubao-content.js"
-      ]
-    },
-    {
-      "matches": [
-        "https://yiyan.baidu.com/*"
-      ],
-      "js": [
-        "src/content/ai/debugPanel.js",
-        "src/content/ai/yiyan-content.js"
-      ]
-    },
-    {
-      "matches": [
-        "https://xinghuo.xfyun.cn/desk"
-      ],
-      "js": [
-        "src/content/ai/debugPanel.js",
-        "src/content/ai/xinghuo-content.js"
-      ]
-    },
-    {
-      "matches": [
-        "https://chatgpt.com/*"
-      ],
-      "js": [
-        "src/content/ai/debugPanel.js",
-        "src/content/ai/chatgpt-content.js"
-      ]
-    },
-    {
-      "matches": [
-        "https://gemini.google.com/*"
-      ],
-      "js": [
-        "src/content/ai/debugPanel.js",
-        "src/content/ai/gemini-content.js"
-      ]
+      "js": ["dist/auth-content.js"],
+      "run_at": "document_end"
     }
   ]
 }
