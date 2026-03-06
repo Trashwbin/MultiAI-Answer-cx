@@ -1,5 +1,6 @@
 import { getCredentials, saveCredentials } from '../auth/token-manager';
 import { captureCookies } from '../auth/cookie-capture';
+import { buildPrompt as buildRichPrompt } from '../config/prompts';
 import type {
   AIProvider,
   AuthCredentials,
@@ -38,9 +39,17 @@ export abstract class BaseProvider implements AIProvider {
 
   protected async getAuth(): Promise<AuthCredentials> {
     const stored = await getCredentials(this.config.id);
-    if (stored) return stored;
+    if (stored) {
+      console.log(
+        `[Auth] ${this.config.id}: stored credentials — cookies=[${Object.keys(stored.cookies).join(',')}] bearer=${stored.bearerToken ? 'yes' : 'no'}`,
+      );
+      return stored;
+    }
 
     const cookies = await captureCookies(this.config.id, this.config.domain);
+    console.log(
+      `[Auth] ${this.config.id}: captured cookies from ${this.config.domain} — [${Object.keys(cookies).join(',')}]`,
+    );
     if (Object.keys(cookies).length > 0) {
       const creds: AuthCredentials = {
         cookies,
@@ -61,24 +70,6 @@ export abstract class BaseProvider implements AIProvider {
   }
 
   protected buildPrompt(question: Question): string {
-    const options = question.options.map((opt) => `${opt.label}. ${opt.text}`);
-    const payload: Record<string, string | number | string[]> = {
-      id: question.number,
-      type: question.type,
-      content: question.content,
-    };
-    if (options.length > 0) {
-      payload.options = options;
-    }
-    if (question.blankCount > 0) {
-      payload.blankCount = question.blankCount;
-    }
-
-    return [
-      '请根据题目返回 JSON。',
-      '只返回如下结构，不要 markdown：{"answers":[{"questionNumber":"题号","answer":"答案"}]}',
-      '题目：',
-      JSON.stringify([payload], null, 2),
-    ].join('\n');
+    return buildRichPrompt([question], 'standard');
   }
 }

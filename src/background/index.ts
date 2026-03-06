@@ -151,20 +151,31 @@ async function handleQueryAllAI(
       try {
         const allAnswers: QuestionAnswer[] = [];
         const rawTexts: string[] = [];
+        let firstError: string | undefined;
 
         for (const question of questions) {
           const resp = await provider.query(question);
+          if (resp.error && !firstError) {
+            firstError = resp.error;
+          }
           allAnswers.push(...resp.answers);
           rawTexts.push(resp.rawText);
         }
 
+        const joinedRaw = rawTexts.join('\n---\n');
         const response: ProviderResponse = {
           providerId: pid,
           answers: allAnswers,
-          rawText: rawTexts.join('\n---\n'),
+          rawText: joinedRaw,
+          ...(allAnswers.length === 0 && firstError ? { error: firstError } : {}),
         };
 
-        console.log(`[SW] ${pid}: OK, ${allAnswers.length} answers`);
+        if (response.error) {
+          console.error(`[SW] ${pid}: FAIL -`, response.error);
+        } else {
+          console.log(`[SW] ${pid}: OK, ${allAnswers.length} answers, rawText ${joinedRaw.length} chars`);
+        }
+
         await safeSendToTab(senderTabId, {
           type: 'SHOW_ANSWER' as const,
           providerId: pid,
@@ -172,7 +183,7 @@ async function handleQueryAllAI(
         });
       } catch (err: unknown) {
         const errMsg = err instanceof Error ? err.message : String(err);
-        console.error(`[SW] ${pid}: FAIL -`, errMsg);
+        console.error(`[SW] ${pid}: EXCEPTION -`, errMsg);
         await safeSendToTab(senderTabId, {
           type: 'SHOW_ANSWER' as const,
           providerId: pid,
