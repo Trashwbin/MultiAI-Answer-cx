@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <title>MultiAI Answer - AI 连接管理</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f5f5f5;
+      color: #333;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 640px;
+      margin: 0 auto;
+      padding: 32px 24px;
+    }
+
+    .header {
+      margin-bottom: 24px;
+    }
+
+    .header h1 {
+      font-size: 22px;
+      font-weight: 600;
+      color: #1a1a1a;
+    }
+
+    .header p {
+      font-size: 14px;
+      color: #666;
+      margin-top: 4px;
+    }
+
+    .provider-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .provider-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+      transition: box-shadow 0.2s;
+    }
+
+    .provider-card:hover {
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .provider-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .provider-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .provider-name {
+      font-size: 14px;
+      font-weight: 500;
+      color: #1a1a1a;
+    }
+
+    .provider-domain {
+      font-size: 12px;
+      color: #999;
+      margin-top: 2px;
+    }
+
+    .provider-status {
+      font-size: 12px;
+      font-weight: 500;
+      padding: 2px 8px;
+      border-radius: 10px;
+      flex-shrink: 0;
+    }
+
+    .status-authenticated {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .status-unauthenticated {
+      background: #f5f5f5;
+      color: #999;
+    }
+
+    .status-expired {
+      background: #fff3e0;
+      color: #e65100;
+    }
+
+    .status-error {
+      background: #ffebee;
+      color: #c62828;
+    }
+
+    .provider-actions {
+      display: flex;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .btn {
+      padding: 6px 14px;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+
+    .btn:hover {
+      opacity: 0.85;
+    }
+
+    .btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .btn-connect {
+      background: #4CAF50;
+      color: #fff;
+    }
+
+    .btn-disconnect {
+      background: #f5f5f5;
+      color: #666;
+      border: 1px solid #e0e0e0;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>AI 连接管理</h1>
+      <p>管理各 AI 提供商的登录状态</p>
+    </div>
+    <div id="providerList" class="provider-list"></div>
+  </div>
+  <script src="ai-config.js"></script>
+</body>
+
+</html>
