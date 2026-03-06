@@ -9,6 +9,7 @@ import { GeminiProvider } from './gemini';
 import { GrokProvider } from './grok';
 import { KimiProvider } from './kimi';
 import { MockProvider } from './mock';
+import { QwenCnProvider } from './qwen-cn';
 import { QwenProvider } from './qwen';
 
 type ProviderFactory = (config: ProviderConfig) => AIProvider;
@@ -21,7 +22,7 @@ const FACTORIES: Record<string, ProviderFactory> = {
   gemini: (config) => new GeminiProvider(config),
   doubao: (config) => new DoubaoProvider(config),
   grok: (config) => new GrokProvider(config),
-  'qwen-cn': (config) => new QwenProvider(config),
+  'qwen-cn': (config) => new QwenCnProvider(config),
   'qwen-intl': (config) => new QwenProvider(config),
   chatglm: (config) => new ChatGLMProvider(config),
   'mock-fast': (config) => new MockProvider(config),

@@ -1,5 +1,5 @@
 import { getCredentials, saveCredentials } from '../auth/token-manager';
-import { captureCookies } from '../auth/cookie-capture';
+import { captureCookies, captureAllCookies } from '../auth/cookie-capture';
 import { buildPrompt as buildRichPrompt } from '../config/prompts';
 import type {
   AIProvider,
@@ -39,27 +39,26 @@ export abstract class BaseProvider implements AIProvider {
 
   protected async getAuth(): Promise<AuthCredentials> {
     const stored = await getCredentials(this.config.id);
-    if (stored) {
-      console.log(
-        `[Auth] ${this.config.id}: stored credentials — cookies=[${Object.keys(stored.cookies).join(',')}] bearer=${stored.bearerToken ? 'yes' : 'no'}`,
-      );
-      return stored;
-    }
+    const freshCookies = await captureAllCookies(this.config.id, this.config.domain);
+    const freshCount = Object.keys(freshCookies).length;
 
-    const cookies = await captureCookies(this.config.id, this.config.domain);
+    const merged: AuthCredentials = {
+      cookies: { ...(stored?.cookies ?? {}), ...freshCookies },
+      bearerToken: stored?.bearerToken,
+      expiresAt: Date.now() + CREDENTIAL_TTL_MS,
+    };
+
+    const cookieKeys = Object.keys(merged.cookies);
     console.log(
-      `[Auth] ${this.config.id}: captured cookies from ${this.config.domain} — [${Object.keys(cookies).join(',')}]`,
+      `[Auth] ${this.config.id}: cookies=[${cookieKeys.join(',')}] (stored=${Object.keys(stored?.cookies ?? {}).length}, fresh=${freshCount}) bearer=${merged.bearerToken ? 'yes' : 'no'}`,
     );
-    if (Object.keys(cookies).length > 0) {
-      const creds: AuthCredentials = {
-        cookies,
-        expiresAt: Date.now() + CREDENTIAL_TTL_MS,
-      };
-      await saveCredentials(this.config.id, creds);
-      return creds;
+
+    if (cookieKeys.length === 0 && !merged.bearerToken) {
+      throw new Error(`${this.config.name} is not authenticated`);
     }
 
-    throw new Error(`${this.config.name} is not authenticated`);
+    await saveCredentials(this.config.id, merged);
+    return merged;
   }
 
   protected buildCookieHeader(cookies: Record<string, string>): string {
