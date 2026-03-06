@@ -1,8 +1,10 @@
 import type { ExtensionMessage, Question, QuestionAnswer, ProviderResponse } from '../types';
+import { QuestionType } from '../types/question';
 import { getProviderById, getProvidersByIds, getEnabledProviders } from '../providers/registry';
-import { AI_PROVIDERS } from '../config/ai-config';
+import { AI_PROVIDERS, getProviderById as getProviderConfig } from '../config/ai-config';
 import { startGuidedLogin } from '../auth/guided-login';
-import { clearCredentials } from '../auth/token-manager';
+import { clearCredentials, mergeCredentials } from '../auth/token-manager';
+import { captureAllCookies } from '../auth/cookie-capture';
 
 const activePorts = new Set<chrome.runtime.Port>();
 
@@ -14,6 +16,53 @@ chrome.runtime.onConnect.addListener((port) => {
     });
   }
 });
+
+const BEARER_INTERCEPT_URLS = [
+  'https://chat.deepseek.com/api/*',
+  'https://kimi.moonshot.cn/api/*',
+  'https://www.kimi.com/api/*',
+  'https://kimi.com/api/*',
+  'https://claude.ai/api/*',
+  'https://www.doubao.com/samantha/*',
+  'https://chatglm.cn/chatglm/*',
+  'https://chat2.qianwen.com/*',
+];
+
+const URL_TO_PROVIDER: Record<string, string> = {
+  'chat.deepseek.com': 'deepseek',
+  'kimi.moonshot.cn': 'kimi',
+  'www.kimi.com': 'kimi',
+  'kimi.com': 'kimi',
+  'claude.ai': 'claude',
+  'www.doubao.com': 'doubao',
+  'chatglm.cn': 'chatglm',
+  'chat2.qianwen.com': 'qwen-cn',
+};
+
+chrome.webRequest.onSendHeaders.addListener(
+  (details) => {
+    if (!details.requestHeaders) return;
+
+    const authHeader = details.requestHeaders.find(
+      (h) => h.name.toLowerCase() === 'authorization',
+    );
+    if (!authHeader?.value?.startsWith('Bearer ')) return;
+
+    const bearer = authHeader.value.slice(7);
+    if (bearer.length < 10) return;
+
+    try {
+      const url = new URL(details.url);
+      const providerId = URL_TO_PROVIDER[url.hostname];
+      if (!providerId) return;
+
+      console.log(`[WebRequest] Captured Bearer for ${providerId} (${bearer.length} chars)`);
+      mergeCredentials(providerId, { bearerToken: bearer }).catch(() => {});
+    } catch {}
+  },
+  { urls: BEARER_INTERCEPT_URLS },
+  ['requestHeaders', 'extraHeaders'],
+);
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -87,6 +136,74 @@ chrome.runtime.onMessage.addListener(
 
       case 'QUESTION_PAGE_READY':
         sendResponse({ success: true });
+        break;
+
+      case 'TEST_PROVIDER': {
+        const testProviderId = message.providerId;
+        const testQuestion = message.question;
+        handleTestProvider(testProviderId, testQuestion)
+          .then((result) => sendResponse(result))
+          .catch((err: unknown) =>
+            sendResponse({
+              success: false,
+              providerId: testProviderId,
+              error: errorMessage(err),
+              elapsed: 0,
+            }),
+          );
+        break;
+      }
+
+      case 'DEBUG_COOKIES': {
+        const debugId = message.providerId;
+        const cfg = getProviderConfig(debugId);
+        if (!cfg) {
+          sendResponse({ success: false, error: `Unknown provider: ${debugId}` });
+          break;
+        }
+        Promise.all([
+          captureAllCookies(debugId, cfg.domain),
+          import('../auth/token-manager').then((m) => m.getCredentials(debugId)),
+        ])
+          .then(([cookies, storedCreds]) => {
+            const names = Object.keys(cookies);
+            console.log(`[DEBUG] ${debugId}: found ${names.length} cookies:`, names.join(', '));
+            sendResponse({
+              success: true,
+              providerId: debugId,
+              cookieCount: names.length,
+              cookieNames: names,
+              cookies,
+              storedBearer: storedCreds?.bearerToken ? `${storedCreds.bearerToken.slice(0, 20)}...` : null,
+              storedCookieKeys: storedCreds ? Object.keys(storedCreds.cookies) : [],
+            });
+          })
+          .catch((err: unknown) =>
+            sendResponse({ success: false, error: errorMessage(err) }),
+          );
+        break;
+      }
+
+      case 'CLEAR_ALL_CREDENTIALS':
+        Promise.all(AI_PROVIDERS.map((p) => clearCredentials(p.id)))
+          .then(() => sendResponse({ success: true }))
+          .catch((err: unknown) =>
+            sendResponse({ success: false, error: errorMessage(err) }),
+          );
+        break;
+
+      case 'STORAGE_CAPTURED':
+        console.log(`[SW] Storage captured for ${message.providerId}:`, Object.keys(message.storage).join(', '));
+        mergeCredentials(message.providerId, { cookies: message.storage })
+          .then(() => sendResponse({ success: true }))
+          .catch((err: unknown) => sendResponse({ success: false, error: errorMessage(err) }));
+        break;
+
+      case 'BEARER_CAPTURED':
+        console.log(`[SW] Bearer captured for ${message.providerId} (${message.bearerToken.length} chars)`);
+        mergeCredentials(message.providerId, { bearerToken: message.bearerToken })
+          .then(() => sendResponse({ success: true }))
+          .catch((err: unknown) => sendResponse({ success: false, error: errorMessage(err) }));
         break;
 
       case 'SHOW_ANSWER':
@@ -236,4 +353,50 @@ async function handleQuerySingleAI(
     providerId,
     response,
   });
+}
+
+async function handleTestProvider(
+  providerId: string,
+  questionText: string,
+): Promise<Record<string, unknown>> {
+  const provider = getProviderById(providerId);
+  if (!provider) {
+    return { success: false, providerId, error: `Unknown provider: ${providerId}`, elapsed: 0 };
+  }
+
+  const testQuestion: Question = {
+    id: 'test-1',
+    number: '1',
+    type: QuestionType.SINGLE_CHOICE,
+    content: questionText,
+    options: [
+      { label: 'A', text: '1' },
+      { label: 'B', text: '2' },
+      { label: 'C', text: '3' },
+      { label: 'D', text: '4' },
+    ],
+    blankCount: 0,
+  };
+
+  const start = performance.now();
+  try {
+    const resp = await provider.query(testQuestion);
+    const elapsed = Math.round(performance.now() - start);
+    return {
+      success: true,
+      providerId,
+      answers: resp.answers,
+      rawText: resp.rawText,
+      error: resp.error ?? null,
+      elapsed,
+    };
+  } catch (err: unknown) {
+    const elapsed = Math.round(performance.now() - start);
+    return {
+      success: false,
+      providerId,
+      error: errorMessage(err),
+      elapsed,
+    };
+  }
 }

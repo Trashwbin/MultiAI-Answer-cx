@@ -52,6 +52,33 @@ interface QuestionPageReadyMessage {
   type: 'QUESTION_PAGE_READY';
 }
 
+interface TestProviderMessage {
+  type: 'TEST_PROVIDER';
+  providerId: string;
+  question: string;
+}
+
+interface DebugCookiesMessage {
+  type: 'DEBUG_COOKIES';
+  providerId: string;
+}
+
+interface ClearAllCredentialsMessage {
+  type: 'CLEAR_ALL_CREDENTIALS';
+}
+
+interface StorageCapturedMessage {
+  type: 'STORAGE_CAPTURED';
+  providerId: string;
+  storage: Record<string, string>;
+}
+
+interface BearerCapturedMessage {
+  type: 'BEARER_CAPTURED';
+  providerId: string;
+  bearerToken: string;
+}
+
 export type ExtensionMessage =
   | QueryAIMessage
   | QueryAllAIMessage
@@ -62,4 +89,9 @@ export type ExtensionMessage =
   | AuthStatusMessage
   | AuthLogoutMessage
   | AuthStatusAllMessage
-  | QuestionPageReadyMessage;
+  | QuestionPageReadyMessage
+  | TestProviderMessage
+  | DebugCookiesMessage
+  | ClearAllCredentialsMessage
+  | StorageCapturedMessage
+  | BearerCapturedMessage;
