@@ -85,12 +85,17 @@ function kimiConnectRpc(
         return { ok: false as const, error: 'Kimi: 未找到 kimi-auth Cookie — 请先登录 www.kimi.com' };
       }
 
+      // SCENARIO_K2D5 = K2.5 model (current production).
+      // chat_id / tools / parent_id are required fields per Chat2API reference.
       const req = {
-        scenario: 'SCENARIO_K2',
+        scenario: 'SCENARIO_K2D5',
+        chat_id: '',
+        tools: [],
         message: {
+          parent_id: '',
           role: 'user',
           blocks: [{ message_id: '', text: { content: message } }],
-          scenario: 'SCENARIO_K2',
+          scenario: 'SCENARIO_K2D5',
         },
         options: { thinking: false },
       };
@@ -108,7 +113,6 @@ function kimiConnectRpc(
           method: 'POST',
           headers: {
             'Content-Type': 'application/connect+json',
-            'Connect-Protocol-Version': '1',
             Accept: '*/*',
             'X-Language': 'zh-CN',
             'X-Msh-Platform': 'web',
@@ -127,24 +131,19 @@ function kimiConnectRpc(
       const u8 = new Uint8Array(arr);
       const decoder = new TextDecoder();
       const texts: string[] = [];
-      const frameDumps: string[] = [];
       let o = 0;
 
       while (o + 5 <= u8.length) {
-        const flags = u8[o];
         const len = new DataView(u8.buffer, u8.byteOffset + o + 1, 4).getUint32(0, false);
         if (o + 5 + len > u8.length) break;
 
         const chunk = u8.slice(o + 5, o + 5 + len);
         try {
-          const raw = decoder.decode(chunk);
-          frameDumps.push(`[f${flags}:${len}] ${raw.slice(0, 200)}`);
-
-          const obj = JSON.parse(raw);
+          const obj = JSON.parse(decoder.decode(chunk));
           if (obj.error) {
             return {
               ok: false as const,
-              error: `Kimi RPC error: ${obj.error.message ?? obj.error.code ?? JSON.stringify(obj.error).slice(0, 300)}`,
+              error: `Kimi RPC: ${obj.error.message ?? obj.error.code ?? JSON.stringify(obj.error).slice(0, 200)}`,
             };
           }
           if (obj.block?.text?.content && ['set', 'append'].includes(obj.op ?? '')) {
@@ -156,14 +155,7 @@ function kimiConnectRpc(
         o += 5 + len;
       }
 
-      const text = texts.join('');
-      if (!text) {
-        return {
-          ok: false as const,
-          error: `Kimi: 响应为空 (bytes=${u8.length}, frames: ${frameDumps.join(' | ')})`,
-        };
-      }
-      return { ok: true as const, text };
+      return { ok: true as const, text: texts.join('') };
     } catch (e: unknown) {
       return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
     }
