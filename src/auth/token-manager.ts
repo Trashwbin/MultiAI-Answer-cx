@@ -33,3 +33,25 @@ export async function clearCredentials(providerId: string): Promise<void> {
   const key = storageKey(providerId);
   await chrome.storage.local.remove(key);
 }
+
+export async function mergeCredentials(
+  providerId: string,
+  partial: { bearerToken?: string; cookies?: Record<string, string> },
+): Promise<void> {
+  const key = storageKey(providerId);
+  const result = await chrome.storage.local.get(key);
+  const existing = (result[key] as AuthCredentials | undefined) ?? {
+    cookies: {},
+    expiresAt: Date.now() + 86_400_000,
+  };
+
+  if (partial.bearerToken) {
+    existing.bearerToken = partial.bearerToken;
+  }
+  if (partial.cookies) {
+    existing.cookies = { ...existing.cookies, ...partial.cookies };
+  }
+  existing.expiresAt = Date.now() + 86_400_000;
+
+  await chrome.storage.local.set({ [key]: existing });
+}
