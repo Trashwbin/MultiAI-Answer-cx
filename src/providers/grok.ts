@@ -137,15 +137,20 @@ export class GrokProvider extends BaseProvider {
 // All functions below run inside grok.com's MAIN world via executeScript.
 // They MUST be fully self-contained — no outer-scope references allowed.
 
-// Adapted from grok2api processor.ts + fount grokAPI.mjs + openai-grok worker.js
-// Uses /conversations/new (temporary) — single request, no conversation management.
+// Adapted from grok2api headers.ts + processor.ts + conversation.ts
+// Uses /conversations/new (temporary). Requires x-statsig-id + x-xai-request-id anti-bot headers.
 // Parses NDJSON: result.response.token (streaming deltas), result.response.modelResponse.message (final).
 function grokApiQuery(
   message: string,
 ): Promise<{ ok: true; text: string; debug?: string } | { ok: false; error: string; is403: boolean }> {
   return (async () => {
     try {
-      // Payload aligned with grok2api + fount + openai-grok (all active Grok reverse-proxy projects)
+      // x-statsig-id: grok2api generates a base64-encoded fake error message as fingerprint
+      const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+      let rand = '';
+      for (let i = 0; i < 8; i++) rand += chars[Math.floor(Math.random() * chars.length)];
+      const statsigId = btoa(`e:TypeError: Cannot read properties of null (reading 'children["${rand}"]')`);
+
       const body = {
         temporary: true,
         modelName: 'grok-3',
@@ -170,7 +175,11 @@ function grokApiQuery(
 
       const res = await fetch('https://grok.com/rest/app-chat/conversations/new', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-statsig-id': statsigId,
+          'x-xai-request-id': crypto.randomUUID(),
+        },
         credentials: 'include',
         body: JSON.stringify(body),
       });
