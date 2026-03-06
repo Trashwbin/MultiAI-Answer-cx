@@ -66,6 +66,7 @@ async function pageContextFetch(
       method: fetchMethod,
       headers: fetchHeaders,
       body: fetchBody,
+      credentials: 'include',
     });
     const body = await res.text();
     return { ok: res.ok, status: res.status, body };
