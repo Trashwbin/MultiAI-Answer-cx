@@ -3,81 +3,85 @@ import type { ProviderResponse, Question } from '../types';
 import { BaseProvider } from './base-provider';
 
 export class KimiProvider extends BaseProvider {
-  private async createConversation(bearerToken: string): Promise<string> {
-    const res = await fetch('https://kimi.moonshot.cn/api/chat', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${bearerToken}`,
-      },
-      body: JSON.stringify({
-        name: 'AI Answer',
-        is_example: false,
-        kimiplus_id: 'kimi',
-      }),
-    });
-
-    if (!res.ok) {
-      const errorText = await res.text();
-      throw new Error(`Kimi create conversation ${res.status}: ${errorText.slice(0, 300)}`);
-    }
-
-    const data = (await res.json()) as { id?: string };
-    if (!data.id) throw new Error('Kimi: conversation id missing');
-    return data.id;
-  }
-
-  private parseSse(sse: string): string {
-    const parts: string[] = [];
-    for (const line of sse.split('\n')) {
-      const trimmed = line.trim();
-      if (!trimmed.startsWith('data:')) continue;
-      const payload = trimmed.slice(5).trim();
-      if (!payload || payload === '[DONE]') continue;
-      try {
-        const data = JSON.parse(payload) as { event?: string; text?: string };
-        if (data.event === 'cmpl' && typeof data.text === 'string') {
-          parts.push(data.text);
-        }
-      } catch {}
-    }
-    return parts.join('');
-  }
-
   async query(question: Question): Promise<ProviderResponse> {
     try {
       const auth = await this.getAuth();
-      const bearerToken = auth.bearerToken ?? auth.cookies['access_token'] ?? auth.cookies['kimi-auth'] ?? '';
-      if (!bearerToken) throw new Error('Kimi: missing access_token — 请先登录 kimi.moonshot.cn');
+      const bearerToken = auth.bearerToken ?? auth.cookies['kimi-auth'] ?? '';
+      if (!bearerToken) throw new Error('Kimi: 缺少 kimi-auth — 请先登录 www.kimi.com');
 
       const prompt = this.buildPrompt(question);
-      const conversationId = await this.createConversation(bearerToken);
-
-      const res = await fetch(
-        `https://kimi.moonshot.cn/api/chat/${conversationId}/completion/stream`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${bearerToken}`,
-          },
-          body: JSON.stringify({
-            messages: [{ role: 'user', content: prompt }],
-            use_search: false,
-            kimiplus_id: 'kimi',
-            refs: [],
-            refs_file: [],
-          }),
+      const req = {
+        scenario: 'SCENARIO_K2',
+        message: {
+          role: 'user' as const,
+          blocks: [{ message_id: '', text: { content: prompt } }],
+          scenario: 'SCENARIO_K2',
         },
-      );
+        options: { thinking: false },
+      };
+      const enc = new TextEncoder().encode(JSON.stringify(req));
+      const buf = new ArrayBuffer(5 + enc.byteLength);
+      const dv = new DataView(buf);
+      dv.setUint8(0, 0x00);
+      dv.setUint32(1, enc.byteLength, false);
+      new Uint8Array(buf, 5).set(enc);
+
+      const res = await fetch('https://www.kimi.com/apiv2/kimi.gateway.chat.v1.ChatService/Chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/connect+json',
+          'Connect-Protocol-Version': '1',
+          Accept: '*/*',
+          Origin: 'https://www.kimi.com',
+          Referer: 'https://www.kimi.com/',
+          'X-Language': 'zh-CN',
+          'X-Msh-Platform': 'web',
+          Authorization: `Bearer ${bearerToken}`,
+        },
+        body: buf,
+      });
 
       if (!res.ok) {
         const errorText = await res.text();
         throw new Error(`Kimi API ${res.status}: ${errorText.slice(0, 300)}`);
       }
 
-      const sse = await res.text();
-      const rawText = this.parseSse(sse);
+      const arr = await res.arrayBuffer();
+      const u8 = new Uint8Array(arr);
+      const texts: string[] = [];
+      const decoder = new TextDecoder();
+      let o = 0;
+      while (o + 5 <= u8.length) {
+        const len = new DataView(u8.buffer, u8.byteOffset + o + 1, 4).getUint32(0, false);
+        if (o + 5 + len > u8.length) break;
+
+        const chunk = u8.slice(o + 5, o + 5 + len);
+        try {
+          const obj = JSON.parse(decoder.decode(chunk)) as {
+            block?: { text?: { content?: string } };
+            op?: string;
+            done?: boolean;
+            error?: { message?: string; code?: string };
+          };
+
+          if (obj.error) {
+            throw new Error(
+              `Kimi RPC error: ${obj.error.message ?? obj.error.code ?? JSON.stringify(obj.error).slice(0, 200)}`,
+            );
+          }
+
+          if (obj.block?.text?.content && ['set', 'append'].includes(obj.op ?? '')) {
+            texts.push(obj.block.text.content);
+          }
+          if (obj.done) break;
+        } catch (e) {
+          if (e instanceof Error && e.message.startsWith('Kimi RPC')) throw e;
+        }
+
+        o += 5 + len;
+      }
+      const rawText = texts.join('');
+
       const parsed = parseAIResponse(rawText, this.config.id);
       return { ...parsed, rawText };
     } catch (error) {

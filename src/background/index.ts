@@ -21,6 +21,7 @@ const BEARER_INTERCEPT_URLS = [
   'https://chat.deepseek.com/api/*',
   'https://kimi.moonshot.cn/api/*',
   'https://www.kimi.com/api/*',
+  'https://www.kimi.com/apiv2/*',
   'https://kimi.com/api/*',
   'https://claude.ai/api/*',
   'https://www.doubao.com/samantha/*',

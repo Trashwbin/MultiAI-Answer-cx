@@ -14,18 +14,18 @@ export class DoubaoProvider extends BaseProvider {
         const data = JSON.parse(payload) as {
           text?: string;
           content?: string;
-          data?: { text?: string };
+          delta?: string;
           choices?: Array<{
             delta?: { content?: string };
             message?: { content?: string };
           }>;
         };
         const text =
-          data.text ??
-          data.content ??
           data.choices?.[0]?.delta?.content ??
           data.choices?.[0]?.message?.content ??
-          data.data?.text;
+          data.text ??
+          data.content ??
+          data.delta;
         if (typeof text === 'string') parts.push(text);
       } catch {}
     }

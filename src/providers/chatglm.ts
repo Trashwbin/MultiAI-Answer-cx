@@ -13,14 +13,6 @@ const X_EXP_GROUPS =
   'memory_common:exp:enable,mainchat_moe:exp:300,assistant_greet_user:exp:greet_user,' +
   'app_welcome_personalize:exp:A,assistant_model_exp_group:exp:glm4.5,ai_wallet:exp:ai_wallet_enable';
 
-interface ChatGlmSseLine {
-  data?: {
-    parts?: Array<{
-      content?: string;
-    }>;
-  };
-}
-
 export class ChatGLMProvider extends BaseProvider {
   private deviceId = crypto.randomUUID();
 
@@ -52,6 +44,9 @@ export class ChatGLMProvider extends BaseProvider {
           'X-Nonce': signData.nonce,
           'X-Timestamp': signData.timestamp,
           'X-Exp-Groups': X_EXP_GROUPS,
+          'X-App-fr': 'default',
+          'X-Device-Brand': '',
+          'X-Device-Model': '',
         },
         body: JSON.stringify({
           assistant_id: '65940acff94777010aa6b796',
@@ -145,13 +140,55 @@ export class ChatGLMProvider extends BaseProvider {
       const payload = trimmed.slice(5).trim();
       if (!payload || payload === '[DONE]') continue;
       try {
-        const obj = JSON.parse(payload) as ChatGlmSseLine;
-        const part = obj.data?.parts?.[0]?.content;
-        if (typeof part === 'string') {
-          chunks.push(part);
+        const obj = JSON.parse(payload) as Record<string, unknown>;
+        let text = '';
+
+        // Primary: parts[].content[] format (new ChatGLM)
+        const parts = obj.parts;
+        if (Array.isArray(parts)) {
+          for (const part of parts) {
+            if (part && typeof part === 'object') {
+              const content = (part as Record<string, unknown>).content;
+              if (Array.isArray(content)) {
+                for (const c of content) {
+                  if (c && typeof c === 'object') {
+                    const cc = c as Record<string, unknown>;
+                    if (cc.type === 'text' && typeof cc.text === 'string') {
+                      text = cc.text;
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+            if (text) break;
+          }
         }
-      } catch {
-      }
+
+        // Fallback: legacy data.parts[].content format
+        if (!text) {
+          const dataParts = obj.data;
+          if (dataParts && typeof dataParts === 'object') {
+            const dp = dataParts as Record<string, unknown>;
+            const dpParts = dp.parts;
+            if (Array.isArray(dpParts)) {
+              const partContent = (dpParts[0] as Record<string, unknown> | undefined)?.content;
+              if (typeof partContent === 'string') {
+                text = partContent;
+              }
+            }
+          }
+        }
+
+        // Fallback: simple fields
+        if (!text) {
+          text = (typeof obj.text === 'string' ? obj.text : '') ||
+                 (typeof obj.content === 'string' ? obj.content : '') ||
+                 (typeof obj.delta === 'string' ? obj.delta : '');
+        }
+
+        if (text) chunks.push(text);
+      } catch {}
     }
     return chunks.join('');
   }

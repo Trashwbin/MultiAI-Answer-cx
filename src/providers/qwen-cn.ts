@@ -121,23 +121,58 @@ export class QwenCnProvider extends BaseProvider {
   }
 
   private parseSse(sse: string): string {
-    const parts: string[] = [];
+    let lastContent = '';
+    let deltaParts: string[] = [];
+    let usedAccumulated = false;
+
     for (const line of sse.split('\n')) {
       const trimmed = line.trim();
       if (!trimmed.startsWith('data:')) continue;
       const payload = trimmed.slice(5).trim();
       if (!payload || payload === '[DONE]') continue;
       try {
-        const data = JSON.parse(payload) as {
-          content?: string;
-          text?: string;
-          choices?: Array<{ delta?: { content?: string } }>;
-        };
-        const text = data.content ?? data.text ?? data.choices?.[0]?.delta?.content;
-        if (typeof text === 'string') parts.push(text);
-      } catch {
-      }
+        const data = JSON.parse(payload) as Record<string, unknown>;
+
+        // Qwen CN primary format: data.data.messages[].content (accumulated full text)
+        const innerData = data.data;
+        if (innerData && typeof innerData === 'object') {
+          const inner = innerData as Record<string, unknown>;
+          const messages = inner.messages;
+          if (Array.isArray(messages)) {
+            for (let i = messages.length - 1; i >= 0; i--) {
+              const msg = messages[i] as Record<string, unknown> | undefined;
+              if (msg && typeof msg.content === 'string' && msg.content) {
+                lastContent = msg.content;
+                usedAccumulated = true;
+                break;
+              }
+            }
+            if (usedAccumulated) continue;
+          }
+        }
+
+        // Delta-based fallback formats
+        const choiceDelta = ((data.choices as Array<{ delta?: { content?: string } }> | undefined)?.[0])?.delta?.content;
+        if (typeof choiceDelta === 'string') {
+          deltaParts.push(choiceDelta);
+          continue;
+        }
+
+        const text =
+          (typeof data.text === 'string' ? data.text : undefined) ??
+          (typeof data.content === 'string' ? data.content : undefined);
+        if (typeof text === 'string') {
+          deltaParts.push(text);
+        }
+      } catch {}
     }
-    return parts.join('');
+
+    // If we found accumulated content, use the last one (it's the full text)
+    if (usedAccumulated && lastContent) {
+      return lastContent;
+    }
+
+    // Otherwise join deltas
+    return deltaParts.join('');
   }
 }

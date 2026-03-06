@@ -12,7 +12,7 @@ export const AI_PROVIDERS: readonly ProviderConfig[] = [
   {
     id: 'kimi',
     name: 'Kimi',
-    domain: 'kimi.moonshot.cn',
+    domain: 'www.kimi.com',
     color: '#1A73E8',
     weight: 1.0,
     enabled: true,

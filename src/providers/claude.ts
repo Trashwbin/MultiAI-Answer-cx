@@ -138,24 +138,48 @@ export class ClaudeProvider extends BaseProvider {
   }
 
   private parseCompletionSse(sse: string): string {
-    let content = '';
+    const parts: string[] = [];
     for (const line of sse.split('\n')) {
       const trimmed = line.trim();
       if (!trimmed.startsWith('data:')) continue;
       const payload = trimmed.slice(5).trim();
       if (!payload || payload === '[DONE]') continue;
       try {
-        const data = JSON.parse(payload) as { completion?: string };
-        const completion = data.completion;
-        if (typeof completion !== 'string') continue;
-        if (completion.startsWith(content)) {
-          content = completion;
-        } else {
-          content += completion;
+        const data = JSON.parse(payload) as {
+          type?: string;
+          completion?: string;
+          text?: string;
+          content?: string;
+          delta?: string | { text?: string };
+          choices?: Array<{ delta?: { content?: string } }>;
+        };
+
+        // Claude content_block_delta format
+        if (data.type === 'content_block_delta' && typeof data.delta === 'object' && data.delta !== null && typeof data.delta.text === 'string') {
+          parts.push(data.delta.text);
+          continue;
         }
-      } catch {
-      }
+
+        // Legacy Claude format
+        if (typeof data.completion === 'string') {
+          parts.push(data.completion);
+          continue;
+        }
+
+        // OpenAI-compatible format
+        const choiceDelta = data.choices?.[0]?.delta?.content;
+        if (typeof choiceDelta === 'string') {
+          parts.push(choiceDelta);
+          continue;
+        }
+
+        // Fallback text/content
+        const text = data.text ?? data.content ?? (typeof data.delta === 'string' ? data.delta : undefined);
+        if (typeof text === 'string') {
+          parts.push(text);
+        }
+      } catch {}
     }
-    return content;
+    return parts.join('');
   }
 }
