@@ -8,11 +8,14 @@ export class KimiProvider extends BaseProvider {
       const prompt = this.buildPrompt(question);
       const tabId = await this.ensureKimiTab();
 
+      const auth = await this.getAuth();
+      const kimiAuth = auth.cookies['kimi-auth'] ?? '';
+
       const results = await chrome.scripting.executeScript({
         target: { tabId },
         world: 'MAIN',
         func: kimiConnectRpc,
-        args: [prompt],
+        args: [prompt, kimiAuth],
       });
 
       const result = results[0]?.result as
@@ -67,14 +70,17 @@ export class KimiProvider extends BaseProvider {
 }
 
 // Runs inside kimi.com MAIN world — MUST be fully self-contained.
-// Reads kimi-auth from document.cookie, sends Connect RPC, parses binary response.
+// kimi-auth is HttpOnly → read via chrome.cookies in service worker, passed as arg.
 function kimiConnectRpc(
   message: string,
+  kimiAuth: string,
 ): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
   return (async () => {
     try {
-      const cookieMatch = document.cookie.match(/(?:^|;\s*)kimi-auth=([^;]+)/);
-      const kimiAuth = cookieMatch?.[1] ?? '';
+      if (!kimiAuth) {
+        const cookieMatch = document.cookie.match(/(?:^|;\s*)kimi-auth=([^;]+)/);
+        kimiAuth = cookieMatch?.[1] ?? '';
+      }
       if (!kimiAuth) {
         return { ok: false as const, error: 'Kimi: 未找到 kimi-auth Cookie — 请先登录 www.kimi.com' };
       }
