@@ -127,25 +127,24 @@ function kimiConnectRpc(
       const u8 = new Uint8Array(arr);
       const decoder = new TextDecoder();
       const texts: string[] = [];
+      const frameDumps: string[] = [];
       let o = 0;
-      let frameCount = 0;
-      let firstFramePreview = '';
 
       while (o + 5 <= u8.length) {
+        const flags = u8[o];
         const len = new DataView(u8.buffer, u8.byteOffset + o + 1, 4).getUint32(0, false);
         if (o + 5 + len > u8.length) break;
 
         const chunk = u8.slice(o + 5, o + 5 + len);
         try {
           const raw = decoder.decode(chunk);
-          frameCount++;
-          if (!firstFramePreview) firstFramePreview = raw.slice(0, 300);
+          frameDumps.push(`[f${flags}:${len}] ${raw.slice(0, 200)}`);
 
           const obj = JSON.parse(raw);
           if (obj.error) {
             return {
               ok: false as const,
-              error: `Kimi RPC: ${obj.error.message ?? obj.error.code ?? JSON.stringify(obj.error).slice(0, 200)}`,
+              error: `Kimi RPC error: ${obj.error.message ?? obj.error.code ?? JSON.stringify(obj.error).slice(0, 300)}`,
             };
           }
           if (obj.block?.text?.content && ['set', 'append'].includes(obj.op ?? '')) {
@@ -161,7 +160,7 @@ function kimiConnectRpc(
       if (!text) {
         return {
           ok: false as const,
-          error: `Kimi: 响应为空 (bytes=${u8.length}, frames=${frameCount}, firstFrame=${firstFramePreview})`,
+          error: `Kimi: 响应为空 (bytes=${u8.length}, frames: ${frameDumps.join(' | ')})`,
         };
       }
       return { ok: true as const, text };
