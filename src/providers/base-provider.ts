@@ -1,4 +1,5 @@
-import { getCredentials } from '../auth/token-manager';
+import { getCredentials, saveCredentials } from '../auth/token-manager';
+import { captureCookies } from '../auth/cookie-capture';
 import type {
   AIProvider,
   AuthCredentials,
@@ -8,6 +9,8 @@ import type {
   Question,
 } from '../types';
 
+const CREDENTIAL_TTL_MS = 86_400_000;
+
 export abstract class BaseProvider implements AIProvider {
   constructor(public readonly config: ProviderConfig) {}
 
@@ -15,25 +18,39 @@ export abstract class BaseProvider implements AIProvider {
 
   async checkAuth(): Promise<AuthStatus> {
     try {
-      const creds = await getCredentials(this.config.id);
-      if (!creds) {
-        return 'unauthenticated';
+      const stored = await getCredentials(this.config.id);
+      if (stored) return 'authenticated';
+
+      const cookies = await captureCookies(this.config.id, this.config.domain);
+      if (Object.keys(cookies).length > 0) {
+        await saveCredentials(this.config.id, {
+          cookies,
+          expiresAt: Date.now() + CREDENTIAL_TTL_MS,
+        });
+        return 'authenticated';
       }
-      if (Date.now() >= creds.expiresAt) {
-        return 'expired';
-      }
-      return 'authenticated';
+
+      return 'unauthenticated';
     } catch {
       return 'error';
     }
   }
 
   protected async getAuth(): Promise<AuthCredentials> {
-    const creds = await getCredentials(this.config.id);
-    if (!creds) {
-      throw new Error(`${this.config.name} is not authenticated`);
+    const stored = await getCredentials(this.config.id);
+    if (stored) return stored;
+
+    const cookies = await captureCookies(this.config.id, this.config.domain);
+    if (Object.keys(cookies).length > 0) {
+      const creds: AuthCredentials = {
+        cookies,
+        expiresAt: Date.now() + CREDENTIAL_TTL_MS,
+      };
+      await saveCredentials(this.config.id, creds);
+      return creds;
     }
-    return creds;
+
+    throw new Error(`${this.config.name} is not authenticated`);
   }
 
   protected buildCookieHeader(cookies: Record<string, string>): string {
