@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>模拟考试 - 测试页面</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; background: #f5f5f5; }
+    h1 { text-align: center; color: #333; }
+    .exam-info { text-align: center; color: #666; margin-bottom: 24px; font-size: 14px; }
+    .questionLi { background: #fff; border-radius: 8px; padding: 16px 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    .mark_name { font-size: 15px; line-height: 1.6; color: #333; margin-bottom: 12px; }
+    .colorShallow { color: #999; font-size: 13px; }
+    .stem_answer { margin-top: 10px; }
+    .answerBg { display: flex; align-items: flex-start; gap: 8px; padding: 8px 12px; margin: 4px 0; border-radius: 6px; cursor: pointer; transition: background 0.15s; }
+    .answerBg:hover { background: #f0f7ff; }
+    .num_option, .num_option_dx { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; border: 2px solid #ccc; font-size: 13px; color: #666; flex-shrink: 0; transition: all 0.15s; }
+    .num_option.check_answer, .num_option_dx.check_answer_dx { border-color: #4caf50; background: #4caf50; color: #fff; }
+    .answer_p { flex: 1; color: #444; line-height: 1.5; }
+    .tiankong { margin: 8px 0; }
+    .tiankong input { width: 200px; padding: 6px 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+    .sub_que_div { margin: 8px 0; }
+    .edui-editor-iframeholder { border: 1px solid #ddd; border-radius: 4px; min-height: 80px; }
+    .edui-editor-iframeholder iframe { width: 100%; min-height: 80px; border: none; }
+    .completeBtn { display: inline-block; padding: 10px 24px; background: #4caf50; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 15px; margin: 20px auto; }
+    .completeBtn:hover { background: #43a047; }
+    .btn-bar { text-align: center; margin: 24px 0; }
+    .fill-result { margin-top: 8px; padding: 6px 10px; background: #f0fff4; border-radius: 4px; font-size: 13px; color: #38a169; display: none; }
+  </style>
+</head>
+<body>
+  <h1>计算机基础 - 模拟考试</h1>
+  <p class="exam-info">本试卷共 6 题，满分 100 分，考试时间 60 分钟</p>
+
+  <!-- 单选题 -->
+  <div class="questionLi" data="q001">
+    <input type="hidden" name="typeName001" value="单选题">
+    <div class="mark_name">
+      <span class="colorShallow">(单选题, 10分)</span>
+      <div>以下哪个是面向对象编程的基本特征？</div>
+    </div>
+    <div class="stem_answer">
+      <div class="answerBg" onclick="toggleChoice(this, false)">
+        <span class="num_option" data="A">A</span>
+        <span class="answer_p">封装</span>
+      </div>
+      <div class="answerBg" onclick="toggleChoice(this, false)">
+        <span class="num_option" data="B">B</span>
+        <span class="answer_p">递归</span>
+      </div>
+      <div class="answerBg" onclick="toggleChoice(this, false)">
+        <span class="num_option" data="C">C</span>
+        <span class="answer_p">排序</span>
+      </div>
+      <div class="answerBg" onclick="toggleChoice(this, false)">
+        <span class="num_option" data="D">D</span>
+        <span class="answer_p">遍历</span>
+      </div>
+    </div>
+    <div class="fill-result" id="result-q001"></div>
+  </div>
+
+  <!-- 多选题 -->
+  <div class="questionLi" data="q002">
+    <input type="hidden" name="typeName002" value="多选题">
+    <div class="mark_name">
+      <span class="colorShallow">(多选题, 15分)</span>
+      <div>以下哪些是常用的 HTTP 请求方法？</div>
+    </div>
+    <div class="stem_answer">
+      <div class="answerBg" onclick="toggleChoice(this, true)">
+        <span class="num_option_dx" data="A">A</span>
+        <span class="answer_p">GET</span>
+      </div>
+      <div class="answerBg" onclick="toggleChoice(this, true)">
+        <span class="num_option_dx" data="B">B</span>
+        <span class="answer_p">POST</span>
+      </div>
+      <div class="answerBg" onclick="toggleChoice(this, true)">
+        <span class="num_option_dx" data="C">C</span>
+        <span class="answer_p">SELECT</span>
+      </div>
+      <div class="answerBg" onclick="toggleChoice(this, true)">
+        <span class="num_option_dx" data="D">D</span>
+        <span class="answer_p">DELETE</span>
+      </div>
+    </div>
+    <div class="fill-result" id="result-q002"></div>
+  </div>
+
+  <!-- 判断题 -->
+  <div class="questionLi" data="q003">
+    <input type="hidden" name="typeName003" value="判断题">
+    <div class="mark_name">
+      <span class="colorShallow">(判断题, 10分)</span>
+      <div>TCP 是一种面向连接的传输层协议。</div>
+    </div>
+    <div class="stem_answer">
+      <div class="answerBg" onclick="toggleChoice(this, false)">
+        <span class="num_option" data="true">A</span>
+        <span class="answer_p">正确</span>
+      </div>
+      <div class="answerBg" onclick="toggleChoice(this, false)">
+        <span class="num_option" data="false">B</span>
+        <span class="answer_p">错误</span>
+      </div>
+    </div>
+    <div class="fill-result" id="result-q003"></div>
+  </div>
+
+  <!-- 单选题 2 -->
+  <div class="questionLi" data="q004">
+    <input type="hidden" name="typeName004" value="单选题">
+    <div class="mark_name">
+      <span class="colorShallow">(单选题, 10分)</span>
+      <div>HTML 中，哪个标签用于定义超链接？</div>
+    </div>
+    <div class="stem_answer">
+      <div class="answerBg" onclick="toggleChoice(this, false)">
+        <span class="num_option" data="A">A</span>
+        <span class="answer_p">&lt;link&gt;</span>
+      </div>
+      <div class="answerBg" onclick="toggleChoice(this, false)">
+        <span class="num_option" data="B">B</span>
+        <span class="answer_p">&lt;a&gt;</span>
+      </div>
+      <div class="answerBg" onclick="toggleChoice(this, false)">
+        <span class="num_option" data="C">C</span>
+        <span class="answer_p">&lt;href&gt;</span>
+      </div>
+      <div class="answerBg" onclick="toggleChoice(this, false)">
+        <span class="num_option" data="D">D</span>
+        <span class="answer_p">&lt;url&gt;</span>
+      </div>
+    </div>
+    <div class="fill-result" id="result-q004"></div>
+  </div>
+
+  <!-- 判断题 2 -->
+  <div class="questionLi" data="q005">
+    <input type="hidden" name="typeName005" value="判断题">
+    <div class="mark_name">
+      <span class="colorShallow">(判断题, 10分)</span>
+      <div>JavaScript 是一种编译型语言。</div>
+    </div>
+    <div class="stem_answer">
+      <div class="answerBg" onclick="toggleChoice(this, false)">
+        <span class="num_option" data="true">A</span>
+        <span class="answer_p">正确</span>
+      </div>
+      <div class="answerBg" onclick="toggleChoice(this, false)">
+        <span class="num_option" data="false">B</span>
+        <span class="answer_p">错误</span>
+      </div>
+    </div>
+    <div class="fill-result" id="result-q005"></div>
+  </div>
+
+  <!-- 多选题 2 -->
+  <div class="questionLi" data="q006">
+    <input type="hidden" name="typeName006" value="多选题">
+    <div class="mark_name">
+      <span class="colorShallow">(多选题, 15分)</span>
+      <div>以下哪些属于 CSS 布局方式？</div>
+    </div>
+    <div class="stem_answer">
+      <div class="answerBg" onclick="toggleChoice(this, true)">
+        <span class="num_option_dx" data="A">A</span>
+        <span class="answer_p">Flexbox</span>
+      </div>
+      <div class="answerBg" onclick="toggleChoice(this, true)">
+        <span class="num_option_dx" data="B">B</span>
+        <span class="answer_p">Grid</span>
+      </div>
+      <div class="answerBg" onclick="toggleChoice(this, true)">
+        <span class="num_option_dx" data="C">C</span>
+        <span class="answer_p">Float</span>
+      </div>
+      <div class="answerBg" onclick="toggleChoice(this, true)">
+        <span class="num_option_dx" data="D">D</span>
+        <span class="answer_p">Webpack</span>
+      </div>
+    </div>
+    <div class="fill-result" id="result-q006"></div>
+  </div>
+
+  <div class="btn-bar">
+    <button class="completeBtn" onclick="alert('交卷功能仅做测试用途')">交卷</button>
+  </div>
+
+  <script>
+    function toggleChoice(answerBg, isMultiple) {
+      const span = answerBg.querySelector('.num_option, .num_option_dx');
+      if (!span) return;
+
+      if (isMultiple) {
+        span.classList.toggle('check_answer_dx');
+      } else {
+        const parent = answerBg.closest('.stem_answer');
+        parent.querySelectorAll('.num_option').forEach(s => s.classList.remove('check_answer'));
+        span.classList.add('check_answer');
+      }
+
+      showFillResult(answerBg);
+    }
+
+    function showFillResult(el) {
+      const questionLi = el.closest('.questionLi');
+      const resultDiv = questionLi.querySelector('.fill-result');
+      if (!resultDiv) return;
+
+      const selected = [];
+      questionLi.querySelectorAll('.check_answer, .check_answer_dx').forEach(s => {
+        selected.push(s.getAttribute('data') || s.textContent.trim());
+      });
+
+      if (selected.length > 0) {
+        resultDiv.style.display = 'block';
+        resultDiv.textContent = '已选择: ' + selected.join(', ');
+      } else {
+        resultDiv.style.display = 'none';
+      }
+    }
+  </script>
+</body>
+</html>

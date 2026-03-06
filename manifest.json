@@ -43,7 +43,9 @@
     "https://gemini.google.com/*",
     "https://claude.ai/*",
     "https://grok.com/*",
-    "https://chat.qwen.ai/*"
+    "https://chat.qwen.ai/*",
+    "http://127.0.0.1:*/*",
+    "http://localhost:*/*"
   ],
   "background": {
     "service_worker": "dist/background.js"
@@ -57,7 +59,9 @@
         "https://*.chaoxing.com/*/mooc2/exam*",
         "https://*.chaoxing.com/*/test*",
         "https://*.chaoxing.com/*/mooc2/test*",
-        "https://*.chaoxing.com/mycourse/studentstudy*"
+        "https://*.chaoxing.com/mycourse/studentstudy*",
+        "http://127.0.0.1:*/*",
+        "http://localhost:*/*"
       ],
       "js": ["dist/content.js"],
       "run_at": "document_end"
