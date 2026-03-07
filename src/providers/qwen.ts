@@ -22,10 +22,12 @@ export class QwenProvider extends BaseProvider {
       if (!bearerToken) throw new Error('Qwen Intl: 未找到 token — 请先登录 chat.qwen.ai');
       const prompt = this.buildPrompt(question);
       const chatId = await this.createChat(bearerToken);
+      console.log(`[QwenIntl] chatId=${chatId}`);
 
+      const completionUrl = `https://chat.qwen.ai/api/v2/chat/completions?chat_id=${encodeURIComponent(chatId)}`;
       const res = await proxyFetch(
         'chat.qwen.ai',
-        'https://chat.qwen.ai/api/v2/chat/completions',
+        completionUrl,
         {
           method: 'POST',
           headers: {
@@ -169,10 +171,12 @@ export class QwenProvider extends BaseProvider {
       throw new Error(`Qwen create chat ${res.status}: ${res.body.slice(0, 200)}`);
     }
 
+    console.log(`[QwenIntl] createChat response: ${res.body.slice(0, 300)}`);
+
     const data = JSON.parse(res.body) as QwenCreateChatResponse;
     const chatId = data.data?.id;
     if (!chatId) {
-      throw new Error('Qwen chat id missing');
+      throw new Error(`Qwen chat id missing, body=${res.body.slice(0, 200)}`);
     }
     return chatId;
   }
