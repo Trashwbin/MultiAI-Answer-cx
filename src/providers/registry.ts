@@ -8,7 +8,6 @@ import { DoubaoProvider } from './doubao';
 import { GeminiProvider } from './gemini';
 import { GrokProvider } from './grok';
 import { KimiProvider } from './kimi';
-import { MockProvider } from './mock';
 import { QwenCnProvider } from './qwen-cn';
 import { QwenProvider } from './qwen';
 
@@ -25,9 +24,6 @@ const FACTORIES: Record<string, ProviderFactory> = {
   'qwen-cn': (config) => new QwenCnProvider(config),
   'qwen-intl': (config) => new QwenProvider(config),
   chatglm: (config) => new ChatGLMProvider(config),
-  'mock-fast': (config) => new MockProvider(config),
-  'mock-slow': (config) => new MockProvider(config),
-  'mock-fail': (config) => new MockProvider(config),
 };
 
 export function getEnabledProviders(): AIProvider[] {
