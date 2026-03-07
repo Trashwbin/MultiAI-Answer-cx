@@ -9,7 +9,7 @@ export const PROVIDER_COOKIE_KEYS: Record<string, string[]> = {
   grok: ['sso', 'ct0'],
   'qwen-cn': ['tongyi_sso_ticket', 'login_aliyunid_ticket', 'XSRF-TOKEN', 'b-user-id', 'qwen_session'],
   'qwen-intl': ['qwen_session'],
-  chatglm: ['chatglm_token', 'chatglm_refresh_token'],
+  chatglm: ['chatglm_refresh_token', 'chatglm_token'],
 };
 
 const PROVIDER_EXTRA_DOMAINS: Record<string, string[]> = {

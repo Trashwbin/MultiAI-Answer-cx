@@ -1,3 +1,4 @@
+import { captureAllCookies } from '../auth/cookie-capture';
 import { parseAIResponse } from '../core/json-parser';
 import type { AuthStatus, ProviderResponse, Question } from '../types';
 import { BaseProvider } from './base-provider';
@@ -17,21 +18,22 @@ export class ChatGLMProvider extends BaseProvider {
   private deviceId = crypto.randomUUID();
 
   async checkAuth(): Promise<AuthStatus> {
-    const base = await super.checkAuth();
-    if (base === 'authenticated') return base;
-
-    const tabId = await this.findProviderTab(['https://chatglm.cn/*', 'https://www.chatglm.cn/*']);
-    if (tabId === undefined) return 'unauthenticated';
-
     try {
-      const results = await chrome.scripting.executeScript({
-        target: { tabId },
-        world: 'MAIN',
-        func: chatglmAuthProbe,
-      });
-      return results[0]?.result === true ? 'authenticated' : 'unauthenticated';
+      const allCookies = await captureAllCookies(this.config.id, this.config.domain);
+      const hasRefresh = !!allCookies['chatglm_refresh_token'];
+      const hasAccess = !!allCookies['chatglm_token'];
+
+      if (!hasRefresh && !hasAccess) return 'unauthenticated';
+      if (hasRefresh) return 'authenticated';
+
+      const expiresRaw = allCookies['chatglm_token_expires'] ?? '';
+      if (expiresRaw) {
+        const expiresMs = new Date(decodeURIComponent(expiresRaw)).getTime();
+        if (!isNaN(expiresMs) && Date.now() > expiresMs) return 'unauthenticated';
+      }
+      return 'authenticated';
     } catch {
-      return 'unauthenticated';
+      return 'error';
     }
   }
 
@@ -42,11 +44,15 @@ export class ChatGLMProvider extends BaseProvider {
       const signData = createSign();
       const requestId = crypto.randomUUID();
 
+      const auth = await this.getAuth();
+      const accessTokenSW = auth.cookies['chatglm_token'] ?? '';
+      const refreshTokenSW = auth.cookies['chatglm_refresh_token'] ?? '';
+
       const results = await chrome.scripting.executeScript({
         target: { tabId },
         world: 'MAIN',
         func: chatglmPageQuery,
-        args: [prompt, signData, this.deviceId, requestId, X_EXP_GROUPS],
+        args: [prompt, signData, this.deviceId, requestId, X_EXP_GROUPS, accessTokenSW, refreshTokenSW],
       });
 
       const result = results[0]?.result as
@@ -100,22 +106,65 @@ export class ChatGLMProvider extends BaseProvider {
   }
 }
 
-// Runs inside chatglm.cn MAIN world — MUST be fully self-contained.
-// Sign data + deviceId passed as args (MD5 stays in service worker).
-// Reads chatglm_token from document.cookie.
 function chatglmPageQuery(
   prompt: string,
   signData: { sign: string; nonce: string; timestamp: string },
   deviceId: string,
   requestId: string,
   xExpGroups: string,
+  accessTokenFromSW: string,
+  refreshTokenFromSW: string,
 ): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
   return (async () => {
     try {
-      const tokenMatch = document.cookie.match(/(?:^|;\s*)chatglm_token=([^;]+)/);
-      const accessToken = tokenMatch?.[1] ?? '';
+      const cookieAccess = document.cookie.match(/(?:^|;\s*)chatglm_token=([^;]+)/)?.[1] ?? '';
+      const cookieRefresh = document.cookie.match(/(?:^|;\s*)chatglm_refresh_token=([^;]+)/)?.[1] ?? '';
+      const cookieExpires = document.cookie.match(/(?:^|;\s*)chatglm_token_expires=([^;]+)/)?.[1] ?? '';
+
+      let accessToken = accessTokenFromSW || cookieAccess;
+      const refreshToken = refreshTokenFromSW || cookieRefresh;
+
+      if (!accessToken && !refreshToken) {
+        return { ok: false as const, error: 'ChatGLM: 未找到登录凭证 — 请先登录 chatglm.cn' };
+      }
+
+      let needsRefresh = !accessToken;
+      if (accessToken && cookieExpires) {
+        const expiresMs = new Date(decodeURIComponent(cookieExpires)).getTime();
+        if (!isNaN(expiresMs) && Date.now() > expiresMs) needsRefresh = true;
+      }
+
+      if (needsRefresh && refreshToken) {
+        const refreshRes = await fetch('https://chatglm.cn/chatglm/user-api/user/refresh', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${refreshToken}`,
+            'App-Name': 'chatglm',
+            'X-App-Platform': 'pc',
+            'X-Device-Id': deviceId,
+            'X-Request-Id': crypto.randomUUID(),
+            'X-Sign': signData.sign,
+            'X-Nonce': signData.nonce,
+            'X-Timestamp': signData.timestamp,
+          },
+          body: '{}',
+        });
+
+        if (!refreshRes.ok) {
+          const errText = await refreshRes.text();
+          return { ok: false as const, error: `ChatGLM token 刷新失败 ${refreshRes.status}: ${errText.slice(0, 200)}` };
+        }
+
+        const refreshData = await refreshRes.json() as { result?: { access_token?: string } };
+        accessToken = refreshData?.result?.access_token ?? '';
+        if (!accessToken) {
+          return { ok: false as const, error: 'ChatGLM: token 刷新响应无 access_token' };
+        }
+      }
+
       if (!accessToken) {
-        return { ok: false as const, error: 'ChatGLM: 未找到 chatglm_token Cookie — 请先登录 chatglm.cn' };
+        return { ok: false as const, error: 'ChatGLM: 无可用 access_token — 请重新登录 chatglm.cn' };
       }
 
       const res = await fetch('https://chatglm.cn/chatglm/backend-api/assistant/stream', {
@@ -371,6 +420,4 @@ function wordsToHex(state: Md5State): string {
   return hexParts.join('');
 }
 
-function chatglmAuthProbe(): boolean {
-  return document.cookie.includes('chatglm_token');
-}
+
