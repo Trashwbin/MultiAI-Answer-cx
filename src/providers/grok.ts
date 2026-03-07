@@ -16,7 +16,7 @@ export class GrokProvider extends BaseProvider {
       });
 
       const apiResult = apiResults[0]?.result as
-        | { ok: true; text: string; debug?: string }
+        | { ok: true; text: string }
         | { ok: false; error: string; is403: boolean }
         | undefined;
 
@@ -25,8 +25,7 @@ export class GrokProvider extends BaseProvider {
       if (apiResult.ok) {
         const rawText = apiResult.text;
         const parsed = parseAIResponse(rawText, this.config.id);
-        const debugSuffix = apiResult.debug ? ` [grok: ${apiResult.debug}]` : '';
-        return { ...parsed, rawText: rawText + debugSuffix };
+        return { ...parsed, rawText };
       }
 
       if (!apiResult.is403) {
@@ -142,7 +141,7 @@ export class GrokProvider extends BaseProvider {
 // Parses NDJSON: result.response.token (streaming deltas), result.response.modelResponse.message (final).
 function grokApiQuery(
   message: string,
-): Promise<{ ok: true; text: string; debug?: string } | { ok: false; error: string; is403: boolean }> {
+): Promise<{ ok: true; text: string } | { ok: false; error: string; is403: boolean }> {
   return (async () => {
     try {
       // x-statsig-id: grok2api generates a base64-encoded fake error message as fingerprint
@@ -191,18 +190,14 @@ function grokApiQuery(
       }
 
       const ndjson = await res.text();
-      const ndjsonPreview = ndjson.slice(0, 500);
-
       let finalMessage = '';
       const tokens: string[] = [];
-      let parsedLines = 0;
 
       for (const line of ndjson.split('\n')) {
         const trimmed = line.trim();
         if (!trimmed) continue;
         try {
           const data = JSON.parse(trimmed) as Record<string, unknown>;
-          parsedLines++;
 
           const err = (data as Record<string, Record<string, unknown>>).error;
           if (err?.message) {
@@ -237,11 +232,11 @@ function grokApiQuery(
       if (!text) {
         return {
           ok: false as const,
-          error: `Grok: 响应为空 (parsed=${parsedLines} lines, len=${ndjson.length}). NDJSON preview: ${ndjsonPreview}`,
+          error: `Grok: 响应为空 (len=${ndjson.length})`,
           is403: false,
         };
       }
-      return { ok: true as const, text, debug: `parsed=${parsedLines}, tokens=${tokens.length}, hasFinal=${!!finalMessage}` };
+      return { ok: true as const, text };
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       const is403 = msg.includes('403') || msg.includes('anti-bot');
