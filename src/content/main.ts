@@ -9,6 +9,8 @@ let extensionEnabled = true;
 let questions: Question[] = [];
 let finalAnswers: FinalAnswer[] = [];
 const providerResponses = new Map<string, ProviderResponse | 'querying'>();
+let selectedProviderIds: string[] = [];
+let weightProviderId: string | null = null;
 let keepAlivePort: chrome.runtime.Port | null = null;
 
 function connectKeepAlive(): void {
@@ -112,6 +114,41 @@ function sendQueryAllAI(providerIds?: string[]): void {
   safeSendMessage({ type: 'QUERY_ALL_AI', questions, providerIds });
 }
 
+function buildPanelCallbacks(): {
+  onAutoFill: () => void;
+  onRetransmit: (providerId: string) => void;
+  onRemoveProvider: (providerId: string) => void;
+  onWeightChange: (providerId: string | null) => void;
+} {
+  return {
+    onAutoFill: () => void autoFillAnswers(finalAnswers, questions),
+    onRetransmit: (providerId: string) => {
+      providerResponses.set(providerId, 'querying');
+      safeSendMessage({ type: 'QUERY_AI', providerId, questions });
+    },
+    onRemoveProvider: (providerId: string) => {
+      providerResponses.delete(providerId);
+      selectedProviderIds = selectedProviderIds.filter((id) => id !== providerId);
+      finalAnswers = aggregateFinalAnswers(providerResponses);
+    },
+    onWeightChange: (newWeightId: string | null) => {
+      weightProviderId = newWeightId;
+    },
+  };
+}
+
+function openPanelAndQuery(providerIds: string[], wId: string | null): void {
+  selectedProviderIds = providerIds;
+  weightProviderId = wId;
+  finalAnswers = [];
+  providerResponses.clear();
+  showAnswerPanel(
+    { questions, finalAnswers, providerIds, weightProviderId: wId, isLoading: true },
+    buildPanelCallbacks(),
+  );
+  sendQueryAllAI(providerIds);
+}
+
 function handlePopupMessage(
   message: { action: string; enabled?: boolean },
   _sender: chrome.runtime.MessageSender,
@@ -162,11 +199,8 @@ function handlePopupMessage(
         sendResponse({ success: false, error: '\u5F53\u524D\u9875\u9762\u672A\u627E\u5230\u9898\u76EE' });
         break;
       }
-      showAISelector((providerIds) => {
-        finalAnswers = [];
-        providerResponses.clear();
-        showAnswerPanel({ questions, finalAnswers, isLoading: true });
-        sendQueryAllAI(providerIds);
+      showAISelector(({ providerIds, weightProviderId: wId }) => {
+        openPanelAndQuery(providerIds, wId);
       });
       sendResponse({ success: true });
       break;
@@ -217,11 +251,8 @@ function initialize(): void {
   setQuestionListSendCallback((selected) => {
     questions = selected;
     hideQuestionList();
-    showAISelector((providerIds) => {
-      finalAnswers = [];
-      providerResponses.clear();
-      showAnswerPanel({ questions, finalAnswers, isLoading: true });
-      sendQueryAllAI(providerIds);
+    showAISelector(({ providerIds, weightProviderId: wId }) => {
+      openPanelAndQuery(providerIds, wId);
     });
   });
 
