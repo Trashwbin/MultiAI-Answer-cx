@@ -43,7 +43,8 @@
     "https://gemini.google.com/*",
     "https://claude.ai/*",
     "https://grok.com/*",
-    "https://chat.qwen.ai/*",
+    "https://qwen.ai/*",
+    "https://*.qwen.ai/*",
     "https://*.qianwen.com/*",
     "http://127.0.0.1:*/*",
     "http://localhost:*/*"

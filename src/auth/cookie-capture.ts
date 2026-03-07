@@ -21,7 +21,7 @@ const PROVIDER_EXTRA_DOMAINS: Record<string, string[]> = {
   doubao: ['doubao.com', 'www.doubao.com'],
   grok: ['grok.com', 'x.com', 'twitter.com'],
   'qwen-cn': ['qianwen.com', 'www.qianwen.com', 'chat2.qianwen.com', 'chat.qwen.ai', 'tongyi.aliyun.com'],
-  'qwen-intl': ['chat.qwen.ai'],
+  'qwen-intl': ['qwen.ai', 'chat.qwen.ai'],
   chatglm: ['chatglm.cn', 'www.chatglm.cn', 'open.bigmodel.cn'],
 };
 
