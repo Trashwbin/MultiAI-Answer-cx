@@ -23,7 +23,7 @@
     'doubao.com': 'doubao',
     'www.doubao.com': 'doubao',
     'grok.com': 'grok',
-    'chat.qwen.ai': 'qwen-cn',
+    'chat.qwen.ai': 'qwen-intl',
     'www.qianwen.com': 'qwen-cn',
     'qianwen.com': 'qwen-cn',
     'chatglm.cn': 'chatglm',
@@ -33,6 +33,7 @@
   const PROVIDER_STORAGE_KEYS: Record<string, string[]> = {
     kimi: ['access_token', 'refresh_token'],
     deepseek: ['userToken'],
+    'qwen-intl': ['token'],
   };
 
   const PROVIDER_META_KEYS: Record<string, Array<{ selector: string; key: string }>> = {
