@@ -25,7 +25,7 @@ export class QwenProvider extends BaseProvider {
 
       const res = await proxyFetch(
         'chat.qwen.ai',
-        `https://chat.qwen.ai/api/v2/chat/completions?chat_id=${encodeURIComponent(chatId)}`,
+        'https://chat.qwen.ai/api/v2/chat/completions',
         {
           method: 'POST',
           headers: {
@@ -34,6 +34,7 @@ export class QwenProvider extends BaseProvider {
             Authorization: `Bearer ${bearerToken}`,
           },
           body: JSON.stringify({
+            chat_id: chatId,
             model: 'qwen-max-latest',
             messages: [{ role: 'user', content: prompt }],
             stream: true,
