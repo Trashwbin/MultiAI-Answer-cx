@@ -141,7 +141,7 @@ export class DeepSeekProvider extends BaseProvider {
           chat_session_id: sessionId,
           prompt,
           ref_file_ids: [],
-          thinking_enabled: false,
+          thinking_enabled: this.promptMode === 'analysis',
           search_enabled: false,
         }),
       });

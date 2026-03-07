@@ -1,10 +1,12 @@
 import type { ExtensionMessage, Question } from '../types';
+import type { PromptMode } from '../types/provider';
 import { QuestionType } from '../types/question';
 import { getProviderById, getProvidersByIds, getEnabledProviders } from '../providers/registry';
 import { AI_PROVIDERS, getProviderById as getProviderConfig } from '../config/ai-config';
 import { startGuidedLogin } from '../auth/guided-login';
 import { clearCredentials, mergeCredentials } from '../auth/token-manager';
 import { captureAllCookies } from '../auth/cookie-capture';
+import { BaseProvider } from '../providers/base-provider';
 
 const activePorts = new Set<chrome.runtime.Port>();
 
@@ -80,7 +82,7 @@ chrome.runtime.onMessage.addListener(
           sendResponse({ success: false, error: 'No sender tab' });
           break;
         }
-        handleQueryAllAI(message.questions, tabId, message.providerIds, message.batchMode).catch((err: unknown) => {
+        handleQueryAllAI(message.questions, tabId, message.providerIds, message.batchMode, message.promptMode).catch((err: unknown) => {
           console.error('[SW] QUERY_ALL_AI failed:', err);
         });
         sendResponse({ success: true });
@@ -245,6 +247,7 @@ async function handleQueryAllAI(
   senderTabId: number,
   providerIds?: string[],
   batchMode?: boolean,
+  promptMode?: PromptMode,
 ): Promise<void> {
   const batch = batchMode !== false;
   const providers = providerIds?.length
@@ -265,6 +268,7 @@ async function handleQueryAllAI(
     providers.map(async (provider) => {
       const pid = provider.config.id;
       console.log(`[SW] ${pid}: starting query (${batch ? 'batch' : 'single'})...`);
+      (provider as BaseProvider).promptMode = promptMode ?? 'standard';
 
       try {
         if (batch) {

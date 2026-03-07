@@ -1,5 +1,6 @@
 import { AI_PROVIDERS } from '../../config/ai-config';
 import type { AuthStatus } from '../../types';
+import type { PromptMode } from '../../types/provider';
 
 /* ── Constants & Types ──────────────────────────────── */
 
@@ -10,6 +11,7 @@ type SelectCallback = (result: {
   providerIds: string[];
   weightProviderId: string | null;
   batchMode: boolean;
+  promptMode: PromptMode;
 }) => void;
 
 interface CardState {
@@ -25,6 +27,7 @@ let currentWeightId: string | null = null;
 let visibilityHandler: (() => void) | null = null;
 let stylesInjected = false;
 let batchMode = true;
+let promptMode: PromptMode = 'standard';
 
 /* ── Public API ──────────────────────────────────────── */
 
@@ -38,6 +41,7 @@ export function showAISelector(onConfirm: SelectCallback, onCancel?: () => void)
   }));
 
   currentWeightId = AI_PROVIDERS.find((p) => p.enabled)?.id ?? null;
+  promptMode = 'standard';
 
   injectStyles();
   const modal = buildModal(onConfirm, onCancel);
@@ -359,6 +363,55 @@ function buildFooter(
   toggleRow.appendChild(toggleText);
   leftGroup.appendChild(toggleRow);
 
+  /* ── Prompt mode toggle ── */
+  const promptToggleRow = mk('div', {
+    style: j('display:flex', 'align-items:center', 'gap:8px'),
+  });
+
+  const promptToggleLabel = mk('span', {
+    style: 'color:#718096;font-size:12px;white-space:nowrap;',
+  });
+  promptToggleLabel.textContent = '\u56DE\u7B54\u6A21\u5F0F\uFF1A';
+
+  const promptToggleTrack = mk('div', {
+    id: 'ai-sel-prompt-toggle',
+    style: j(
+      'width:36px', 'height:20px', 'border-radius:10px',
+      'background:#cbd5e0', 'position:relative', 'cursor:pointer',
+      'transition:background 0.2s', 'flex-shrink:0',
+    ),
+  });
+  const promptToggleThumb = mk('div', {
+    style: j(
+      'width:16px', 'height:16px', 'border-radius:50%',
+      'background:#fff', 'position:absolute', 'top:2px', 'left:2px',
+      'transition:left 0.2s', 'box-shadow:0 1px 3px rgba(0,0,0,0.2)',
+    ),
+  });
+  promptToggleTrack.appendChild(promptToggleThumb);
+
+  const promptToggleText = mk('span', {
+    id: 'ai-sel-prompt-text',
+    style: 'color:#4a5568;font-size:12px;font-weight:500;white-space:nowrap;',
+  });
+  promptToggleText.textContent = '\u6781\u901F\u56DE\u7B54';
+
+  function updatePromptToggleUI(): void {
+    promptToggleTrack.style.background = promptMode === 'analysis' ? '#4caf50' : '#cbd5e0';
+    promptToggleThumb.style.left = promptMode === 'analysis' ? '18px' : '2px';
+    promptToggleText.textContent = promptMode === 'analysis' ? '\u8BE6\u7EC6\u89E3\u6790' : '\u6781\u901F\u56DE\u7B54';
+  }
+
+  promptToggleTrack.addEventListener('click', () => {
+    promptMode = promptMode === 'standard' ? 'analysis' : 'standard';
+    updatePromptToggleUI();
+  });
+
+  promptToggleRow.appendChild(promptToggleLabel);
+  promptToggleRow.appendChild(promptToggleTrack);
+  promptToggleRow.appendChild(promptToggleText);
+  leftGroup.appendChild(promptToggleRow);
+
   footer.appendChild(leftGroup);
 
   const actions = mk('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;' });
@@ -388,7 +441,7 @@ function buildFooter(
   const send = mkBtn('\u53D1\u9001\u5230 AI', '#4caf50', '#fff', () => {
     const ids = cards.filter((c) => c.selected).map((c) => c.config.id);
     if (ids.length === 0) return;
-    animateClose(() => onConfirm({ providerIds: ids, weightProviderId: currentWeightId, batchMode }));
+    animateClose(() => onConfirm({ providerIds: ids, weightProviderId: currentWeightId, batchMode, promptMode }));
   });
   send.id = 'ai-sel-send';
   send.style.fontWeight = '600';

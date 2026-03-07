@@ -10,6 +10,8 @@ export interface AuthCredentials {
 
 export type AuthStatus = 'authenticated' | 'unauthenticated' | 'expired' | 'error';
 
+export type PromptMode = 'standard' | 'analysis';
+
 export interface ProviderConfig {
   id: string;
   name: string;
@@ -21,6 +23,7 @@ export interface ProviderConfig {
 
 export interface AIProvider {
   config: ProviderConfig;
+  promptMode: PromptMode;
   query(questions: Question[]): Promise<ProviderResponse>;
   checkAuth(): Promise<AuthStatus>;
 }

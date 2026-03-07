@@ -1,4 +1,5 @@
 import type { Question, FinalAnswer, ProviderResponse, ExtensionMessage } from '../types';
+import type { PromptMode } from '../types/provider';
 import { extractQuestionsFromXXT } from './extractor/extractor';
 import { autoFillAnswers } from './auto-fill/auto-fill';
 import { showAnswerPanel, updateAnswerPanel, updateProviderStatus, setAutoFillCallback } from './panel/panel';
@@ -108,10 +109,10 @@ function safeSendMessage(message: ExtensionMessage): void {
   chrome.runtime.sendMessage(message).catch(() => {});
 }
 
-function sendQueryAllAI(providerIds?: string[], batchMode?: boolean): void {
+function sendQueryAllAI(providerIds?: string[], batchMode?: boolean, promptMode?: PromptMode): void {
   if (questions.length === 0) return;
 
-  safeSendMessage({ type: 'QUERY_ALL_AI', questions, providerIds, batchMode });
+  safeSendMessage({ type: 'QUERY_ALL_AI', questions, providerIds, batchMode, promptMode });
 }
 
 function buildPanelCallbacks(): {
@@ -137,7 +138,7 @@ function buildPanelCallbacks(): {
   };
 }
 
-function openPanelAndQuery(providerIds: string[], wId: string | null, batch?: boolean): void {
+function openPanelAndQuery(providerIds: string[], wId: string | null, batch?: boolean, promptMode?: PromptMode): void {
   selectedProviderIds = providerIds;
   weightProviderId = wId;
   finalAnswers = [];
@@ -146,7 +147,7 @@ function openPanelAndQuery(providerIds: string[], wId: string | null, batch?: bo
     { questions, finalAnswers, providerIds, weightProviderId: wId, isLoading: true },
     buildPanelCallbacks(),
   );
-  sendQueryAllAI(providerIds, batch);
+  sendQueryAllAI(providerIds, batch, promptMode);
 }
 
 function handlePopupMessage(
@@ -199,8 +200,8 @@ function handlePopupMessage(
         sendResponse({ success: false, error: '\u5F53\u524D\u9875\u9762\u672A\u627E\u5230\u9898\u76EE' });
         break;
       }
-      showAISelector(({ providerIds, weightProviderId: wId, batchMode: batch }) => {
-        openPanelAndQuery(providerIds, wId, batch);
+      showAISelector(({ providerIds, weightProviderId: wId, batchMode: batch, promptMode: pm }) => {
+        openPanelAndQuery(providerIds, wId, batch, pm);
       });
       sendResponse({ success: true });
       break;
@@ -251,8 +252,8 @@ function initialize(): void {
   setQuestionListSendCallback((selected) => {
     questions = selected;
     hideQuestionList();
-    showAISelector(({ providerIds, weightProviderId: wId, batchMode: batch }) => {
-      openPanelAndQuery(providerIds, wId, batch);
+    showAISelector(({ providerIds, weightProviderId: wId, batchMode: batch, promptMode: pm }) => {
+      openPanelAndQuery(providerIds, wId, batch, pm);
     });
   });
 

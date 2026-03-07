@@ -5,6 +5,7 @@ import type {
   AIProvider,
   AuthCredentials,
   AuthStatus,
+  PromptMode,
   ProviderConfig,
   ProviderResponse,
   Question,
@@ -13,6 +14,8 @@ import type {
 const CREDENTIAL_TTL_MS = 86_400_000;
 
 export abstract class BaseProvider implements AIProvider {
+  promptMode: PromptMode = 'standard';
+
   constructor(public readonly config: ProviderConfig) {}
 
   abstract query(questions: Question[]): Promise<ProviderResponse>;
@@ -69,7 +72,7 @@ export abstract class BaseProvider implements AIProvider {
   }
 
   protected buildPrompt(questions: Question[]): string {
-    return buildRichPrompt(questions, 'standard');
+    return buildRichPrompt(questions, this.promptMode);
   }
 
   protected async findProviderTab(patterns?: string[]): Promise<number | undefined> {

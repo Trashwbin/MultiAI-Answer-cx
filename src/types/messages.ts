@@ -1,5 +1,6 @@
 import type { Question } from './question';
 import type { ProviderResponse } from './answer';
+import type { PromptMode } from './provider';
 
 interface QueryAIMessage {
   type: 'QUERY_AI';
@@ -12,6 +13,7 @@ interface QueryAllAIMessage {
   questions: Question[];
   providerIds?: string[];
   batchMode?: boolean;
+  promptMode?: PromptMode;
 }
 
 interface ShowAnswerMessage {
