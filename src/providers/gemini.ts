@@ -1,8 +1,27 @@
 import { parseAIResponse } from '../core/json-parser';
-import type { ProviderResponse, Question } from '../types';
+import type { AuthStatus, ProviderResponse, Question } from '../types';
 import { BaseProvider } from './base-provider';
 
 export class GeminiProvider extends BaseProvider {
+  async checkAuth(): Promise<AuthStatus> {
+    const base = await super.checkAuth();
+    if (base === 'authenticated') return base;
+
+    const tabId = await this.findProviderTab(['https://gemini.google.com/*']);
+    if (tabId === undefined) return 'unauthenticated';
+
+    try {
+      const results = await chrome.scripting.executeScript({
+        target: { tabId },
+        world: 'MAIN',
+        func: geminiAuthProbe,
+      });
+      return results[0]?.result === true ? 'authenticated' : 'unauthenticated';
+    } catch {
+      return 'unauthenticated';
+    }
+  }
+
   async query(question: Question): Promise<ProviderResponse> {
     try {
       const prompt = this.buildPrompt(question);
@@ -287,4 +306,11 @@ function geminiDomPoll(sentMessage: string): { text: string; isStreaming: boolea
   const isStreaming = !!stopBtn;
 
   return { text, isStreaming };
+}
+
+function geminiAuthProbe(): boolean {
+  const input = document.querySelector(
+    '[contenteditable="true"][aria-label], div[role="textbox"], textarea',
+  );
+  return input !== null && (input as HTMLElement).offsetParent !== null;
 }

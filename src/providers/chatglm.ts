@@ -1,5 +1,5 @@
 import { parseAIResponse } from '../core/json-parser';
-import type { ProviderResponse, Question } from '../types';
+import type { AuthStatus, ProviderResponse, Question } from '../types';
 import { BaseProvider } from './base-provider';
 
 const SIGN_SECRET = '8a1317a7468aa3ad86e997d08f3f31cb';
@@ -15,6 +15,25 @@ const X_EXP_GROUPS =
 
 export class ChatGLMProvider extends BaseProvider {
   private deviceId = crypto.randomUUID();
+
+  async checkAuth(): Promise<AuthStatus> {
+    const base = await super.checkAuth();
+    if (base === 'authenticated') return base;
+
+    const tabId = await this.findProviderTab(['https://chatglm.cn/*', 'https://www.chatglm.cn/*']);
+    if (tabId === undefined) return 'unauthenticated';
+
+    try {
+      const results = await chrome.scripting.executeScript({
+        target: { tabId },
+        world: 'MAIN',
+        func: chatglmAuthProbe,
+      });
+      return results[0]?.result === true ? 'authenticated' : 'unauthenticated';
+    } catch {
+      return 'unauthenticated';
+    }
+  }
 
   async query(question: Question): Promise<ProviderResponse> {
     try {
@@ -350,4 +369,8 @@ function wordsToHex(state: Md5State): string {
     }
   }
   return hexParts.join('');
+}
+
+function chatglmAuthProbe(): boolean {
+  return document.cookie.includes('chatglm_token');
 }

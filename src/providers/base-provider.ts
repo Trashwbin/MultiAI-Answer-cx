@@ -71,4 +71,14 @@ export abstract class BaseProvider implements AIProvider {
   protected buildPrompt(question: Question): string {
     return buildRichPrompt([question], 'standard');
   }
+
+  protected async findProviderTab(patterns?: string[]): Promise<number | undefined> {
+    const urlPatterns = patterns ?? [`https://${this.config.domain}/*`, `https://www.${this.config.domain}/*`];
+    for (const pattern of urlPatterns) {
+      const tabs = await chrome.tabs.query({ url: pattern });
+      const tab = tabs.find((t) => t.id !== undefined);
+      if (tab?.id !== undefined) return tab.id;
+    }
+    return undefined;
+  }
 }
