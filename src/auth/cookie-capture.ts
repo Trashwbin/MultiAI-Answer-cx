@@ -36,6 +36,7 @@ export async function captureAllCookies(
   for (const d of domains) {
     const urlBased = await chrome.cookies.getAll({ url: `https://${d}/` });
     const domainBased = await chrome.cookies.getAll({ domain: d });
+    const partitioned = await chrome.cookies.getAll({ domain: d, ...{ partitionKey: {} } }).catch(() => [] as chrome.cookies.Cookie[]);
 
     for (const cookie of urlBased) {
       if (cookie.name && !result[cookie.name]) {
@@ -43,6 +44,11 @@ export async function captureAllCookies(
       }
     }
     for (const cookie of domainBased) {
+      if (cookie.name && !result[cookie.name]) {
+        result[cookie.name] = cookie.value;
+      }
+    }
+    for (const cookie of partitioned) {
       if (cookie.name && !result[cookie.name]) {
         result[cookie.name] = cookie.value;
       }
@@ -58,11 +64,25 @@ export async function captureCookies(
 ): Promise<Record<string, string>> {
   const allCookies = await captureAllCookies(providerId, domain);
   const relevantKeys = PROVIDER_COOKIE_KEYS[providerId] ?? [];
+  const domains = PROVIDER_EXTRA_DOMAINS[providerId] ?? [domain];
   const result: Record<string, string> = {};
 
   for (const key of relevantKeys) {
     if (allCookies[key]) {
       result[key] = allCookies[key];
+      continue;
+    }
+    // Fallback: chrome.cookies.get() uses a different code path than getAll()
+    // and may find cookies that getAll() misses (Chrome partitioning bug).
+    for (const d of domains) {
+      try {
+        const cookie = await chrome.cookies.get({ url: `https://${d}/`, name: key });
+        if (cookie?.value) {
+          result[key] = cookie.value;
+          console.log(`[CookieCapture] ${providerId}: found '${key}' via get() fallback on ${d}`);
+          break;
+        }
+      } catch { /* get() failed — try next domain */ }
     }
   }
 

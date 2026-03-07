@@ -1,5 +1,6 @@
+import { mergeCredentials } from '../auth/token-manager';
 import { parseAIResponse } from '../core/json-parser';
-import type { ProviderResponse, Question } from '../types';
+import type { AuthStatus, ProviderResponse, Question } from '../types';
 import { proxyFetch } from '../utils/page-proxy';
 import { BaseProvider } from './base-provider';
 
@@ -18,10 +19,14 @@ interface QwenCompletionResponse {
 }
 
 export class QwenProvider extends BaseProvider {
+  async checkAuth(): Promise<AuthStatus> {
+    const token = await this.resolveToken();
+    return token ? 'authenticated' : 'unauthenticated';
+  }
+
   async query(question: Question): Promise<ProviderResponse> {
     try {
-      const auth = await this.getAuth();
-      const bearerToken = auth.cookies['token'] ?? '';
+      const bearerToken = await this.resolveToken();
       if (!bearerToken) throw new Error('Qwen Intl: 未找到 token — 请先登录 chat.qwen.ai');
       const prompt = this.buildPrompt(question);
       const chatId = await this.createChat(bearerToken);
@@ -59,6 +64,38 @@ export class QwenProvider extends BaseProvider {
         rawText: '',
         error: error instanceof Error ? error.message : String(error),
       };
+    }
+  }
+
+  private async resolveToken(): Promise<string> {
+    try {
+      const auth = await this.getAuth();
+      const fromCreds = auth.cookies['token'] || auth.bearerToken || '';
+      if (fromCreds) return fromCreds;
+    } catch {}
+
+    return this.readTokenFromPage();
+  }
+
+  private async readTokenFromPage(): Promise<string> {
+    const tabId = await this.findProviderTab(['https://chat.qwen.ai/*']);
+    if (tabId === undefined) return '';
+
+    try {
+      const results = await chrome.scripting.executeScript({
+        target: { tabId },
+        world: 'MAIN',
+        func: () => localStorage.getItem('token') ?? '',
+      });
+
+      const token = (results[0]?.result as string) ?? '';
+      if (token) {
+        console.log(`[QwenIntl] token captured from page localStorage (${token.length} chars)`);
+        await mergeCredentials(this.config.id, { cookies: { token } });
+      }
+      return token;
+    } catch {
+      return '';
     }
   }
 

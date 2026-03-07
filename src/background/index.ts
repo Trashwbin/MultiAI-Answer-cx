@@ -27,6 +27,7 @@ const BEARER_INTERCEPT_URLS = [
   'https://www.doubao.com/samantha/*',
   'https://chatglm.cn/chatglm/*',
   'https://chat2.qianwen.com/*',
+  'https://chat.qwen.ai/api/*',
 ];
 
 const URL_TO_PROVIDER: Record<string, string> = {
@@ -38,6 +39,7 @@ const URL_TO_PROVIDER: Record<string, string> = {
   'www.doubao.com': 'doubao',
   'chatglm.cn': 'chatglm',
   'chat2.qianwen.com': 'qwen-cn',
+  'chat.qwen.ai': 'qwen-intl',
 };
 
 chrome.webRequest.onSendHeaders.addListener(
