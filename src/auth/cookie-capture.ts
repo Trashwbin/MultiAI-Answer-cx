@@ -8,7 +8,7 @@ export const PROVIDER_COOKIE_KEYS: Record<string, string[]> = {
   doubao: ['sessionid', 'ttwid'],
   grok: ['sso', 'ct0'],
   'qwen-cn': ['tongyi_sso_ticket', 'login_aliyunid_ticket', 'XSRF-TOKEN', 'b-user-id', 'qwen_session'],
-  'qwen-intl': ['qwen_session'],
+  'qwen-intl': ['token'],
   chatglm: ['chatglm_refresh_token', 'chatglm_token'],
 };
 

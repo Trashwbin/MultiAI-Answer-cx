@@ -20,9 +20,10 @@ export class QwenProvider extends BaseProvider {
   async query(question: Question): Promise<ProviderResponse> {
     try {
       const auth = await this.getAuth();
-      const cookie = this.buildCookieHeader(auth.cookies);
+      const bearerToken = auth.cookies['token'] ?? '';
+      if (!bearerToken) throw new Error('Qwen Intl: 未找到 token — 请先登录 chat.qwen.ai');
       const prompt = this.buildPrompt(question);
-      const chatId = await this.createChat(cookie);
+      const chatId = await this.createChat(bearerToken);
 
       const completionRes = await fetch(
         `https://chat.qwen.ai/api/v2/chat/completions?chat_id=${encodeURIComponent(chatId)}`,
@@ -31,10 +32,10 @@ export class QwenProvider extends BaseProvider {
           headers: {
             'Content-Type': 'application/json',
             Accept: 'application/json',
-            Cookie: cookie,
+            Authorization: `Bearer ${bearerToken}`,
           },
           body: JSON.stringify({
-            model: 'qwen-max',
+            model: 'qwen-max-latest',
             messages: [{ role: 'user', content: prompt }],
             stream: false,
           }),
@@ -60,15 +61,15 @@ export class QwenProvider extends BaseProvider {
     }
   }
 
-  private async createChat(cookie: string): Promise<string> {
+  private async createChat(bearerToken: string): Promise<string> {
     const res = await fetch('https://chat.qwen.ai/api/v2/chats/new', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
-        Cookie: cookie,
+        Authorization: `Bearer ${bearerToken}`,
       },
-      body: JSON.stringify({ model: 'qwen-max' }),
+      body: JSON.stringify({ model: 'qwen-max-latest' }),
     });
 
     if (!res.ok) {
