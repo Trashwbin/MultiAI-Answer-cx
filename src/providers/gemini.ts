@@ -37,15 +37,17 @@ export class GeminiProvider extends BaseProvider {
           target: { tabId },
           world: 'MAIN',
           func: geminiDomPoll,
+          args: [prompt],
         });
 
         const poll = pollResults[0]?.result as { text: string; isStreaming: boolean } | undefined;
         if (!poll) continue;
 
-        if (poll.text && poll.text.length >= 30 && poll.text !== lastText) {
+        const minLen = 40;
+        if (poll.text && poll.text.length >= minLen && poll.text !== lastText) {
           lastText = poll.text;
           stableCount = 0;
-        } else if (poll.text && poll.text.length >= 30) {
+        } else if (poll.text && poll.text.length >= minLen) {
           stableCount++;
           if (!poll.isStreaming && stableCount >= 2) break;
         }
@@ -183,8 +185,42 @@ function geminiDomSend(message: string): { ok: boolean; error?: string } {
   }
 }
 
-function geminiDomPoll(): { text: string; isStreaming: boolean } {
+function geminiDomPoll(sentMessage: string): { text: string; isStreaming: boolean } {
   const clean = (t: string): string => t.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+  const sentPrefix = clean(sentMessage).slice(0, 50);
+
+  const skipTexts = [
+    'Ask Gemini',
+    '问问 Gemini',
+    'Enter a prompt',
+    '输入提示',
+    '需要我为你做些什么',
+    '发起新对话',
+    '我的内容',
+    '设置和帮助',
+    '制作图片',
+    '创作音乐',
+    '帮我学习',
+    '随便写点什么',
+    '给我的一天注入活力',
+    '升级到 Google AI Plus',
+    '正在加载',
+  ];
+  const isGreeting = (t: string): boolean =>
+    /sage[,，]?\s*你好/i.test(t) || (t.includes('你好') && (t.includes('需要') || t.includes('做些什么')));
+  const isSkip = (t: string): boolean => {
+    if (skipTexts.some((s) => t.includes(s))) return true;
+    if (isGreeting(t)) return true;
+    if (sentPrefix && t.startsWith(sentPrefix)) return true;
+    return false;
+  };
+
+  const isModelContent = (el: Element): boolean => {
+    if (el.closest('.user-turn, [class*="user-turn"], [data-message-author="user"], [data-sender="user"]')) {
+      return false;
+    }
+    return true;
+  };
 
   const sidebarRoot = document.querySelector('[aria-label*="对话"], [class*="sidebar"], nav');
   const notInSidebar = (el: Element) => !sidebarRoot?.contains(el);
@@ -207,9 +243,12 @@ function geminiDomPoll(): { text: string; isStreaming: boolean } {
 
   let text = '';
   const modelSelectors = [
+    '.model-response-text',
+    '.model-turn .model-response-text',
     '[data-message-author="model"]',
     '[data-sender="model"]',
     '[class*="model-turn"]',
+    '[class*="model-response-text"]',
     '[class*="modelResponse"]',
     '[class*="response-content"]',
     'article',
@@ -219,9 +258,9 @@ function geminiDomPoll(): { text: string; isStreaming: boolean } {
     const els = scoped.querySelectorAll(sel);
     for (let i = els.length - 1; i >= 0; i--) {
       const el = els[i] as Element | undefined;
-      if (!el || !notInSidebar(el) || !notInInputArea(el)) continue;
+      if (!el || !notInSidebar(el) || !notInInputArea(el) || !isModelContent(el)) continue;
       const t = clean((el as HTMLElement).textContent ?? '');
-      if (t.length >= 30) {
+      if (t.length >= 40 && !isSkip(t)) {
         text = t;
         break;
       }
@@ -232,9 +271,9 @@ function geminiDomPoll(): { text: string; isStreaming: boolean } {
   if (!text) {
     const candidates: Array<{ text: string }> = [];
     scoped.querySelectorAll('p, div[class], li, span[class]').forEach((el) => {
-      if (!notInSidebar(el) || !notInInputArea(el)) return;
+      if (!notInSidebar(el) || !notInInputArea(el) || !isModelContent(el)) return;
       const t = clean((el as HTMLElement).textContent ?? '');
-      if (t.length > 50 && !candidates.some((c) => c.text === t)) {
+      if (t.length > 50 && !isSkip(t) && !candidates.some((c) => c.text === t)) {
         candidates.push({ text: t });
       }
     });
