@@ -7,6 +7,10 @@ export enum QuestionType {
   QA = '简答题',
   WORD_DEFINITION = '名词解释',
   OTHER = '其他',
+  READING_COMPREHENSION = '阅读理解',
+  CLOZE = '完形填空',
+  SHARED_OPTIONS = '共用选项题',
+  WORD_FILL = '选词填空',
 }
 
 export interface QuestionOption {
@@ -21,4 +25,11 @@ export interface Question {
   content: string;
   options: QuestionOption[];
   blankCount: number;
+  globalOrder?: number;
+  subQuestions?: Array<{
+    index: number;
+    content: string;
+    options: QuestionOption[];
+    type?: QuestionType;
+  }>;
 }

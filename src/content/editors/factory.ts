@@ -20,6 +20,10 @@ const editorMap: Record<QuestionType, EditorFactory> = {
   [QuestionType.QA]: createQAEditor,
   [QuestionType.WORD_DEFINITION]: createQAEditor,
   [QuestionType.OTHER]: createQAEditor,
+  [QuestionType.READING_COMPREHENSION]: createQAEditor,
+  [QuestionType.CLOZE]: createQAEditor,
+  [QuestionType.SHARED_OPTIONS]: createQAEditor,
+  [QuestionType.WORD_FILL]: createQAEditor,
 };
 
 export function createEditor(question: Question, answer: FinalAnswer | null): QuestionEditor {

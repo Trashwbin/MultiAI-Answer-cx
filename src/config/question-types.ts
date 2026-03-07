@@ -19,6 +19,12 @@ export const QUESTION_TYPE_MAP: Record<string, QuestionType> = {
   '计算题': QuestionType.QA,
   '名词解释': QuestionType.WORD_DEFINITION,
   '其他': QuestionType.OTHER,
+  '阅读理解': QuestionType.READING_COMPREHENSION,
+  '完形填空': QuestionType.CLOZE,
+  '完型填空': QuestionType.CLOZE,
+  '共用选项题': QuestionType.SHARED_OPTIONS,
+  '共用选项': QuestionType.SHARED_OPTIONS,
+  '选词填空': QuestionType.WORD_FILL,
 };
 
 export const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
@@ -29,10 +35,18 @@ export const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
   [QuestionType.QA]: '简答题',
   [QuestionType.WORD_DEFINITION]: '名词解释',
   [QuestionType.OTHER]: '其他',
+  [QuestionType.READING_COMPREHENSION]: '阅读理解',
+  [QuestionType.CLOZE]: '完形填空',
+  [QuestionType.SHARED_OPTIONS]: '共用选项题',
+  [QuestionType.WORD_FILL]: '选词填空',
 };
 
 // Detection patterns ordered from most specific to least specific
 const DETECTION_RULES: ReadonlyArray<{ pattern: RegExp; type: QuestionType }> = [
+  { pattern: /阅读理解/, type: QuestionType.READING_COMPREHENSION },
+  { pattern: /完[形型]填空/, type: QuestionType.CLOZE },
+  { pattern: /共用选项/, type: QuestionType.SHARED_OPTIONS },
+  { pattern: /选词填空/, type: QuestionType.WORD_FILL },
   { pattern: /多选/, type: QuestionType.MULTIPLE_CHOICE },
   { pattern: /单选/, type: QuestionType.SINGLE_CHOICE },
   { pattern: /判断|是非/, type: QuestionType.JUDGE },

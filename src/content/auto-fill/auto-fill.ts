@@ -4,6 +4,12 @@ import { fillChoiceAnswer } from './fill-choice';
 import { fillBlankAnswers } from './fill-blank';
 import { fillJudgeAnswer } from './fill-judge';
 import { fillQAAnswer } from './fill-qa';
+import {
+  fillReadingAnswer,
+  fillClozeAnswer,
+  fillSharedOptionsAnswer,
+  fillWordFillAnswer,
+} from './fill-composite';
 
 const FILL_DELAY_MS = 100;
 
@@ -47,6 +53,18 @@ function fillByType(
         questionDiv,
         Array.isArray(answer) ? answer.join('\n') : answer,
       );
+
+    case QuestionType.READING_COMPREHENSION:
+      return fillReadingAnswer(questionDiv, answer);
+
+    case QuestionType.CLOZE:
+      return fillClozeAnswer(questionDiv, answer);
+
+    case QuestionType.SHARED_OPTIONS:
+      return fillSharedOptionsAnswer(questionDiv, answer);
+
+    case QuestionType.WORD_FILL:
+      return fillWordFillAnswer(questionDiv, answer);
   }
 }
 
