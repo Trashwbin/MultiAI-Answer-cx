@@ -71,7 +71,7 @@ export const AI_PROVIDERS: readonly ProviderConfig[] = [
     domain: 'chat.qwen.ai',
     color: '#FF6A00',
     weight: 1.0,
-    enabled: false,
+    enabled: true,
   },
   {
     id: 'chatglm',
@@ -81,30 +81,7 @@ export const AI_PROVIDERS: readonly ProviderConfig[] = [
     weight: 1.0,
     enabled: true,
   },
-  {
-    id: 'mock-fast',
-    name: 'Mock 快速',
-    domain: 'localhost',
-    color: '#9333EA',
-    weight: 1.0,
-    enabled: false,
-  },
-  {
-    id: 'mock-slow',
-    name: 'Mock 慢速',
-    domain: 'localhost',
-    color: '#0891B2',
-    weight: 1.0,
-    enabled: false,
-  },
-  {
-    id: 'mock-fail',
-    name: 'Mock 失败',
-    domain: 'localhost',
-    color: '#DC2626',
-    weight: 1.0,
-    enabled: false,
-  },
+
 ] as const satisfies readonly ProviderConfig[];
 
 const providerMap = new Map<string, ProviderConfig>(
