@@ -144,8 +144,10 @@ function chatglmPageQuery(
         return { ok: false as const, error: `ChatGLM API ${res.status}: ${errText.slice(0, 300)}` };
       }
 
+      // ChatGLM SSE: each event contains the FULL accumulated text (not a delta).
+      // We keep only the last (most complete) value.
       const sse = await res.text();
-      const chunks: string[] = [];
+      let lastText = '';
       for (const line of sse.split('\n')) {
         const trimmed = line.trim();
         if (!trimmed.startsWith('data:')) continue;
@@ -182,11 +184,11 @@ function chatglmPageQuery(
                    (typeof obj.delta === 'string' ? obj.delta : '');
           }
 
-          if (text) chunks.push(text);
+          if (text) lastText = text;
         } catch {}
       }
 
-      return { ok: true as const, text: chunks.join('') };
+      return { ok: true as const, text: lastText };
     } catch (e: unknown) {
       return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
     }
