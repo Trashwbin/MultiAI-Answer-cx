@@ -10,14 +10,6 @@ interface QwenCreateChatResponse {
   };
 }
 
-interface QwenCompletionResponse {
-  choices?: Array<{
-    message?: {
-      content?: string;
-    };
-  }>;
-}
-
 export class QwenProvider extends BaseProvider {
   async checkAuth(): Promise<AuthStatus> {
     const token = await this.resolveToken();
@@ -38,13 +30,13 @@ export class QwenProvider extends BaseProvider {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Accept: 'application/json',
+            Accept: 'text/event-stream, application/json',
             Authorization: `Bearer ${bearerToken}`,
           },
           body: JSON.stringify({
             model: 'qwen-max-latest',
             messages: [{ role: 'user', content: prompt }],
-            stream: false,
+            stream: true,
           }),
         },
       );
@@ -53,8 +45,13 @@ export class QwenProvider extends BaseProvider {
         throw new Error(`Qwen API ${res.status}: ${res.body.slice(0, 300)}`);
       }
 
-      const data = JSON.parse(res.body) as QwenCompletionResponse;
-      const rawText = data.choices?.[0]?.message?.content ?? '';
+      console.log(`[QwenIntl] response (${res.body.length} chars): ${res.body.slice(0, 200)}`);
+
+      const rawText = this.extractContent(res.body);
+      if (!rawText) {
+        throw new Error(`Qwen Intl: empty response body=${res.body.slice(0, 300)}`);
+      }
+
       const parsed = parseAIResponse(rawText, this.config.id);
       return { ...parsed, rawText };
     } catch (error) {
@@ -65,6 +62,63 @@ export class QwenProvider extends BaseProvider {
         error: error instanceof Error ? error.message : String(error),
       };
     }
+  }
+
+  private extractContent(body: string): string {
+    if (body.includes('data:')) {
+      return this.parseSse(body);
+    }
+    try {
+      const data = JSON.parse(body) as Record<string, unknown>;
+      const choices = data.choices as Array<{ message?: { content?: string } }> | undefined;
+      return choices?.[0]?.message?.content ?? '';
+    } catch {
+      return body;
+    }
+  }
+
+  private parseSse(sse: string): string {
+    let lastContent = '';
+    const deltaParts: string[] = [];
+    let usedAccumulated = false;
+
+    for (const line of sse.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith('data:')) continue;
+      const payload = trimmed.slice(5).trim();
+      if (!payload || payload === '[DONE]') continue;
+      try {
+        const data = JSON.parse(payload) as Record<string, unknown>;
+
+        const choices = data.choices as Array<{
+          delta?: { content?: string };
+          message?: { content?: string };
+        }> | undefined;
+
+        const msgContent = choices?.[0]?.message?.content;
+        if (typeof msgContent === 'string' && msgContent) {
+          lastContent = msgContent;
+          usedAccumulated = true;
+          continue;
+        }
+
+        const deltaContent = choices?.[0]?.delta?.content;
+        if (typeof deltaContent === 'string') {
+          deltaParts.push(deltaContent);
+          continue;
+        }
+
+        const text =
+          (typeof data.text === 'string' ? data.text : undefined) ??
+          (typeof data.content === 'string' ? data.content : undefined);
+        if (typeof text === 'string') {
+          deltaParts.push(text);
+        }
+      } catch {}
+    }
+
+    if (usedAccumulated && lastContent) return lastContent;
+    return deltaParts.join('');
   }
 
   private async resolveToken(): Promise<string> {
