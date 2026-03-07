@@ -3,9 +3,9 @@ import type { ProviderResponse, Question } from '../types';
 import { BaseProvider } from './base-provider';
 
 export class GrokProvider extends BaseProvider {
-  async query(question: Question): Promise<ProviderResponse> {
+  async query(questions: Question[]): Promise<ProviderResponse> {
     try {
-      const prompt = this.buildPrompt(question);
+      const prompt = this.buildPrompt(questions);
       const tabId = await this.ensureGrokTab();
 
       const apiResults = await chrome.scripting.executeScript({

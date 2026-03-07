@@ -21,6 +21,6 @@ export interface ProviderConfig {
 
 export interface AIProvider {
   config: ProviderConfig;
-  query(question: Question): Promise<ProviderResponse>;
+  query(questions: Question[]): Promise<ProviderResponse>;
   checkAuth(): Promise<AuthStatus>;
 }

@@ -22,9 +22,9 @@ export class ChatGPTProvider extends BaseProvider {
     }
   }
 
-  async query(question: Question): Promise<ProviderResponse> {
+  async query(questions: Question[]): Promise<ProviderResponse> {
     try {
-      const prompt = this.buildPrompt(question);
+      const prompt = this.buildPrompt(questions);
       const tabId = await this.ensureChatGPTTab();
 
       const apiResults = await chrome.scripting.executeScript({

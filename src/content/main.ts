@@ -108,10 +108,10 @@ function safeSendMessage(message: ExtensionMessage): void {
   chrome.runtime.sendMessage(message).catch(() => {});
 }
 
-function sendQueryAllAI(providerIds?: string[]): void {
+function sendQueryAllAI(providerIds?: string[], batchMode?: boolean): void {
   if (questions.length === 0) return;
 
-  safeSendMessage({ type: 'QUERY_ALL_AI', questions, providerIds });
+  safeSendMessage({ type: 'QUERY_ALL_AI', questions, providerIds, batchMode });
 }
 
 function buildPanelCallbacks(): {
@@ -137,7 +137,7 @@ function buildPanelCallbacks(): {
   };
 }
 
-function openPanelAndQuery(providerIds: string[], wId: string | null): void {
+function openPanelAndQuery(providerIds: string[], wId: string | null, batch?: boolean): void {
   selectedProviderIds = providerIds;
   weightProviderId = wId;
   finalAnswers = [];
@@ -146,7 +146,7 @@ function openPanelAndQuery(providerIds: string[], wId: string | null): void {
     { questions, finalAnswers, providerIds, weightProviderId: wId, isLoading: true },
     buildPanelCallbacks(),
   );
-  sendQueryAllAI(providerIds);
+  sendQueryAllAI(providerIds, batch);
 }
 
 function handlePopupMessage(
@@ -199,8 +199,8 @@ function handlePopupMessage(
         sendResponse({ success: false, error: '\u5F53\u524D\u9875\u9762\u672A\u627E\u5230\u9898\u76EE' });
         break;
       }
-      showAISelector(({ providerIds, weightProviderId: wId }) => {
-        openPanelAndQuery(providerIds, wId);
+      showAISelector(({ providerIds, weightProviderId: wId, batchMode: batch }) => {
+        openPanelAndQuery(providerIds, wId, batch);
       });
       sendResponse({ success: true });
       break;
@@ -251,8 +251,8 @@ function initialize(): void {
   setQuestionListSendCallback((selected) => {
     questions = selected;
     hideQuestionList();
-    showAISelector(({ providerIds, weightProviderId: wId }) => {
-      openPanelAndQuery(providerIds, wId);
+    showAISelector(({ providerIds, weightProviderId: wId, batchMode: batch }) => {
+      openPanelAndQuery(providerIds, wId, batch);
     });
   });
 

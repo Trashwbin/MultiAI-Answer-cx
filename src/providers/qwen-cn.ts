@@ -30,10 +30,10 @@ export class QwenCnProvider extends BaseProvider {
     }
   }
 
-  async query(question: Question): Promise<ProviderResponse> {
+  async query(questions: Question[]): Promise<ProviderResponse> {
     try {
       const auth = await this.getAuth();
-      const prompt = this.buildPrompt(question);
+      const prompt = this.buildPrompt(questions);
       const timestamp = Date.now().toString();
       const nonce = crypto.randomUUID();
       const ut = auth.cookies['b-user-id'] || `random-${crypto.randomUUID().slice(0, 12)}`;

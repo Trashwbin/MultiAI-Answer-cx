@@ -15,7 +15,7 @@ const CREDENTIAL_TTL_MS = 86_400_000;
 export abstract class BaseProvider implements AIProvider {
   constructor(public readonly config: ProviderConfig) {}
 
-  abstract query(question: Question): Promise<ProviderResponse>;
+  abstract query(questions: Question[]): Promise<ProviderResponse>;
 
   async checkAuth(): Promise<AuthStatus> {
     try {
@@ -68,8 +68,8 @@ export abstract class BaseProvider implements AIProvider {
       .join('; ');
   }
 
-  protected buildPrompt(question: Question): string {
-    return buildRichPrompt([question], 'standard');
+  protected buildPrompt(questions: Question[]): string {
+    return buildRichPrompt(questions, 'standard');
   }
 
   protected async findProviderTab(patterns?: string[]): Promise<number | undefined> {

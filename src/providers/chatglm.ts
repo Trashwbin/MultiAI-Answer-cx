@@ -37,9 +37,9 @@ export class ChatGLMProvider extends BaseProvider {
     }
   }
 
-  async query(question: Question): Promise<ProviderResponse> {
+  async query(questions: Question[]): Promise<ProviderResponse> {
     try {
-      const prompt = this.buildPrompt(question);
+      const prompt = this.buildPrompt(questions);
       const tabId = await this.ensureChatGLMTab();
       const signData = createSign();
       const requestId = crypto.randomUUID();
@@ -425,5 +425,4 @@ function wordsToHex(state: Md5State): string {
   }
   return hexParts.join('');
 }
-
 

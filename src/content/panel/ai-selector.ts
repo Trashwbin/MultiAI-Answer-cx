@@ -9,6 +9,7 @@ const ANIM = 'aiSel';
 type SelectCallback = (result: {
   providerIds: string[];
   weightProviderId: string | null;
+  batchMode: boolean;
 }) => void;
 
 interface CardState {
@@ -23,6 +24,7 @@ let cards: CardState[] = [];
 let currentWeightId: string | null = null;
 let visibilityHandler: (() => void) | null = null;
 let stylesInjected = false;
+let batchMode = true;
 
 /* ── Public API ──────────────────────────────────────── */
 
@@ -298,12 +300,67 @@ function buildFooter(
     ),
   });
 
+  const leftGroup = mk('div', {
+    style: 'display:flex;flex-direction:column;gap:6px;min-width:0;',
+  });
+
   const count = mk('span', {
     id: 'ai-sel-count',
     style: 'color:#718096;font-size:14px;font-weight:500;white-space:nowrap;',
   });
   count.textContent = '\u68C0\u67E5\u8BA4\u8BC1\u72B6\u6001\u4E2D...';
-  footer.appendChild(count);
+  leftGroup.appendChild(count);
+
+  /* ── Batch mode toggle ── */
+  const toggleRow = mk('div', {
+    style: j('display:flex', 'align-items:center', 'gap:8px'),
+  });
+
+  const toggleLabel = mk('span', {
+    style: 'color:#718096;font-size:12px;white-space:nowrap;',
+  });
+  toggleLabel.textContent = '\u53D1\u9001\u6A21\u5F0F\uFF1A';
+
+  const toggleTrack = mk('div', {
+    id: 'ai-sel-batch-toggle',
+    style: j(
+      'width:36px', 'height:20px', 'border-radius:10px',
+      'background:#4caf50', 'position:relative', 'cursor:pointer',
+      'transition:background 0.2s', 'flex-shrink:0',
+    ),
+  });
+  const toggleThumb = mk('div', {
+    style: j(
+      'width:16px', 'height:16px', 'border-radius:50%',
+      'background:#fff', 'position:absolute', 'top:2px', 'left:18px',
+      'transition:left 0.2s', 'box-shadow:0 1px 3px rgba(0,0,0,0.2)',
+    ),
+  });
+  toggleTrack.appendChild(toggleThumb);
+
+  const toggleText = mk('span', {
+    id: 'ai-sel-batch-text',
+    style: 'color:#4a5568;font-size:12px;font-weight:500;white-space:nowrap;',
+  });
+  toggleText.textContent = '\u6279\u91CF\u53D1\u9001';
+
+  function updateToggleUI(): void {
+    toggleTrack.style.background = batchMode ? '#4caf50' : '#cbd5e0';
+    toggleThumb.style.left = batchMode ? '18px' : '2px';
+    toggleText.textContent = batchMode ? '\u6279\u91CF\u53D1\u9001' : '\u9010\u9898\u53D1\u9001';
+  }
+
+  toggleTrack.addEventListener('click', () => {
+    batchMode = !batchMode;
+    updateToggleUI();
+  });
+
+  toggleRow.appendChild(toggleLabel);
+  toggleRow.appendChild(toggleTrack);
+  toggleRow.appendChild(toggleText);
+  leftGroup.appendChild(toggleRow);
+
+  footer.appendChild(leftGroup);
 
   const actions = mk('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;' });
 
@@ -332,7 +389,7 @@ function buildFooter(
   const send = mkBtn('\u53D1\u9001\u5230 AI', '#4caf50', '#fff', () => {
     const ids = cards.filter((c) => c.selected).map((c) => c.config.id);
     if (ids.length === 0) return;
-    animateClose(() => onConfirm({ providerIds: ids, weightProviderId: currentWeightId }));
+    animateClose(() => onConfirm({ providerIds: ids, weightProviderId: currentWeightId, batchMode }));
   });
   send.id = 'ai-sel-send';
   send.style.fontWeight = '600';

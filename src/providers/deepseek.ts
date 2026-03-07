@@ -104,11 +104,11 @@ export class DeepSeekProvider extends BaseProvider {
     });
   }
 
-  async query(question: Question): Promise<ProviderResponse> {
+  async query(questions: Question[]): Promise<ProviderResponse> {
     try {
       const auth = await this.getAuth();
       await this.resolveBearer(auth);
-      const prompt = this.buildPrompt(question);
+      const prompt = this.buildPrompt(questions);
       const sessionId = await this.createChatSession(auth);
       const challenge = await this.createPowChallenge(auth);
       const answer = await this.solvePow(challenge);

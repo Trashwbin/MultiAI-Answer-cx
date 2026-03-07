@@ -11,6 +11,7 @@ interface QueryAllAIMessage {
   type: 'QUERY_ALL_AI';
   questions: Question[];
   providerIds?: string[];
+  batchMode?: boolean;
 }
 
 interface ShowAnswerMessage {

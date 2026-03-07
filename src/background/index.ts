@@ -1,4 +1,4 @@
-import type { ExtensionMessage, Question, QuestionAnswer, ProviderResponse } from '../types';
+import type { ExtensionMessage, Question } from '../types';
 import { QuestionType } from '../types/question';
 import { getProviderById, getProvidersByIds, getEnabledProviders } from '../providers/registry';
 import { AI_PROVIDERS, getProviderById as getProviderConfig } from '../config/ai-config';
@@ -80,7 +80,7 @@ chrome.runtime.onMessage.addListener(
           sendResponse({ success: false, error: 'No sender tab' });
           break;
         }
-        handleQueryAllAI(message.questions, tabId, message.providerIds).catch((err: unknown) => {
+        handleQueryAllAI(message.questions, tabId, message.providerIds, message.batchMode).catch((err: unknown) => {
           console.error('[SW] QUERY_ALL_AI failed:', err);
         });
         sendResponse({ success: true });
@@ -244,13 +244,15 @@ async function handleQueryAllAI(
   questions: Question[],
   senderTabId: number,
   providerIds?: string[],
+  batchMode?: boolean,
 ): Promise<void> {
+  const batch = batchMode !== false;
   const providers = providerIds?.length
     ? getProvidersByIds(providerIds)
     : getEnabledProviders();
 
   const ids = providers.map((p) => p.config.id);
-  console.log('[SW] QUERY_ALL_AI: querying', ids.join(', '));
+  console.log(`[SW] QUERY_ALL_AI: querying ${ids.join(', ')} (${batch ? 'batch' : 'single'})`);
 
   await safeSendToTab(senderTabId, {
     type: 'QUERY_START' as const,
@@ -262,41 +264,18 @@ async function handleQueryAllAI(
   await Promise.allSettled(
     providers.map(async (provider) => {
       const pid = provider.config.id;
-      console.log(`[SW] ${pid}: starting query...`);
+      console.log(`[SW] ${pid}: starting query (${batch ? 'batch' : 'single'})...`);
 
       try {
-        const allAnswers: QuestionAnswer[] = [];
-        const rawTexts: string[] = [];
-        let firstError: string | undefined;
-
-        for (const question of questions) {
-          const resp = await provider.query(question);
-          if (resp.error && !firstError) {
-            firstError = resp.error;
-          }
-          allAnswers.push(...resp.answers);
-          rawTexts.push(resp.rawText);
-        }
-
-        const joinedRaw = rawTexts.join('\n---\n');
-        const response: ProviderResponse = {
-          providerId: pid,
-          answers: allAnswers,
-          rawText: joinedRaw,
-          ...(allAnswers.length === 0 && firstError ? { error: firstError } : {}),
-        };
-
-        if (response.error) {
-          console.error(`[SW] ${pid}: FAIL -`, response.error);
+        if (batch) {
+          const response = await provider.query(questions);
+          logAndSendResponse(pid, response, senderTabId);
         } else {
-          console.log(`[SW] ${pid}: OK, ${allAnswers.length} answers, rawText ${joinedRaw.length} chars`);
+          for (const q of questions) {
+            const response = await provider.query([q]);
+            await logAndSendResponse(pid, response, senderTabId);
+          }
         }
-
-        await safeSendToTab(senderTabId, {
-          type: 'SHOW_ANSWER' as const,
-          providerId: pid,
-          response,
-        });
       } catch (err: unknown) {
         const errMsg = err instanceof Error ? err.message : String(err);
         console.error(`[SW] ${pid}: EXCEPTION -`, errMsg);
@@ -322,6 +301,24 @@ async function handleQueryAllAI(
   });
 }
 
+async function logAndSendResponse(
+  pid: string,
+  response: import('../types').ProviderResponse,
+  senderTabId: number,
+): Promise<void> {
+  if (response.error) {
+    console.error(`[SW] ${pid}: FAIL -`, response.error);
+  } else {
+    console.log(`[SW] ${pid}: OK, ${response.answers.length} answers, rawText ${response.rawText.length} chars`);
+  }
+
+  await safeSendToTab(senderTabId, {
+    type: 'SHOW_ANSWER' as const,
+    providerId: pid,
+    response,
+  });
+}
+
 async function handleQuerySingleAI(
   providerId: string,
   questions: Question[],
@@ -332,20 +329,7 @@ async function handleQuerySingleAI(
     throw new Error(`Unknown provider: ${providerId}`);
   }
 
-  const allAnswers: QuestionAnswer[] = [];
-  const rawTexts: string[] = [];
-
-  for (const question of questions) {
-    const resp = await provider.query(question);
-    allAnswers.push(...resp.answers);
-    rawTexts.push(resp.rawText);
-  }
-
-  const response: ProviderResponse = {
-    providerId,
-    answers: allAnswers,
-    rawText: rawTexts.join('\n---\n'),
-  };
+  const response = await provider.query(questions);
 
   await safeSendToTab(senderTabId, {
     type: 'SHOW_ANSWER' as const,
@@ -379,7 +363,7 @@ async function handleTestProvider(
 
   const start = performance.now();
   try {
-    const resp = await provider.query(testQuestion);
+    const resp = await provider.query([testQuestion]);
     const elapsed = Math.round(performance.now() - start);
     return {
       success: true,

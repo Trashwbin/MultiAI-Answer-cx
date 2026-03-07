@@ -22,9 +22,9 @@ export class GeminiProvider extends BaseProvider {
     }
   }
 
-  async query(question: Question): Promise<ProviderResponse> {
+  async query(questions: Question[]): Promise<ProviderResponse> {
     try {
-      const prompt = this.buildPrompt(question);
+      const prompt = this.buildPrompt(questions);
       const tabId = await this.ensureGeminiTab();
 
       const sendResults = await chrome.scripting.executeScript({

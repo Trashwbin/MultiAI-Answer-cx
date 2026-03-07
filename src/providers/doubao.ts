@@ -61,10 +61,10 @@ export class DoubaoProvider extends BaseProvider {
     return chunks.join('');
   }
 
-  async query(question: Question): Promise<ProviderResponse> {
+  async query(questions: Question[]): Promise<ProviderResponse> {
     try {
       const auth = await this.getAuth();
-      const prompt = this.buildPrompt(question);
+      const prompt = this.buildPrompt(questions);
 
       const url =
         'https://www.doubao.com/samantha/chat/completion?aid=497858&device_platform=web&language=zh&pkg_type=release_version&real_aid=497858&region=CN&samantha_web=1&sys_region=CN&use_olympus_account=1&version_code=20800';

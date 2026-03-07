@@ -1,4 +1,4 @@
-import type { AIProvider, Question, QuestionAnswer, ProviderResponse, FinalAnswer } from '../types';
+import type { AIProvider, Question, ProviderResponse, FinalAnswer } from '../types';
 import { getEnabledProviders, getProvidersByIds } from '../providers/registry';
 import { aggregateAnswers } from './answer-aggregator';
 
@@ -20,23 +20,10 @@ async function queryProviderQuestions(
   questions: Question[],
   signal: AbortSignal,
 ): Promise<ProviderResponse> {
-  const allAnswers: QuestionAnswer[] = [];
-  const rawTexts: string[] = [];
-
-  for (const question of questions) {
-    if (signal.aborted) {
-      throw new DOMException('Query timed out', 'AbortError');
-    }
-    const response = await provider.query(question);
-    allAnswers.push(...response.answers);
-    rawTexts.push(response.rawText);
+  if (signal.aborted) {
+    throw new DOMException('Query timed out', 'AbortError');
   }
-
-  return {
-    providerId: provider.config.id,
-    answers: allAnswers,
-    rawText: rawTexts.join('\n---\n'),
-  };
+  return provider.query(questions);
 }
 
 export async function queryAllProviders(
