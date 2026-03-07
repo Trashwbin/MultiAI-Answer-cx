@@ -2,6 +2,7 @@ export const PROVIDER_COOKIE_KEYS: Record<string, string[]> = {
   deepseek: ['userToken', 'ds_session_id'],
   kimi: ['access_token', 'refresh_token', 'kimi-auth'],
   claude: ['sessionKey', 'CH_SESSION'],
+  // TODO: ChatGPT auth cookies may have changed; verify latest key(s) used by /api/auth/session.
   chatgpt: ['__Secure-next-auth.session-token', 'cf_clearance'],
   gemini: ['SID', 'HSID', 'SSID'],
   doubao: ['sessionid', 'ttwid'],

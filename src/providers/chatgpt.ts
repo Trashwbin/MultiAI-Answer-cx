@@ -143,9 +143,11 @@ function chatgptApiQuery(
 ): Promise<{ ok: true; text: string } | { ok: false; error: string; is403: boolean }> {
   return (async () => {
     try {
+      console.log('[ChatGPT API] fetching session');
       const sessionRes = await fetch('https://chatgpt.com/api/auth/session', {
         credentials: 'include',
       });
+      console.log('[ChatGPT API] session status:', sessionRes.status);
       if (!sessionRes.ok) {
         return { ok: false as const, error: `ChatGPT session ${sessionRes.status}`, is403: false };
       }
@@ -172,6 +174,7 @@ function chatgptApiQuery(
 
       let sentinelToken = '';
       try {
+        console.log('[ChatGPT API] fetching sentinel requirements');
         const sentinelRes = await fetch(
           'https://chatgpt.com/backend-api/sentinel/chat-requirements',
           {
@@ -180,11 +183,14 @@ function chatgptApiQuery(
             credentials: 'include',
           },
         );
+        console.log('[ChatGPT API] sentinel status:', sentinelRes.status);
         if (sentinelRes.ok) {
           const data = (await sentinelRes.json()) as { token?: string };
           sentinelToken = data.token ?? '';
         }
-      } catch {}
+      } catch (e: unknown) {
+        console.log('[ChatGPT API] sentinel fetch error:', e instanceof Error ? e.message : String(e));
+      }
 
       const headers: Record<string, string> = {
         ...baseHeaders,
@@ -212,12 +218,14 @@ function chatgptApiQuery(
         force_use_sse: true,
       };
 
+      console.log('[ChatGPT API] posting conversation');
       const res = await fetch('https://chatgpt.com/backend-api/conversation', {
         method: 'POST',
         headers,
         body: JSON.stringify(body),
         credentials: 'include',
       });
+      console.log('[ChatGPT API] conversation status:', res.status);
 
       if (!res.ok) {
         const errText = await res.text();
@@ -339,38 +347,28 @@ function chatgptDomSend(message: string): { ok: boolean; error?: string } {
 function chatgptDomPoll(): { text: string; isStreaming: boolean } {
   const clean = (t: string): string => t.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
 
+  const scope = document.querySelector('main') ?? document.body;
   const selectors = [
     'div[data-message-author-role="assistant"]',
     '.agent-turn [data-message-author-role="assistant"]',
-    '[class*="assistant"]',
-    '[class*="markdown"]',
-    '[class*="response"]',
-    'article',
-    '.prose',
   ];
+  const inConversationTurn = (el: Element): boolean =>
+    !!el.closest('[data-testid^="conversation-turn"], [data-testid*="conversation"], .agent-turn');
 
   let text = '';
   for (const sel of selectors) {
-    const els = document.querySelectorAll(sel);
-    const last = els.length > 0 ? els[els.length - 1] : null;
-    if (last) {
-      const t = clean((last as HTMLElement).textContent ?? '');
-      if (t.length > 10) {
+    const els = scope.querySelectorAll(sel);
+    for (let i = els.length - 1; i >= 0; i--) {
+      const el = els.item(i);
+      if (!el) continue;
+      if (!inConversationTurn(el)) continue;
+      const t = clean((el as HTMLElement).textContent ?? '');
+      if (t.length >= 10) {
         text = t;
         break;
       }
     }
-  }
-
-  if (!text) {
-    const all = document.querySelectorAll('p, div[class]');
-    for (let i = all.length - 1; i >= 0; i--) {
-      const t = clean((all[i] as HTMLElement).textContent ?? '');
-      if (t.length > 20) {
-        text = t;
-        break;
-      }
-    }
+    if (text) break;
   }
 
   const stopBtn = document.querySelector(
