@@ -142,13 +142,19 @@ function chatglmPageQuery(
             Authorization: `Bearer ${refreshToken}`,
             'App-Name': 'chatglm',
             'X-App-Platform': 'pc',
-            'X-Device-Id': deviceId,
-            'X-Request-Id': crypto.randomUUID(),
+            'X-App-Version': '0.0.1',
+            'X-App-Fr': 'browser_extension',
+            'X-Lang': 'zh',
+            'X-Device-Brand': '',
+            'X-Device-Model': '',
+            'X-Device-Id': deviceId.replace(/-/g, ''),
+            'X-Request-Id': crypto.randomUUID().replace(/-/g, ''),
             'X-Sign': signData.sign,
             'X-Nonce': signData.nonce,
             'X-Timestamp': signData.timestamp,
           },
           body: '{}',
+          credentials: 'include',
         });
 
         if (!refreshRes.ok) {
