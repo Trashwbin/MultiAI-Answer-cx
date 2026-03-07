@@ -37,8 +37,7 @@ export function showAISelector(onConfirm: SelectCallback, onCancel?: () => void)
     selected: false,
   }));
 
-  const defaultWeight = AI_PROVIDERS.find((p) => p.weight > 1 && p.enabled);
-  currentWeightId = defaultWeight?.id ?? AI_PROVIDERS.find((p) => p.enabled)?.id ?? null;
+  currentWeightId = AI_PROVIDERS.find((p) => p.enabled)?.id ?? null;
 
   injectStyles();
   const modal = buildModal(onConfirm, onCancel);

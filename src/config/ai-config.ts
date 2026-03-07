@@ -6,7 +6,7 @@ export const AI_PROVIDERS: readonly ProviderConfig[] = [
     name: 'DeepSeek',
     domain: 'chat.deepseek.com',
     color: '#4D6BFE',
-    weight: 1.0,
+    weight: 1.2,
     enabled: true,
   },
   {
@@ -14,22 +14,6 @@ export const AI_PROVIDERS: readonly ProviderConfig[] = [
     name: 'Kimi',
     domain: 'www.kimi.com',
     color: '#1A73E8',
-    weight: 1.0,
-    enabled: true,
-  },
-  {
-    id: 'chatgpt',
-    name: 'ChatGPT',
-    domain: 'chatgpt.com',
-    color: '#10A37F',
-    weight: 1.2,
-    enabled: true,
-  },
-  {
-    id: 'gemini',
-    name: 'Gemini',
-    domain: 'gemini.google.com',
-    color: '#4285F4',
     weight: 1.0,
     enabled: true,
   },
@@ -65,7 +49,14 @@ export const AI_PROVIDERS: readonly ProviderConfig[] = [
     weight: 1.0,
     enabled: true,
   },
-
+  {
+    id: 'chatgpt',
+    name: 'ChatGPT',
+    domain: 'chatgpt.com',
+    color: '#10A37F',
+    weight: 1.0,
+    enabled: true,
+  },
 ] as const satisfies readonly ProviderConfig[];
 
 const providerMap = new Map<string, ProviderConfig>(
