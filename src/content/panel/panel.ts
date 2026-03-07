@@ -1,373 +1,1092 @@
 import type { Question, FinalAnswer, ProviderResponse } from '../../types';
 import { getProviderById } from '../../config/ai-config';
 import { createEditor } from '../editors/factory';
-import { showLoading, hideLoading } from './loading';
+
+/* ── Constants ────────────────────────────────────────── */
 
 const PANEL_ID = 'ai-answers-panel';
+const ANIM = 'aiPanel';
+
+/* ── Exported Interfaces ─────────────────────────────── */
 
 export interface AnswerPanelState {
   questions: Question[];
   finalAnswers: FinalAnswer[];
+  providerIds?: string[];
+  weightProviderId?: string | null;
   isLoading: boolean;
+}
+
+export interface AnswerPanelCallbacks {
+  onAutoFill: () => void;
+  onRetransmit: (providerId: string) => void;
+  onRemoveProvider: (providerId: string) => void;
+  onWeightChange: (providerId: string | null) => void;
 }
 
 export type AutoFillCallback = () => void;
 
-let currentPanel: HTMLElement | null = null;
-let onAutoFill: AutoFillCallback | null = null;
+/* ── Internal Types ──────────────────────────────────── */
 
-export function setAutoFillCallback(cb: AutoFillCallback): void {
-  onAutoFill = cb;
+interface DropdownItem {
+  id: string;
+  label: string;
+  color: string;
+  suffix?: string;
+  onClick: () => void;
 }
 
-export function showAnswerPanel(state: AnswerPanelState): void {
+/* ── Module State ────────────────────────────────────── */
+
+let currentPanel: HTMLElement | null = null;
+let panelState: AnswerPanelState | null = null;
+let panelCallbacks: AnswerPanelCallbacks | null = null;
+let onAutoFill: AutoFillCallback | null = null;
+let activeProviderIds: string[] = [];
+let currentWeightId: string | null = null;
+let storedProviderResponses = new Map<string, ProviderResponse | 'querying'>();
+let isCollapsed = false;
+let stylesInjected = false;
+let dragAbortController: AbortController | null = null;
+
+/* ═══════════════════════════════════════════════════════
+   Public API
+   ═══════════════════════════════════════════════════════ */
+
+export function showAnswerPanel(
+  state: AnswerPanelState,
+  callbacks?: AnswerPanelCallbacks,
+): void {
   hideAnswerPanel();
 
-  const panel = buildPanel(state);
+  panelState = state;
+  panelCallbacks = callbacks ?? null;
+  activeProviderIds = state.providerIds ? [...state.providerIds] : [];
+  currentWeightId = state.weightProviderId ?? null;
+  storedProviderResponses = new Map();
+  isCollapsed = false;
+
+  dragAbortController?.abort();
+  dragAbortController = new AbortController();
+
+  injectStyles();
+  const panel = buildPanel();
   document.body.appendChild(panel);
   currentPanel = panel;
 
-  if (state.isLoading) {
-    showLoading();
-  }
+  requestAnimationFrame(() => {
+    panel.style.opacity = '1';
+  });
 }
 
 export function updateAnswerPanel(
   finalAnswers: FinalAnswer[],
   providerResponses?: Map<string, ProviderResponse | 'querying'>,
 ): void {
-  hideLoading();
-
-  const body = currentPanel?.querySelector<HTMLElement>('.ai-panel-body');
-  if (!body || !currentPanel) return;
-
-  const questions = getQuestionsFromPanel(currentPanel);
-
-  body.innerHTML = '';
-  renderQuestionRows(body, questions, finalAnswers, providerResponses);
+  if (!currentPanel || !panelState) return;
 
   if (providerResponses) {
-    updateProviderStatus(providerResponses);
+    storedProviderResponses = new Map(providerResponses);
+    if (activeProviderIds.length === 0) {
+      activeProviderIds = Array.from(providerResponses.keys());
+      if (currentWeightId === null && activeProviderIds.length > 0) {
+        currentWeightId = activeProviderIds[0] ?? null;
+        updateWeightButton();
+      }
+    }
   }
+
+  panelState.finalAnswers = finalAnswers;
+  refreshFullGrid();
 }
 
 export function updateProviderStatus(
   providerResponses: Map<string, ProviderResponse | 'querying'>,
 ): void {
-  if (!currentPanel) return;
+  if (!currentPanel || !panelState) return;
 
-  storeProviderResponsesOnPanel(currentPanel, providerResponses);
+  storedProviderResponses = new Map(providerResponses);
 
-  let statusBar = currentPanel.querySelector<HTMLElement>('.ai-panel-status-bar');
-  if (!statusBar) {
-    statusBar = document.createElement('div');
-    statusBar.className = 'ai-panel-status-bar';
-    statusBar.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px;padding:8px 16px;border-bottom:1px solid #e2e8f0;background:#fafbfc;min-height:32px;';
-    const body = currentPanel.querySelector('.ai-panel-body');
-    if (body) {
-      currentPanel.insertBefore(statusBar, body);
-    } else {
-      currentPanel.appendChild(statusBar);
+  if (activeProviderIds.length === 0) {
+    activeProviderIds = Array.from(providerResponses.keys());
+    if (currentWeightId === null && activeProviderIds.length > 0) {
+      currentWeightId = activeProviderIds[0] ?? null;
+      updateWeightButton();
     }
   }
 
-  statusBar.innerHTML = '';
-
-  for (const [providerId, value] of providerResponses) {
-    const config = getProviderById(providerId);
-    const providerName = config?.name ?? providerId;
-    const providerColor = config?.color ?? '#718096';
-
-    const pill = document.createElement('span');
-    pill.style.cssText = 'display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:10px;background:#f7fafc;border:1px solid #e2e8f0;font-size:12px;white-space:nowrap;';
-
-    if (value === 'querying') {
-      pill.style.borderLeft = `3px solid ${providerColor}`;
-      pill.textContent = `\u23F3 ${providerName}`;
-    } else if (value.error) {
-      pill.style.color = '#e53e3e';
-      pill.textContent = `\u2717 ${providerName}`;
-      pill.title = value.error;
-    } else {
-      pill.style.color = '#38a169';
-      pill.textContent = `\u2713 ${providerName}`;
-    }
-
-    statusBar.appendChild(pill);
-  }
+  refreshFullGrid();
 }
 
 export function hideAnswerPanel(): void {
   currentPanel?.remove();
   currentPanel = null;
+  panelState = null;
+  panelCallbacks = null;
+  dragAbortController?.abort();
+  dragAbortController = null;
 }
 
-function buildPanel(state: AnswerPanelState): HTMLElement {
-  const panel = document.createElement('div');
-  panel.id = PANEL_ID;
-  panel.style.cssText = [
-    'position: fixed',
-    'top: 60px',
-    'right: 20px',
-    'width: 420px',
-    'max-height: calc(100vh - 80px)',
-    'background: white',
-    'border-radius: 8px',
-    'box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15)',
-    'z-index: 999999',
-    'display: flex',
-    'flex-direction: column',
-    'font-family: system-ui, -apple-system, sans-serif',
-    'font-size: 14px',
-    'color: #2d3748',
-    'overflow: hidden',
-  ].join(';');
+export function setAutoFillCallback(cb: AutoFillCallback): void {
+  onAutoFill = cb;
+}
 
-  panel.appendChild(buildHeader());
+/* ── Animated close (user-initiated) ─────────────────── */
 
-  const statusBar = document.createElement('div');
-  statusBar.className = 'ai-panel-status-bar';
-  statusBar.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px;padding:8px 16px;border-bottom:1px solid #e2e8f0;background:#fafbfc;min-height:32px;';
-  panel.appendChild(statusBar);
+function animateClose(): void {
+  if (!currentPanel) return;
+  const panel = currentPanel;
+  panel.style.transition = 'opacity 0.3s ease-out';
+  panel.style.opacity = '0';
+  setTimeout(() => {
+    panel.remove();
+    if (currentPanel === panel) {
+      currentPanel = null;
+      panelState = null;
+      panelCallbacks = null;
+    }
+  }, 300);
+}
 
-  const body = document.createElement('div');
-  body.className = 'ai-panel-body';
-  body.style.cssText = [
-    'flex: 1',
-    'overflow-y: auto',
-    'padding: 12px 16px',
-  ].join(';');
+/* ═══════════════════════════════════════════════════════
+   Panel Construction
+   ═══════════════════════════════════════════════════════ */
 
-  storeQuestionsOnPanel(panel, state.questions);
-  renderQuestionRows(body, state.questions, state.finalAnswers);
+function buildPanel(): HTMLElement {
+  const panel = mk('div', {
+    id: PANEL_ID,
+    style: j(
+      'position:fixed', 'top:50%', 'left:50%',
+      'transform:translate(-50%,-50%)',
+      'width:90vw', 'max-width:90vw', 'height:90vh',
+      'background:#fff', 'border-radius:8px',
+      'box-shadow:0 2px 10px rgba(0,0,0,0.1)',
+      'z-index:10000',
+      'display:flex', 'flex-direction:column',
+      'font-family:system-ui,-apple-system,sans-serif',
+      'font-size:14px', 'color:#2d3748',
+      'overflow:hidden',
+      'opacity:0', 'transition:opacity 0.3s ease-out',
+      `animation:${ANIM}FadeIn 0.3s ease-out`,
+    ),
+  });
 
+  /* Header container (title + toolbar + AI names) */
+  const header = mk('div', {
+    'data-role': 'header',
+    style: j('flex-shrink:0', 'border-bottom:1px solid #e2e8f0'),
+  });
+
+  header.appendChild(buildTitleRow());
+  header.appendChild(buildToolbar());
+  header.appendChild(buildAINamesRow());
+  panel.appendChild(header);
+
+  /* Scrollable body */
+  const body = mk('div', {
+    className: 'ai-panel-body',
+    style: j('flex:1', 'overflow-y:auto', 'padding:16px 20px'),
+  });
+  renderQuestionRows(body);
   panel.appendChild(body);
-  injectPanelStyles();
 
   return panel;
 }
 
-function buildHeader(): HTMLElement {
-  const header = document.createElement('div');
-  header.style.cssText = [
-    'display: flex',
-    'align-items: center',
-    'justify-content: space-between',
-    'padding: 10px 16px',
-    'border-bottom: 1px solid #e2e8f0',
-    'background: #f7fafc',
-    'border-radius: 8px 8px 0 0',
-  ].join(';');
+/* ── Title Row (Draggable) ───────────────────────────── */
 
-  const title = document.createElement('span');
-  title.style.cssText = 'font-weight: 600; font-size: 15px; color: #2d3748;';
-  title.textContent = 'AI 答案';
-  header.appendChild(title);
+function buildTitleRow(): HTMLElement {
+  const row = mk('div', {
+    'data-role': 'title-row',
+    style: j(
+      'display:flex', 'align-items:center', 'justify-content:center',
+      'padding:10px 16px',
+      'background:#f7fafc', 'border-radius:8px 8px 0 0',
+      'cursor:move', 'user-select:none',
+      'position:relative',
+    ),
+  });
 
-  const btnGroup = document.createElement('div');
-  btnGroup.style.cssText = 'display: flex; gap: 6px;';
+  const dragIcon = mk('span', {
+    style: j(
+      'position:absolute', 'left:16px',
+      'color:#a0aec0', 'font-size:14px', 'letter-spacing:2px',
+    ),
+  });
+  dragIcon.textContent = '\u22EE\u22EE';
 
-  btnGroup.appendChild(
-    createHeaderButton('自动填写', '#4caf50', '#fff', () => onAutoFill?.()),
-  );
-  btnGroup.appendChild(
-    createHeaderButton('收起', '#f8f9fa', '#333', toggleCollapse),
-  );
-  btnGroup.appendChild(
-    createHeaderButton('×', '#f8f9fa', '#333', hideAnswerPanel),
-  );
+  const title = mk('span', {
+    style: j('font-weight:600', 'font-size:15px', 'color:#2d3748'),
+  });
+  title.textContent = 'AI \u56DE\u7B54\u5BF9\u6BD4';
 
-  header.appendChild(btnGroup);
-  return header;
-}
+  row.appendChild(dragIcon);
+  row.appendChild(title);
 
-function createHeaderButton(
-  text: string,
-  bg: string,
-  color: string,
-  onClick: () => void,
-): HTMLElement {
-  const btn = document.createElement('button');
-  btn.textContent = text;
-  btn.style.cssText = [
-    `background: ${bg}`,
-    `color: ${color}`,
-    'border: none',
-    'border-radius: 4px',
-    'padding: 4px 10px',
-    'cursor: pointer',
-    'font-size: 13px',
-    'transition: opacity 0.2s',
-  ].join(';');
-  btn.addEventListener('mouseenter', () => { btn.style.opacity = '0.8'; });
-  btn.addEventListener('mouseleave', () => { btn.style.opacity = '1'; });
-  btn.addEventListener('click', onClick);
-  return btn;
-}
+  /* Drag logic */
+  let isDragging = false;
+  let dragStartX = 0;
+  let dragStartY = 0;
+  let offsetX = 0;
+  let offsetY = 0;
 
-function toggleCollapse(): void {
-  if (!currentPanel) return;
+  row.addEventListener('mousedown', (e: MouseEvent) => {
+    isDragging = true;
+    dragStartX = e.clientX - offsetX;
+    dragStartY = e.clientY - offsetY;
+    e.preventDefault();
+  });
 
-  const body = currentPanel.querySelector<HTMLElement>('.ai-panel-body');
-  if (!body) return;
+  const onMouseMove = (e: MouseEvent): void => {
+    if (!isDragging || !currentPanel) return;
+    offsetX = e.clientX - dragStartX;
+    offsetY = e.clientY - dragStartY;
+    currentPanel.style.transform =
+      `translate(calc(-50% + ${offsetX}px), calc(-50% + ${offsetY}px))`;
+  };
 
-  const isCollapsed = body.style.display === 'none';
-  body.style.display = isCollapsed ? 'block' : 'none';
+  const onMouseUp = (): void => {
+    isDragging = false;
+  };
 
-  const collapseBtn = currentPanel.querySelectorAll('button')[1];
-  if (collapseBtn) {
-    collapseBtn.textContent = isCollapsed ? '收起' : '展开';
-  }
-}
-
-function renderQuestionRows(
-  container: HTMLElement,
-  questions: Question[],
-  finalAnswers: FinalAnswer[],
-  providerResponses?: ProviderResponseMap,
-): void {
-  for (const question of questions) {
-    const answer = finalAnswers.find(a => a.questionNumber === question.number) ?? null;
-    const row = buildQuestionRow(question, answer, providerResponses);
-    container.appendChild(row);
-  }
-}
-
-function buildQuestionRow(
-  question: Question,
-  answer: FinalAnswer | null,
-  providerResponses?: ProviderResponseMap,
-): HTMLElement {
-  const row = document.createElement('div');
-  row.className = 'ai-panel-row';
-  row.dataset['questionId'] = question.id;
-  row.style.cssText = [
-    'padding: 10px 0',
-    'border-bottom: 1px solid #edf2f7',
-  ].join(';');
-
-  const headerLine = document.createElement('div');
-  headerLine.style.cssText = [
-    'display: flex',
-    'align-items: center',
-    'gap: 8px',
-    'margin-bottom: 8px',
-  ].join(';');
-
-  const numberBadge = document.createElement('span');
-  numberBadge.style.cssText = [
-    'font-weight: 500',
-    'color: #4a5568',
-    'min-width: 24px',
-  ].join(';');
-  numberBadge.textContent = question.number;
-
-  const typeBadge = document.createElement('span');
-  typeBadge.style.cssText = [
-    'font-size: 12px',
-    'color: #718096',
-    'background: #edf2f7',
-    'padding: 1px 6px',
-    'border-radius: 4px',
-  ].join(';');
-  typeBadge.textContent = question.type;
-
-  headerLine.appendChild(numberBadge);
-  headerLine.appendChild(typeBadge);
-
-  if (answer) {
-    const voteBadge = document.createElement('span');
-    voteBadge.style.cssText = [
-      'font-size: 12px',
-      'color: #38a169',
-      'background: #f0fff4',
-      'padding: 1px 6px',
-      'border-radius: 4px',
-      'margin-left: auto',
-    ].join(';');
-    voteBadge.textContent = `${answer.votes}/${answer.totalProviders} AI 同意`;
-    headerLine.appendChild(voteBadge);
-  }
-
-  row.appendChild(headerLine);
-
-  const contentPreview = document.createElement('div');
-  contentPreview.style.cssText = [
-    'font-size: 13px',
-    'color: #718096',
-    'margin-bottom: 8px',
-    'overflow: hidden',
-    'text-overflow: ellipsis',
-    'display: -webkit-box',
-    '-webkit-line-clamp: 2',
-    '-webkit-box-orient: vertical',
-    'line-height: 1.4',
-  ].join(';');
-  contentPreview.textContent = question.content;
-  contentPreview.title = question.content;
-  row.appendChild(contentPreview);
-
-  const editor = createEditor(question, answer);
-  row.appendChild(editor.render());
-
-  if (providerResponses) {
-    const aiDetails = document.createElement('div');
-    aiDetails.style.cssText = 'font-size:12px;margin-top:6px;display:flex;flex-wrap:wrap;gap:4px 12px;color:#718096;';
-
-    for (const [providerId, value] of providerResponses) {
-      if (value === 'querying') continue;
-      if (value.error) continue;
-
-      const matched = value.answers.find(a => a.questionNumber === question.number);
-      if (!matched) continue;
-
-      const config = getProviderById(providerId);
-      const providerName = config?.name ?? providerId;
-      const providerColor = config?.color ?? '#718096';
-
-      const answerText = Array.isArray(matched.answer)
-        ? matched.answer.join(',')
-        : matched.answer;
-
-      const detail = document.createElement('span');
-      detail.style.cssText = `display:inline;color:${providerColor};`;
-      detail.textContent = `${providerName}: ${answerText}`;
-      aiDetails.appendChild(detail);
-    }
-
-    if (aiDetails.childElementCount > 0) {
-      row.appendChild(aiDetails);
-    }
+  if (dragAbortController) {
+    document.addEventListener('mousemove', onMouseMove, {
+      signal: dragAbortController.signal,
+    });
+    document.addEventListener('mouseup', onMouseUp, {
+      signal: dragAbortController.signal,
+    });
   }
 
   return row;
 }
 
-const QUESTIONS_DATA_KEY = '__aiPanelQuestions';
+/* ── Toolbar ─────────────────────────────────────────── */
 
-function storeQuestionsOnPanel(panel: HTMLElement, questions: Question[]): void {
-  (panel as HTMLElement & { [QUESTIONS_DATA_KEY]: Question[] })[QUESTIONS_DATA_KEY] = questions;
+function buildToolbar(): HTMLElement {
+  const toolbar = mk('div', {
+    'data-role': 'toolbar',
+    style: j(
+      'display:flex', 'gap:10px', 'align-items:center',
+      'padding:8px 16px',
+      'background:#fff',
+      'border-bottom:1px solid #f0f0f0',
+      'flex-wrap:wrap',
+    ),
+  });
+
+  /* a. "\u67E5\u770B\u5B8C\u6574\u56DE\u7B54" */
+  toolbar.appendChild(
+    mkBtn('\u67E5\u770B\u5B8C\u6574\u56DE\u7B54', '#673ab7', '#fff', showRawResponseModal),
+  );
+
+  /* b. "\u5220\u9664AI" dropdown */
+  toolbar.appendChild(buildDropdownButton(
+    '\u5220\u9664AI', '#dc3545', '#fff',
+    () => activeProviderIds.map((id) => {
+      const config = getProviderById(id);
+      return {
+        id,
+        label: config?.name ?? id,
+        color: config?.color ?? '#718096',
+        onClick: () => handleRemoveProvider(id),
+      };
+    }),
+  ));
+
+  /* c. "\u5F53\u524D\u6743\u91CDAI" dropdown */
+  const weightWrapper = buildDropdownButton(
+    getWeightButtonText(), '#9c27b0', '#fff',
+    () => activeProviderIds.map((id) => {
+      const config = getProviderById(id);
+      return {
+        id,
+        label: config?.name ?? id,
+        color: config?.color ?? '#718096',
+        suffix: `(\u6743\u91CD: ${config?.weight ?? 1})`,
+        onClick: () => handleWeightChange(id),
+      };
+    }),
+  );
+  weightWrapper.id = 'ai-panel-weight-btn';
+  toolbar.appendChild(weightWrapper);
+
+  /* d. "\u91CD\u53D1\u95EE\u9898" dropdown */
+  toolbar.appendChild(buildDropdownButton(
+    '\u91CD\u53D1\u95EE\u9898', '#2196F3', '#fff',
+    () => activeProviderIds.map((id) => {
+      const config = getProviderById(id);
+      return {
+        id,
+        label: config?.name ?? id,
+        color: config?.color ?? '#718096',
+        onClick: () => handleRetransmit(id),
+      };
+    }),
+  ));
+
+  /* e. "\u6536\u8D77AI\u56DE\u7B54" toggle */
+  const collapseBtn = mkBtn(
+    '\u6536\u8D77AI\u56DE\u7B54', '#f8f9fa', '#333',
+    () => {
+      toggleCollapse();
+      collapseBtn.textContent = isCollapsed
+        ? '\u5C55\u5F00AI\u56DE\u7B54'
+        : '\u6536\u8D77AI\u56DE\u7B54';
+    },
+  );
+  collapseBtn.id = 'ai-panel-collapse-btn';
+  toolbar.appendChild(collapseBtn);
+
+  /* f. "\u81EA\u52A8\u586B\u5199" */
+  toolbar.appendChild(
+    mkBtn('\u81EA\u52A8\u586B\u5199', '#4caf50', '#fff', () => {
+      if (panelCallbacks?.onAutoFill) {
+        panelCallbacks.onAutoFill();
+      } else {
+        onAutoFill?.();
+      }
+    }),
+  );
+
+  /* g. Close button */
+  const closeBtn = mk('button', {
+    style: j(
+      'width:28px', 'height:28px', 'border-radius:50%',
+      'background:#f8f9fa', 'border:none',
+      'color:#333', 'font-size:16px',
+      'cursor:pointer', 'display:flex',
+      'align-items:center', 'justify-content:center',
+      'transition:all 0.15s', 'margin-left:auto',
+      'font-family:system-ui,-apple-system,sans-serif',
+      'line-height:1',
+    ),
+  });
+  closeBtn.textContent = '\u00D7';
+  closeBtn.addEventListener('mouseenter', () => {
+    closeBtn.style.background = '#fee2e2';
+    closeBtn.style.color = '#dc2626';
+  });
+  closeBtn.addEventListener('mouseleave', () => {
+    closeBtn.style.background = '#f8f9fa';
+    closeBtn.style.color = '#333';
+  });
+  closeBtn.addEventListener('click', animateClose);
+  toolbar.appendChild(closeBtn);
+
+  return toolbar;
 }
 
-function getQuestionsFromPanel(panel: HTMLElement): Question[] {
-  return ((panel as HTMLElement & { [QUESTIONS_DATA_KEY]?: Question[] })[QUESTIONS_DATA_KEY]) ?? [];
+/* ── AI Names Header Row ─────────────────────────────── */
+
+function buildAINamesRow(): HTMLElement {
+  const row = mk('div', {
+    'data-role': 'ai-names-row',
+    style: j(
+      'display:grid',
+      gridColumns(),
+      'gap:20px',
+      'padding:10px 20px',
+      'background:#fafbfc',
+      'align-items:center',
+      'min-height:40px',
+    ),
+  });
+
+  /* First cell: "\u9898\u76EE" */
+  const qLabel = mk('div', {
+    style: j(
+      'font-weight:700', 'color:#718096', 'font-size:13px',
+      'border-bottom:2px solid #e2e8f0', 'padding-bottom:4px',
+    ),
+  });
+  qLabel.textContent = '\u9898\u76EE';
+  row.appendChild(qLabel);
+
+  /* Middle cells: AI provider names (only when expanded) */
+  if (!isCollapsed) {
+    for (const id of activeProviderIds) {
+      const config = getProviderById(id);
+      const name = config?.name ?? id;
+      const color = config?.color ?? '#718096';
+
+      const cell = mk('div', {
+        'data-provider': id,
+        style: j(
+          'display:flex', 'align-items:center', 'justify-content:space-between',
+          `border-bottom:3px solid ${color}`, 'padding-bottom:4px',
+        ),
+      });
+
+      /* Name + status indicator */
+      const nameSpan = mk('span', {
+        style: j('font-weight:700', `color:${color}`, 'font-size:13px'),
+      });
+
+      const providerData = storedProviderResponses.get(id);
+      let indicator = '';
+      if (providerData === undefined) {
+        indicator = '';
+      } else if (providerData === 'querying') {
+        indicator = ' \u23F3';
+      } else if (providerData.error) {
+        indicator = ' \u2717';
+      } else {
+        indicator = ' \u2713';
+      }
+      nameSpan.textContent = name + indicator;
+
+      /* Retry button */
+      const retryBtn = mk('button', {
+        style: j(
+          'background:none', 'border:none', `color:${color}`,
+          'cursor:pointer', 'font-size:14px', 'padding:2px 4px',
+          'border-radius:4px', 'transition:background 0.15s',
+          'font-family:system-ui,-apple-system,sans-serif',
+          'line-height:1',
+        ),
+      });
+      retryBtn.textContent = '\u21BB';
+      retryBtn.title = `\u91CD\u53D1 ${name}`;
+      retryBtn.addEventListener('mouseenter', () => {
+        retryBtn.style.background = `${color}15`;
+      });
+      retryBtn.addEventListener('mouseleave', () => {
+        retryBtn.style.background = 'none';
+      });
+      retryBtn.addEventListener('click', () => handleRetransmit(id));
+
+      cell.appendChild(nameSpan);
+      cell.appendChild(retryBtn);
+      row.appendChild(cell);
+    }
+  }
+
+  /* Last cell: "\u6700\u7EC8\u7B54\u6848" */
+  const finalLabel = mk('div', {
+    style: j(
+      'font-weight:700', 'color:#718096', 'font-size:13px',
+      'border-bottom:2px solid #e2e8f0', 'padding-bottom:4px',
+    ),
+  });
+  finalLabel.textContent = '\u6700\u7EC8\u7B54\u6848';
+  row.appendChild(finalLabel);
+
+  return row;
 }
 
-type ProviderResponseMap = Map<string, ProviderResponse | 'querying'>;
-const PROVIDER_RESPONSES_DATA_KEY = '__aiPanelProviderResponses';
-
-function storeProviderResponsesOnPanel(panel: HTMLElement, responses: ProviderResponseMap): void {
-  (panel as HTMLElement & { [PROVIDER_RESPONSES_DATA_KEY]: ProviderResponseMap })[PROVIDER_RESPONSES_DATA_KEY] = responses;
+function refreshAINamesRow(): void {
+  if (!currentPanel) return;
+  const oldRow = currentPanel.querySelector('[data-role="ai-names-row"]');
+  if (!oldRow) return;
+  const newRow = buildAINamesRow();
+  oldRow.replaceWith(newRow);
 }
 
-let panelStylesInjected = false;
+/* ── Grid Columns ────────────────────────────────────── */
 
-function injectPanelStyles(): void {
-  if (panelStylesInjected) return;
-  panelStylesInjected = true;
+function gridColumns(): string {
+  if (isCollapsed || activeProviderIds.length === 0) {
+    return 'grid-template-columns:200px 1fr';
+  }
+  return `grid-template-columns:200px repeat(${activeProviderIds.length},1fr) 1fr`;
+}
 
-  const style = document.createElement('style');
-  style.textContent = `
+/* ═══════════════════════════════════════════════════════
+   Question Rows
+   ═══════════════════════════════════════════════════════ */
+
+function renderQuestionRows(container: HTMLElement): void {
+  if (!panelState) return;
+
+  panelState.questions.forEach((question, index) => {
+    const answer =
+      panelState?.finalAnswers.find((a) => a.questionNumber === question.number) ?? null;
+    container.appendChild(buildQuestionRow(question, answer, index));
+  });
+}
+
+function buildQuestionRow(
+  question: Question,
+  answer: FinalAnswer | null,
+  index: number,
+): HTMLElement {
+  const row = mk('div', {
+    'data-question-number': question.number,
+    style: j(
+      'display:grid',
+      gridColumns(),
+      'gap:20px',
+      'padding:12px 0',
+      'border-bottom:1px solid #edf2f7',
+      `animation:${ANIM}SlideIn 0.3s ease-out`,
+      `animation-delay:${index * 0.05}s`,
+      'animation-fill-mode:both',
+    ),
+  });
+
+  /* Question column */
+  row.appendChild(buildQuestionCell(question));
+
+  /* Per-AI answer columns (only when expanded) */
+  if (!isCollapsed) {
+    for (const id of activeProviderIds) {
+      row.appendChild(buildAIAnswerCell(question, id));
+    }
+  }
+
+  /* Final answer column */
+  row.appendChild(buildFinalAnswerCell(question, answer));
+
+  return row;
+}
+
+/* ── Question Cell ───────────────────────────────────── */
+
+function buildQuestionCell(question: Question): HTMLElement {
+  const cell = mk('div', {
+    style: j('background:#f8f9fa', 'border-radius:6px', 'padding:12px'),
+  });
+
+  const num = mk('div', {
+    style: j('font-weight:700', 'color:#2d3748', 'margin-bottom:4px', 'font-size:14px'),
+  });
+  num.textContent = `\u7B2C ${question.number} \u9898`;
+
+  const typeBadge = mk('span', {
+    style: j(
+      'font-size:11px', 'background:#e2e8f0', 'color:#718096',
+      'padding:1px 6px', 'border-radius:4px', 'display:inline-block',
+      'margin-bottom:6px',
+    ),
+  });
+  typeBadge.textContent = question.type;
+
+  const content = mk('div', {
+    style: j(
+      'font-size:13px', 'color:#718096', 'line-height:1.4',
+      'overflow:hidden', 'text-overflow:ellipsis',
+      'display:-webkit-box', '-webkit-line-clamp:2',
+      '-webkit-box-orient:vertical',
+    ),
+  });
+  content.textContent = question.content;
+  content.title = question.content;
+
+  cell.appendChild(num);
+  cell.appendChild(typeBadge);
+  cell.appendChild(content);
+  return cell;
+}
+
+/* ── AI Answer Cell ──────────────────────────────────── */
+
+function buildAIAnswerCell(question: Question, providerId: string): HTMLElement {
+  const config = getProviderById(providerId);
+  const color = config?.color ?? '#718096';
+  const name = config?.name ?? providerId;
+
+  const cell = mk('div', {
+    'data-provider': providerId,
+    'data-question': question.number,
+    style: j(
+      `background:${color}10`, `border:1px solid ${color}20`,
+      'border-radius:4px', 'padding:10px',
+      'position:relative', 'min-height:60px',
+      `animation:${ANIM}ScaleIn 0.3s ease-out`,
+    ),
+  });
+
+  /* Name badge (top-right) */
+  const badge = mk('div', {
+    style: j(
+      'position:absolute', 'top:6px', 'right:6px',
+      `background:${color}20`, `color:${color}`,
+      'font-size:10px', 'font-weight:600',
+      'padding:1px 6px', 'border-radius:3px',
+    ),
+  });
+  badge.textContent = name;
+  cell.appendChild(badge);
+
+  /* Content area */
+  const contentArea = mk('div', {
+    style: j('margin-top:22px', 'font-size:13px', 'line-height:1.5'),
+  });
+
+  const providerData = storedProviderResponses.get(providerId);
+
+  if (!providerData || providerData === 'querying') {
+    /* Loading state */
+    contentArea.appendChild(buildLoadingDots(color));
+  } else if (providerData.error) {
+    /* Error state */
+    const errorEl = mk('div', {
+      style: j('color:#e53e3e', 'font-size:12px'),
+    });
+    errorEl.textContent = providerData.error;
+    contentArea.appendChild(errorEl);
+  } else {
+    /* Answer state */
+    const matched = providerData.answers.find(
+      (a) => a.questionNumber === question.number,
+    );
+    if (matched) {
+      const answerText = Array.isArray(matched.answer)
+        ? matched.answer.join(', ')
+        : matched.answer;
+      const answerEl = mk('div', { style: 'color:#2d3748;' });
+      answerEl.textContent = answerText;
+      contentArea.appendChild(answerEl);
+    } else {
+      const noAnswer = mk('div', {
+        style: j('color:#a0aec0', 'font-size:12px'),
+      });
+      noAnswer.textContent = '\u65E0\u56DE\u7B54';
+      contentArea.appendChild(noAnswer);
+    }
+  }
+
+  cell.appendChild(contentArea);
+  return cell;
+}
+
+/* ── Final Answer Cell ───────────────────────────────── */
+
+function buildFinalAnswerCell(
+  question: Question,
+  answer: FinalAnswer | null,
+): HTMLElement {
+  const cell = mk('div', {
+    style: j('background:#f8f9fa', 'border-radius:4px', 'padding:10px'),
+  });
+
+  const editor = createEditor(question, answer);
+  cell.appendChild(editor.render());
+  return cell;
+}
+
+/* ═══════════════════════════════════════════════════════
+   Loading Dots Animation
+   ═══════════════════════════════════════════════════════ */
+
+function buildLoadingDots(color: string): HTMLElement {
+  const container = mk('div', {
+    style: j(
+      'display:flex', 'gap:4px', 'align-items:center',
+      'justify-content:center', 'padding:8px 0',
+    ),
+  });
+
+  for (let i = 0; i < 3; i++) {
+    const dot = mk('div', {
+      style: j(
+        'width:8px', 'height:8px', 'border-radius:50%',
+        `background:${color}`,
+        `animation:${ANIM}Dot 1.4s infinite ease-in-out`,
+        `animation-delay:${i * 0.16}s`,
+      ),
+    });
+    container.appendChild(dot);
+  }
+
+  return container;
+}
+
+/* ═══════════════════════════════════════════════════════
+   Raw Response Sub-Modal
+   ═══════════════════════════════════════════════════════ */
+
+function showRawResponseModal(): void {
+  document.getElementById('ai-raw-response-modal')?.remove();
+
+  const overlay = mk('div', {
+    id: 'ai-raw-response-modal',
+    style: j(
+      'position:fixed', 'inset:0',
+      'background:rgba(0,0,0,0.5)', 'z-index:10001',
+      'display:flex', 'align-items:center', 'justify-content:center',
+      'font-family:system-ui,-apple-system,sans-serif',
+      `animation:${ANIM}FadeIn 0.3s ease-out`,
+    ),
+  });
+
+  const box = mk('div', {
+    style: j(
+      'background:#fff', 'border-radius:12px',
+      'width:80vw', 'max-width:900px', 'height:70vh',
+      'display:flex', 'flex-direction:column',
+      'box-shadow:0 20px 60px rgba(0,0,0,0.2)',
+      'overflow:hidden',
+    ),
+  });
+
+  /* Header with provider select */
+  const header = mk('div', {
+    style: j(
+      'display:flex', 'align-items:center', 'gap:12px',
+      'padding:16px 20px', 'border-bottom:1px solid #e2e8f0',
+      'background:#f7fafc', 'flex-shrink:0',
+    ),
+  });
+
+  const label = mk('span', {
+    style: j('font-weight:600', 'font-size:14px', 'color:#2d3748', 'white-space:nowrap'),
+  });
+  label.textContent = '\u9009\u62E9 AI \u67E5\u770B\u5B8C\u6574\u56DE\u7B54\uFF1A';
+
+  const select = document.createElement('select');
+  select.style.cssText = j(
+    'flex:1', 'padding:6px 12px', 'border:1px solid #e2e8f0',
+    'border-radius:6px', 'font-size:14px', 'outline:none',
+    'font-family:system-ui,-apple-system,sans-serif',
+  );
+
+  for (const id of activeProviderIds) {
+    const config = getProviderById(id);
+    const opt = document.createElement('option');
+    opt.value = id;
+    opt.textContent = config?.name ?? id;
+    select.appendChild(opt);
+  }
+
+  const closeBtn = mk('button', {
+    style: j(
+      'width:32px', 'height:32px', 'border-radius:8px', 'border:none',
+      'background:#edf2f7', 'color:#4a5568', 'font-size:18px',
+      'cursor:pointer', 'display:flex', 'align-items:center', 'justify-content:center',
+      'transition:all 0.15s', 'flex-shrink:0',
+      'font-family:system-ui,-apple-system,sans-serif',
+      'line-height:1',
+    ),
+  });
+  closeBtn.textContent = '\u2715';
+  closeBtn.addEventListener('mouseenter', () => {
+    closeBtn.style.background = '#fed7d7';
+    closeBtn.style.color = '#e53e3e';
+  });
+  closeBtn.addEventListener('mouseleave', () => {
+    closeBtn.style.background = '#edf2f7';
+    closeBtn.style.color = '#4a5568';
+  });
+  closeBtn.addEventListener('click', () => overlay.remove());
+
+  header.appendChild(label);
+  header.appendChild(select);
+  header.appendChild(closeBtn);
+
+  /* Read-only textarea */
+  const textarea = document.createElement('textarea');
+  textarea.readOnly = true;
+  textarea.style.cssText = j(
+    'flex:1', 'margin:16px 20px', 'padding:12px',
+    'border:1px solid #e2e8f0', 'border-radius:8px',
+    'font-family:SFMono-Regular,Consolas,monospace',
+    'font-size:13px', 'line-height:1.6', 'resize:none',
+    'outline:none', 'color:#2d3748', 'background:#fafbfc',
+  );
+
+  const updateContent = (): void => {
+    const selectedId = select.value;
+    const response = storedProviderResponses.get(selectedId);
+    if (!response || response === 'querying') {
+      textarea.value = '\u8BE5 AI \u6B63\u5728\u67E5\u8BE2\u4E2D...';
+    } else if (response.error) {
+      textarea.value = `\u9519\u8BEF: ${response.error}`;
+    } else {
+      textarea.value = response.rawText;
+    }
+  };
+
+  select.addEventListener('change', updateContent);
+  updateContent();
+
+  box.appendChild(header);
+  box.appendChild(textarea);
+  overlay.appendChild(box);
+
+  /* Click overlay backdrop to close */
+  overlay.addEventListener('click', (e: MouseEvent) => {
+    if (e.target === overlay) overlay.remove();
+  });
+
+  document.body.appendChild(overlay);
+}
+
+/* ═══════════════════════════════════════════════════════
+   Dropdown Pattern
+   ═══════════════════════════════════════════════════════ */
+
+function buildDropdownButton(
+  text: string,
+  bg: string,
+  fg: string,
+  getItems: () => DropdownItem[],
+): HTMLElement {
+  const wrapper = mk('div', {
+    style: j('position:relative', 'display:inline-block'),
+  });
+
+  const btn = mkBtn(`${text} \u25BC`, bg, fg, () => {
+    closeAllDropdowns();
+    const items = getItems();
+    if (items.length === 0) return;
+
+    const dd = buildDropdown(items);
+    wrapper.appendChild(dd);
+
+    const outsideHandler = (e: MouseEvent): void => {
+      if (!wrapper.contains(e.target as Node)) {
+        dd.remove();
+        document.removeEventListener('click', outsideHandler);
+      }
+    };
+    setTimeout(() => document.addEventListener('click', outsideHandler), 0);
+  });
+
+  wrapper.appendChild(btn);
+  return wrapper;
+}
+
+function buildDropdown(items: DropdownItem[]): HTMLElement {
+  const dd = mk('div', {
+    className: 'ai-panel-dropdown',
+    style: j(
+      'position:absolute', 'top:100%', 'left:0',
+      'background:#fff', 'border-radius:8px',
+      'box-shadow:0 4px 16px rgba(0,0,0,0.12)',
+      'border:1px solid #e2e8f0',
+      'min-width:160px', 'z-index:10002',
+      'overflow:hidden', 'margin-top:4px',
+      `animation:${ANIM}ScaleIn 0.2s ease-out`,
+    ),
+  });
+
+  for (const item of items) {
+    const row = mk('div', {
+      style: j(
+        'display:flex', 'align-items:center', 'gap:8px',
+        'padding:8px 12px', 'cursor:pointer',
+        'transition:background 0.15s', 'font-size:13px',
+      ),
+    });
+
+    /* Color dot */
+    const dot = mk('div', {
+      style: j(
+        'width:8px', 'height:8px', 'border-radius:50%',
+        `background:${item.color}`, 'flex-shrink:0',
+      ),
+    });
+
+    const label = mk('span', { style: 'color:#2d3748;' });
+    label.textContent = item.label;
+
+    row.appendChild(dot);
+    row.appendChild(label);
+
+    if (item.suffix) {
+      const suffix = mk('span', {
+        style: j('color:#a0aec0', 'font-size:11px', 'margin-left:auto'),
+      });
+      suffix.textContent = item.suffix;
+      row.appendChild(suffix);
+    }
+
+    row.addEventListener('mouseenter', () => {
+      row.style.background = '#f7fafc';
+    });
+    row.addEventListener('mouseleave', () => {
+      row.style.background = '#fff';
+    });
+    row.addEventListener('click', () => {
+      item.onClick();
+      dd.remove();
+    });
+
+    dd.appendChild(row);
+  }
+
+  return dd;
+}
+
+function closeAllDropdowns(): void {
+  document.querySelectorAll('.ai-panel-dropdown').forEach((el) => el.remove());
+}
+
+/* ═══════════════════════════════════════════════════════
+   Handler Functions
+   ═══════════════════════════════════════════════════════ */
+
+function handleRemoveProvider(providerId: string): void {
+  if (activeProviderIds.length <= 1) {
+    showToast('\u81F3\u5C11\u9700\u8981\u4FDD\u7559\u4E00\u4E2AAI');
+    return;
+  }
+
+  activeProviderIds = activeProviderIds.filter((id) => id !== providerId);
+  storedProviderResponses.delete(providerId);
+
+  /* Reassign weight if we removed the weight provider */
+  if (currentWeightId === providerId) {
+    currentWeightId = activeProviderIds[0] ?? null;
+    updateWeightButton();
+  }
+
+  panelCallbacks?.onRemoveProvider(providerId);
+  refreshFullGrid();
+}
+
+function handleWeightChange(providerId: string): void {
+  currentWeightId = providerId;
+  updateWeightButton();
+  panelCallbacks?.onWeightChange(providerId);
+}
+
+function handleRetransmit(providerId: string): void {
+  storedProviderResponses.set(providerId, 'querying');
+  panelCallbacks?.onRetransmit(providerId);
+  refreshFullGrid();
+}
+
+/* ═══════════════════════════════════════════════════════
+   State Helpers
+   ═══════════════════════════════════════════════════════ */
+
+function getWeightButtonText(): string {
+  if (!currentWeightId) return '\u5F53\u524D\u6743\u91CDAI: \u65E0';
+  const config = getProviderById(currentWeightId);
+  return `\u5F53\u524D\u6743\u91CDAI: ${config?.name ?? currentWeightId}`;
+}
+
+function updateWeightButton(): void {
+  const btn = currentPanel?.querySelector<HTMLElement>('#ai-panel-weight-btn button');
+  if (btn) {
+    btn.textContent = `${getWeightButtonText()} \u25BC`;
+  }
+}
+
+function toggleCollapse(): void {
+  isCollapsed = !isCollapsed;
+  refreshFullGrid();
+}
+
+function refreshFullGrid(): void {
+  if (!currentPanel || !panelState) return;
+
+  refreshAINamesRow();
+
+  const body = currentPanel.querySelector<HTMLElement>('.ai-panel-body');
+  if (!body) return;
+  body.innerHTML = '';
+  renderQuestionRows(body);
+}
+
+/* ── Toast ───────────────────────────────────────────── */
+
+function showToast(message: string): void {
+  document.getElementById('ai-panel-toast')?.remove();
+
+  const toast = mk('div', {
+    id: 'ai-panel-toast',
+    style: j(
+      'position:fixed', 'top:20px', 'left:50%',
+      'transform:translateX(-50%)',
+      'background:#2d3748', 'color:#fff',
+      'padding:8px 20px', 'border-radius:8px',
+      'font-size:13px', 'z-index:10003',
+      'box-shadow:0 4px 12px rgba(0,0,0,0.15)',
+      `animation:${ANIM}FadeIn 0.2s ease-out`,
+      'font-family:system-ui,-apple-system,sans-serif',
+    ),
+  });
+  toast.textContent = message;
+  document.body.appendChild(toast);
+
+  setTimeout(() => {
+    toast.style.transition = 'opacity 0.3s';
+    toast.style.opacity = '0';
+    setTimeout(() => toast.remove(), 300);
+  }, 2000);
+}
+
+/* ═══════════════════════════════════════════════════════
+   DOM Utilities (matching ai-selector.ts patterns)
+   ═══════════════════════════════════════════════════════ */
+
+/** Join CSS declarations with semicolons */
+function j(...parts: string[]): string {
+  return parts.join(';');
+}
+
+/** Create an element with optional attributes */
+function mk(tag: string, attrs?: Record<string, string>): HTMLElement {
+  const e = document.createElement(tag);
+  if (attrs) {
+    for (const [k, v] of Object.entries(attrs)) {
+      if (k === 'style') e.style.cssText = v;
+      else if (k === 'id') e.id = v;
+      else if (k === 'className') e.className = v;
+      else e.setAttribute(k, v);
+    }
+  }
+  return e;
+}
+
+/** Create a styled button */
+function mkBtn(
+  text: string,
+  bg: string,
+  fg: string,
+  onClick: () => void,
+): HTMLButtonElement {
+  const b = document.createElement('button');
+  b.style.cssText = j(
+    `padding:6px 14px`, `background:${bg}`, `color:${fg}`,
+    'border:none', 'border-radius:6px', 'cursor:pointer',
+    'font-size:13px', 'font-weight:500', 'transition:all 0.15s',
+    'font-family:system-ui,-apple-system,sans-serif',
+    'white-space:nowrap',
+  );
+  b.textContent = text;
+  b.addEventListener('mouseenter', () => {
+    b.style.opacity = '0.85';
+    b.style.transform = 'translateY(-1px)';
+  });
+  b.addEventListener('mouseleave', () => {
+    b.style.opacity = '1';
+    b.style.transform = 'translateY(0)';
+  });
+  b.addEventListener('click', onClick);
+  return b;
+}
+
+/* ═══════════════════════════════════════════════════════
+   Injected Styles (keyframes + editor CSS)
+   ═══════════════════════════════════════════════════════ */
+
+function injectStyles(): void {
+  if (stylesInjected) return;
+  stylesInjected = true;
+
+  const s = document.createElement('style');
+  s.textContent = `
+    @keyframes ${ANIM}FadeIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+    @keyframes ${ANIM}SlideIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes ${ANIM}ScaleIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+    @keyframes ${ANIM}Dot {
+      0%, 80%, 100% { transform: scale(0); }
+      40%           { transform: scale(1); }
+    }
     #${PANEL_ID} .ai-panel-body::-webkit-scrollbar {
       width: 6px;
     }
@@ -473,5 +1192,5 @@ function injectPanelStyles(): void {
       box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
     }
   `;
-  document.head.appendChild(style);
+  document.head.appendChild(s);
 }
