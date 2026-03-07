@@ -1,13 +1,11 @@
 const PROVIDERS = [
   { id: 'deepseek', name: 'DeepSeek', color: '#4D6BFE', domain: 'chat.deepseek.com', enabled: true },
   { id: 'kimi', name: 'Kimi', color: '#1A73E8', domain: 'kimi.moonshot.cn', enabled: true },
-  { id: 'claude', name: 'Claude', color: '#D97706', domain: 'claude.ai', enabled: true },
   { id: 'chatgpt', name: 'ChatGPT', color: '#10A37F', domain: 'chatgpt.com', enabled: true },
   { id: 'gemini', name: 'Gemini', color: '#4285F4', domain: 'gemini.google.com', enabled: true },
   { id: 'doubao', name: '豆包', color: '#FF6B35', domain: 'doubao.com', enabled: true },
   { id: 'grok', name: 'Grok', color: '#000000', domain: 'grok.com', enabled: true },
   { id: 'qwen-cn', name: '通义千问', color: '#FF6A00', domain: 'qianwen.com', enabled: true },
-  { id: 'qwen-intl', name: 'Qwen (Intl)', color: '#FF6A00', domain: 'chat.qwen.ai', enabled: false },
   { id: 'chatglm', name: '智谱清言', color: '#36B37E', domain: 'chatglm.cn', enabled: true },
 ];
 

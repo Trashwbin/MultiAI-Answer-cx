@@ -2,27 +2,23 @@ import { AI_PROVIDERS, getEnabledProviders as getEnabledConfigs } from '../confi
 import type { AIProvider, ProviderConfig } from '../types';
 import { ChatGLMProvider } from './chatglm';
 import { ChatGPTProvider } from './chatgpt';
-import { ClaudeProvider } from './claude';
 import { DeepSeekProvider } from './deepseek';
 import { DoubaoProvider } from './doubao';
 import { GeminiProvider } from './gemini';
 import { GrokProvider } from './grok';
 import { KimiProvider } from './kimi';
 import { QwenCnProvider } from './qwen-cn';
-import { QwenProvider } from './qwen';
 
 type ProviderFactory = (config: ProviderConfig) => AIProvider;
 
 const FACTORIES: Record<string, ProviderFactory> = {
   deepseek: (config) => new DeepSeekProvider(config),
   kimi: (config) => new KimiProvider(config),
-  claude: (config) => new ClaudeProvider(config),
   chatgpt: (config) => new ChatGPTProvider(config),
   gemini: (config) => new GeminiProvider(config),
   doubao: (config) => new DoubaoProvider(config),
   grok: (config) => new GrokProvider(config),
   'qwen-cn': (config) => new QwenCnProvider(config),
-  'qwen-intl': (config) => new QwenProvider(config),
   chatglm: (config) => new ChatGLMProvider(config),
 };
 

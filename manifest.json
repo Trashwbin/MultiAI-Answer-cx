@@ -41,10 +41,7 @@
     "https://xinghuo.xfyun.cn/*",
     "https://chatgpt.com/*",
     "https://gemini.google.com/*",
-    "https://claude.ai/*",
     "https://grok.com/*",
-    "https://qwen.ai/*",
-    "https://*.qwen.ai/*",
     "https://*.qianwen.com/*",
     "http://127.0.0.1:*/*",
     "http://localhost:*/*"
@@ -77,12 +74,10 @@
         "https://kimi.com/*",
         "https://www.kimi.com/*",
         "https://kimi.moonshot.cn/*",
-        "https://claude.ai/*",
         "https://chatgpt.com/*",
         "https://gemini.google.com/*",
         "https://www.doubao.com/*",
         "https://grok.com/*",
-        "https://chat.qwen.ai/*",
         "https://*.qianwen.com/*",
         "https://chatglm.cn/*"
       ],

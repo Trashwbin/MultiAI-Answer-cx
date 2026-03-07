@@ -2,13 +2,11 @@
   const LOGIN_SUCCESS_SELECTORS: Record<string, string[]> = {
     deepseek: ['.ds-avatar', '[class*="userAvatar"]'],
     kimi: ['.user-avatar', '[class*="avatar"]'],
-    claude: ['[data-testid="user-menu"]', '.user-menu'],
     chatgpt: ['[data-testid="profile-button"]', 'nav [class*="avatar"]'],
     gemini: ['.gb_A.gb_Da'],
     doubao: ['.user-avatar', '[class*="userAvatar"]'],
     grok: ['[data-testid="user-avatar"]'],
     'qwen-cn': ['.user-avatar', '.login-user'],
-    'qwen-intl': ['.user-avatar'],
     chatglm: ['.user-avatar', '[class*="avatar"]'],
   };
 
@@ -17,13 +15,11 @@
     'kimi.com': 'kimi',
     'www.kimi.com': 'kimi',
     'kimi.moonshot.cn': 'kimi',
-    'claude.ai': 'claude',
     'chatgpt.com': 'chatgpt',
     'gemini.google.com': 'gemini',
     'doubao.com': 'doubao',
     'www.doubao.com': 'doubao',
     'grok.com': 'grok',
-    'chat.qwen.ai': 'qwen-intl',
     'www.qianwen.com': 'qwen-cn',
     'qianwen.com': 'qwen-cn',
     'chatglm.cn': 'chatglm',
@@ -33,7 +29,6 @@
   const PROVIDER_STORAGE_KEYS: Record<string, string[]> = {
     kimi: ['access_token', 'refresh_token'],
     deepseek: ['userToken'],
-    'qwen-intl': ['token'],
   };
 
   const PROVIDER_META_KEYS: Record<string, Array<{ selector: string; key: string }>> = {

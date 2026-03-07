@@ -23,11 +23,9 @@ const BEARER_INTERCEPT_URLS = [
   'https://www.kimi.com/api/*',
   'https://www.kimi.com/apiv2/*',
   'https://kimi.com/api/*',
-  'https://claude.ai/api/*',
   'https://www.doubao.com/samantha/*',
   'https://chatglm.cn/chatglm/*',
   'https://chat2.qianwen.com/*',
-  'https://chat.qwen.ai/api/*',
 ];
 
 const URL_TO_PROVIDER: Record<string, string> = {
@@ -35,11 +33,9 @@ const URL_TO_PROVIDER: Record<string, string> = {
   'kimi.moonshot.cn': 'kimi',
   'www.kimi.com': 'kimi',
   'kimi.com': 'kimi',
-  'claude.ai': 'claude',
   'www.doubao.com': 'doubao',
   'chatglm.cn': 'chatglm',
   'chat2.qianwen.com': 'qwen-cn',
-  'chat.qwen.ai': 'qwen-intl',
 };
 
 chrome.webRequest.onSendHeaders.addListener(
