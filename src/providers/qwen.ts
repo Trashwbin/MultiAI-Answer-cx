@@ -1,5 +1,6 @@
 import { parseAIResponse } from '../core/json-parser';
 import type { ProviderResponse, Question } from '../types';
+import { proxyFetch } from '../utils/page-proxy';
 import { BaseProvider } from './base-provider';
 
 interface QwenCreateChatResponse {
@@ -25,7 +26,8 @@ export class QwenProvider extends BaseProvider {
       const prompt = this.buildPrompt(question);
       const chatId = await this.createChat(bearerToken);
 
-      const completionRes = await fetch(
+      const res = await proxyFetch(
+        'chat.qwen.ai',
         `https://chat.qwen.ai/api/v2/chat/completions?chat_id=${encodeURIComponent(chatId)}`,
         {
           method: 'POST',
@@ -42,12 +44,11 @@ export class QwenProvider extends BaseProvider {
         },
       );
 
-      if (!completionRes.ok) {
-        const errorText = await completionRes.text();
-        throw new Error(`Qwen API ${completionRes.status}: ${errorText.slice(0, 300)}`);
+      if (!res.ok) {
+        throw new Error(`Qwen API ${res.status}: ${res.body.slice(0, 300)}`);
       }
 
-      const data = (await completionRes.json()) as QwenCompletionResponse;
+      const data = JSON.parse(res.body) as QwenCompletionResponse;
       const rawText = data.choices?.[0]?.message?.content ?? '';
       const parsed = parseAIResponse(rawText, this.config.id);
       return { ...parsed, rawText };
@@ -62,7 +63,7 @@ export class QwenProvider extends BaseProvider {
   }
 
   private async createChat(bearerToken: string): Promise<string> {
-    const res = await fetch('https://chat.qwen.ai/api/v2/chats/new', {
+    const res = await proxyFetch('chat.qwen.ai', 'https://chat.qwen.ai/api/v2/chats/new', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -73,11 +74,10 @@ export class QwenProvider extends BaseProvider {
     });
 
     if (!res.ok) {
-      const errorText = await res.text();
-      throw new Error(`Qwen create chat ${res.status}: ${errorText.slice(0, 200)}`);
+      throw new Error(`Qwen create chat ${res.status}: ${res.body.slice(0, 200)}`);
     }
 
-    const data = (await res.json()) as QwenCreateChatResponse;
+    const data = JSON.parse(res.body) as QwenCreateChatResponse;
     const chatId = data.data?.id;
     if (!chatId) {
       throw new Error('Qwen chat id missing');
