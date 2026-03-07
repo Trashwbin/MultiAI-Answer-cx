@@ -66,6 +66,10 @@ function groupByType(questions: Question[]): TypeGroup[] {
     QuestionType.FILL_BLANK,
     QuestionType.QA,
     QuestionType.WORD_DEFINITION,
+    QuestionType.READING_COMPREHENSION,
+    QuestionType.CLOZE,
+    QuestionType.SHARED_OPTIONS,
+    QuestionType.WORD_FILL,
     QuestionType.OTHER,
   ];
   const groups: TypeGroup[] = [];
@@ -227,6 +231,29 @@ function buildQuestionRow(q: Question, groupType: QuestionType): HTMLElement {
     const info = el('div', { style: 'font-size:13px;color:#718096;margin-top:6px;' });
     info.textContent = `本题共有 ${q.blankCount} 个空`;
     content.appendChild(info);
+  }
+
+  if (q.subQuestions && q.subQuestions.length > 0) {
+    const subContainer = el('div', { style: 'padding-left:18px;margin-top:8px;border-left:2px solid #e2e8f0;' });
+    for (const sub of q.subQuestions) {
+      const subRow = el('div', { style: 'margin-bottom:8px;padding-left:10px;' });
+      const subTitle = el('div', { style: 'font-size:14px;color:#2d3748;margin-bottom:4px;' });
+      subTitle.textContent = `(${sub.index}) ${sub.content}`;
+      subRow.appendChild(subTitle);
+
+      if (sub.options.length > 0) {
+        const subOpts = el('div', { style: 'padding-left:14px;color:#4a5568;font-size:13px;' });
+        for (const opt of sub.options) {
+          const optLine = el('div', { style: 'margin-bottom:2px;line-height:1.4;' });
+          optLine.textContent = `${opt.label}. ${opt.text}`;
+          subOpts.appendChild(optLine);
+        }
+        subRow.appendChild(subOpts);
+      }
+
+      subContainer.appendChild(subRow);
+    }
+    content.appendChild(subContainer);
   }
 
   row.appendChild(content);
