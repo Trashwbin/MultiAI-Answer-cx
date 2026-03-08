@@ -26,16 +26,6 @@ export interface AnswerPanelCallbacks {
 
 export type AutoFillCallback = () => void;
 
-/* ── Internal Types ──────────────────────────────────── */
-
-interface DropdownItem {
-  id: string;
-  label: string;
-  color: string;
-  suffix?: string;
-  onClick: () => void;
-}
-
 /* ── Module State ────────────────────────────────────── */
 
 let currentPanel: HTMLElement | null = null;
@@ -43,6 +33,7 @@ let panelState: AnswerPanelState | null = null;
 let panelCallbacks: AnswerPanelCallbacks | null = null;
 let onAutoFill: AutoFillCallback | null = null;
 let activeProviderIds: string[] = [];
+let visibleProviderIds: string[] = [];
 let currentWeightId: string | null = null;
 let storedProviderResponses = new Map<string, ProviderResponse | 'querying'>();
 let isCollapsed = false;
@@ -63,6 +54,7 @@ export function showAnswerPanel(
   panelCallbacks = callbacks ?? null;
   activeProviderIds = state.providerIds ? [...state.providerIds] : [];
   currentWeightId = state.weightProviderId ?? null;
+  visibleProviderIds = currentWeightId ? [currentWeightId] : activeProviderIds.slice(0, 1);
   storedProviderResponses = new Map();
   isCollapsed = false;
 
@@ -91,8 +83,8 @@ export function updateAnswerPanel(
       activeProviderIds = Array.from(providerResponses.keys());
       if (currentWeightId === null && activeProviderIds.length > 0) {
         currentWeightId = activeProviderIds[0] ?? null;
-        updateWeightButton();
       }
+      visibleProviderIds = currentWeightId ? [currentWeightId] : activeProviderIds.slice(0, 1);
     }
   }
 
@@ -111,8 +103,8 @@ export function updateProviderStatus(
     activeProviderIds = Array.from(providerResponses.keys());
     if (currentWeightId === null && activeProviderIds.length > 0) {
       currentWeightId = activeProviderIds[0] ?? null;
-      updateWeightButton();
     }
+    visibleProviderIds = currentWeightId ? [currentWeightId] : activeProviderIds.slice(0, 1);
   }
 
   refreshFullGrid();
@@ -167,6 +159,7 @@ function buildPanel(): HTMLElement {
       'font-size:14px', 'color:#2d3748',
       'overflow:hidden',
       'opacity:0', 'transition:opacity 0.3s ease-out',
+      'user-select:text', '-webkit-user-select:text',
       `animation:${ANIM}FadeIn 0.3s ease-out`,
     ),
   });
@@ -280,52 +273,6 @@ function buildToolbar(): HTMLElement {
     mkBtn('\u67E5\u770B\u5B8C\u6574\u56DE\u7B54', '#673ab7', '#fff', showRawResponseModal),
   );
 
-  /* b. "\u5220\u9664AI" dropdown */
-  toolbar.appendChild(buildDropdownButton(
-    '\u5220\u9664AI', '#dc3545', '#fff',
-    () => activeProviderIds.map((id) => {
-      const config = getProviderById(id);
-      return {
-        id,
-        label: config?.name ?? id,
-        color: config?.color ?? '#718096',
-        onClick: () => handleRemoveProvider(id),
-      };
-    }),
-  ));
-
-  /* c. "\u5F53\u524D\u6743\u91CDAI" dropdown */
-  const weightWrapper = buildDropdownButton(
-    getWeightButtonText(), '#9c27b0', '#fff',
-    () => activeProviderIds.map((id) => {
-      const config = getProviderById(id);
-      return {
-        id,
-        label: config?.name ?? id,
-        color: config?.color ?? '#718096',
-        suffix: `(\u6743\u91CD: ${config?.weight ?? 1})`,
-        onClick: () => handleWeightChange(id),
-      };
-    }),
-  );
-  weightWrapper.id = 'ai-panel-weight-btn';
-  toolbar.appendChild(weightWrapper);
-
-  /* d. "\u91CD\u53D1\u95EE\u9898" dropdown */
-  toolbar.appendChild(buildDropdownButton(
-    '\u91CD\u53D1\u95EE\u9898', '#2196F3', '#fff',
-    () => activeProviderIds.map((id) => {
-      const config = getProviderById(id);
-      return {
-        id,
-        label: config?.name ?? id,
-        color: config?.color ?? '#718096',
-        onClick: () => handleRetransmit(id),
-      };
-    }),
-  ));
-
-  /* e. "\u6536\u8D77AI\u56DE\u7B54" toggle */
   const collapseBtn = mkBtn(
     '\u6536\u8D77AI\u56DE\u7B54', '#f8f9fa', '#333',
     () => {
@@ -338,7 +285,6 @@ function buildToolbar(): HTMLElement {
   collapseBtn.id = 'ai-panel-collapse-btn';
   toolbar.appendChild(collapseBtn);
 
-  /* f. "\u81EA\u52A8\u586B\u5199" */
   toolbar.appendChild(
     mkBtn('\u81EA\u52A8\u586B\u5199', '#4caf50', '#fff', () => {
       if (panelCallbacks?.onAutoFill) {
@@ -349,7 +295,6 @@ function buildToolbar(): HTMLElement {
     }),
   );
 
-  /* g. Close button */
   const closeBtn = mk('button', {
     style: j(
       'width:28px', 'height:28px', 'border-radius:50%',
@@ -383,94 +328,147 @@ function buildAINamesRow(): HTMLElement {
   const row = mk('div', {
     'data-role': 'ai-names-row',
     style: j(
-      'display:grid',
-      gridColumns(),
-      'gap:20px',
+      'display:flex',
+      'align-items:center',
+      'gap:12px',
       'padding:10px 20px',
       'background:#fafbfc',
-      'align-items:center',
-      'min-height:40px',
+      'min-height:48px',
+      'overflow-x:auto',
+      'border-bottom:1px solid #f0f0f0',
     ),
   });
 
-  /* First cell: "\u9898\u76EE" */
-  const qLabel = mk('div', {
+  const title = mk('div', {
     style: j(
-      'font-weight:700', 'color:#718096', 'font-size:13px',
-      'border-bottom:2px solid #e2e8f0', 'padding-bottom:4px',
+      'font-weight:700', 'color:#718096', 'font-size:12px',
+      'padding:4px 8px', 'background:#edf2f7', 'border-radius:999px',
+      'white-space:nowrap', 'flex-shrink:0',
     ),
   });
-  qLabel.textContent = '\u9898\u76EE';
-  row.appendChild(qLabel);
+  title.textContent = isCollapsed ? 'AI\u5217\uFF08\u5DF2\u6536\u8D77\uFF09' : 'AI\u5217\u663E\u793A';
+  row.appendChild(title);
 
-  /* Middle cells: AI provider names (only when expanded) */
-  if (!isCollapsed) {
-    for (const id of activeProviderIds) {
-      const config = getProviderById(id);
-      const name = config?.name ?? id;
-      const color = config?.color ?? '#718096';
+  for (const id of activeProviderIds) {
+    const config = getProviderById(id);
+    const name = config?.name ?? id;
+    const color = config?.color ?? '#718096';
 
-      const cell = mk('div', {
-        'data-provider': id,
-        style: j(
-          'display:flex', 'align-items:center', 'justify-content:space-between',
-          `border-bottom:3px solid ${color}`, 'padding-bottom:4px',
-        ),
-      });
+    const cell = mk('div', {
+      'data-provider': id,
+      style: j(
+        'display:flex', 'align-items:center', 'gap:8px',
+        'padding:4px 0 6px 0',
+        `border-bottom:3px solid ${color}`,
+        'white-space:nowrap', 'flex-shrink:0',
+      ),
+    });
 
-      /* Name + status indicator */
-      const nameSpan = mk('span', {
-        style: j('font-weight:700', `color:${color}`, 'font-size:13px'),
-      });
-
-      const providerData = storedProviderResponses.get(id);
-      let indicator = '';
-      if (providerData === undefined) {
-        indicator = '';
-      } else if (providerData === 'querying') {
-        indicator = ' \u23F3';
-      } else if (providerData.error) {
-        indicator = ' \u2717';
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = visibleProviderIds.includes(id);
+    checkbox.disabled = isCollapsed;
+    checkbox.style.cssText = j(
+      `accent-color:${color}`,
+      'cursor:pointer',
+      isCollapsed ? 'opacity:0.5' : 'opacity:1',
+    );
+    checkbox.addEventListener('change', () => {
+      if (checkbox.checked) {
+        if (!visibleProviderIds.includes(id)) {
+          visibleProviderIds = [...visibleProviderIds, id];
+        }
       } else {
-        indicator = ' \u2713';
+        visibleProviderIds = visibleProviderIds.filter((providerId) => providerId !== id);
       }
-      nameSpan.textContent = name + indicator;
+      refreshFullGrid();
+    });
 
-      /* Retry button */
-      const retryBtn = mk('button', {
-        style: j(
-          'background:none', 'border:none', `color:${color}`,
-          'cursor:pointer', 'font-size:14px', 'padding:2px 4px',
-          'border-radius:4px', 'transition:background 0.15s',
-          'font-family:system-ui,-apple-system,sans-serif',
-          'line-height:1',
-        ),
-      });
-      retryBtn.textContent = '\u21BB';
-      retryBtn.title = `\u91CD\u53D1 ${name}`;
-      retryBtn.addEventListener('mouseenter', () => {
-        retryBtn.style.background = `${color}15`;
-      });
-      retryBtn.addEventListener('mouseleave', () => {
-        retryBtn.style.background = 'none';
-      });
-      retryBtn.addEventListener('click', () => handleRetransmit(id));
+    const nameWrap = mk('span', {
+      style: j('display:flex', 'align-items:center', 'gap:4px'),
+    });
 
-      cell.appendChild(nameSpan);
-      cell.appendChild(retryBtn);
-      row.appendChild(cell);
+    const nameSpan = mk('span', {
+      style: j('font-weight:700', `color:${color}`, 'font-size:13px'),
+    });
+    nameSpan.textContent = name;
+
+    const status = mk('span', {
+      style: j('font-size:12px', 'color:#718096'),
+    });
+
+    const providerData = storedProviderResponses.get(id);
+    if (providerData === 'querying') {
+      status.textContent = '\u23F3';
+    } else if (providerData?.error) {
+      status.textContent = '\u2717';
+    } else if (providerData) {
+      status.textContent = '\u2713';
     }
+
+    nameWrap.appendChild(nameSpan);
+    nameWrap.appendChild(status);
+
+    const actions = mk('div', {
+      style: j('display:flex', 'align-items:center', 'gap:2px'),
+    });
+
+    const retryBtn = mk('button', {
+      style: j(
+        'background:none', 'border:none', `color:${color}`,
+        'cursor:pointer', 'font-size:13px', 'padding:2px 4px',
+        'border-radius:4px', 'line-height:1',
+      ),
+    });
+    retryBtn.textContent = '\u21BB';
+    retryBtn.title = `\u91CD\u53D1 ${name}`;
+    retryBtn.addEventListener('click', () => handleRetransmit(id));
+
+    const weightBtn = mk('button', {
+      style: j(
+        'background:none', 'border:none',
+        'cursor:pointer', 'font-size:13px', 'padding:2px 4px',
+        'border-radius:4px', 'line-height:1',
+      ),
+    });
+    weightBtn.style.color = currentWeightId === id ? '#f59e0b' : '#718096';
+    weightBtn.textContent = currentWeightId === id ? '\u2605' : '\u2606';
+    weightBtn.title = currentWeightId === id
+      ? `${name}\uFF08\u5F53\u524D\u6743\u91CDAI\uFF09`
+      : `\u8BBE\u4E3A\u6743\u91CDAI\uFF1A${name}`;
+    weightBtn.addEventListener('click', () => handleWeightChange(id));
+
+    const removeBtn = mk('button', {
+      style: j(
+        'background:none', 'border:none', 'color:#dc2626',
+        'cursor:pointer', 'font-size:13px', 'padding:2px 4px',
+        'border-radius:4px', 'line-height:1',
+      ),
+    });
+    removeBtn.textContent = '\u00D7';
+    removeBtn.title = `\u5220\u9664 ${name}`;
+    removeBtn.addEventListener('click', () => handleRemoveProvider(id));
+
+    actions.appendChild(retryBtn);
+    actions.appendChild(weightBtn);
+    actions.appendChild(removeBtn);
+
+    cell.appendChild(checkbox);
+    cell.appendChild(nameWrap);
+    cell.appendChild(actions);
+    row.appendChild(cell);
   }
 
-  /* Last cell: "\u6700\u7EC8\u7B54\u6848" */
-  const finalLabel = mk('div', {
+  const hint = mk('div', {
     style: j(
-      'font-weight:700', 'color:#718096', 'font-size:13px',
-      'border-bottom:2px solid #e2e8f0', 'padding-bottom:4px',
+      'font-size:12px', 'color:#a0aec0', 'margin-left:auto',
+      'white-space:nowrap', 'flex-shrink:0',
     ),
   });
-  finalLabel.textContent = '\u6700\u7EC8\u7B54\u6848';
-  row.appendChild(finalLabel);
+  hint.textContent = isCollapsed
+    ? '\u6536\u8D77\u72B6\u6001\u4E0B\u4EC5\u663E\u793A\u9898\u76EE\u4E0E\u6700\u7EC8\u7B54\u6848'
+    : '\u4EC5\u52FE\u9009AI\u4F1A\u663E\u793A\u5728\u4E0B\u65B9\u5BF9\u6BD4\u7F51\u683C\u4E2D';
+  row.appendChild(hint);
 
   return row;
 }
@@ -486,10 +484,10 @@ function refreshAINamesRow(): void {
 /* ── Grid Columns ────────────────────────────────────── */
 
 function gridColumns(): string {
-  if (isCollapsed || activeProviderIds.length === 0) {
+  if (isCollapsed || visibleProviderIds.length === 0) {
     return 'grid-template-columns:200px 1fr';
   }
-  return `grid-template-columns:200px repeat(${activeProviderIds.length},1fr) 1fr`;
+  return `grid-template-columns:200px repeat(${visibleProviderIds.length},1fr) 1fr`;
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -530,7 +528,7 @@ function buildQuestionRow(
 
   /* Per-AI answer columns (only when expanded) */
   if (!isCollapsed) {
-    for (const id of activeProviderIds) {
+    for (const id of visibleProviderIds) {
       row.appendChild(buildAIAnswerCell(question, id));
     }
   }
@@ -814,107 +812,6 @@ function showRawResponseModal(): void {
 }
 
 /* ═══════════════════════════════════════════════════════
-   Dropdown Pattern
-   ═══════════════════════════════════════════════════════ */
-
-function buildDropdownButton(
-  text: string,
-  bg: string,
-  fg: string,
-  getItems: () => DropdownItem[],
-): HTMLElement {
-  const wrapper = mk('div', {
-    style: j('position:relative', 'display:inline-block'),
-  });
-
-  const btn = mkBtn(`${text} \u25BC`, bg, fg, () => {
-    closeAllDropdowns();
-    const items = getItems();
-    if (items.length === 0) return;
-
-    const dd = buildDropdown(items);
-    wrapper.appendChild(dd);
-
-    const outsideHandler = (e: MouseEvent): void => {
-      if (!wrapper.contains(e.target as Node)) {
-        dd.remove();
-        document.removeEventListener('click', outsideHandler);
-      }
-    };
-    setTimeout(() => document.addEventListener('click', outsideHandler), 0);
-  });
-
-  wrapper.appendChild(btn);
-  return wrapper;
-}
-
-function buildDropdown(items: DropdownItem[]): HTMLElement {
-  const dd = mk('div', {
-    className: 'ai-panel-dropdown',
-    style: j(
-      'position:absolute', 'top:100%', 'left:0',
-      'background:#fff', 'border-radius:8px',
-      'box-shadow:0 4px 16px rgba(0,0,0,0.12)',
-      'border:1px solid #e2e8f0',
-      'min-width:160px', 'z-index:10002',
-      'overflow:hidden', 'margin-top:4px',
-      `animation:${ANIM}ScaleIn 0.2s ease-out`,
-    ),
-  });
-
-  for (const item of items) {
-    const row = mk('div', {
-      style: j(
-        'display:flex', 'align-items:center', 'gap:8px',
-        'padding:8px 12px', 'cursor:pointer',
-        'transition:background 0.15s', 'font-size:13px',
-      ),
-    });
-
-    /* Color dot */
-    const dot = mk('div', {
-      style: j(
-        'width:8px', 'height:8px', 'border-radius:50%',
-        `background:${item.color}`, 'flex-shrink:0',
-      ),
-    });
-
-    const label = mk('span', { style: 'color:#2d3748;' });
-    label.textContent = item.label;
-
-    row.appendChild(dot);
-    row.appendChild(label);
-
-    if (item.suffix) {
-      const suffix = mk('span', {
-        style: j('color:#a0aec0', 'font-size:11px', 'margin-left:auto'),
-      });
-      suffix.textContent = item.suffix;
-      row.appendChild(suffix);
-    }
-
-    row.addEventListener('mouseenter', () => {
-      row.style.background = '#f7fafc';
-    });
-    row.addEventListener('mouseleave', () => {
-      row.style.background = '#fff';
-    });
-    row.addEventListener('click', () => {
-      item.onClick();
-      dd.remove();
-    });
-
-    dd.appendChild(row);
-  }
-
-  return dd;
-}
-
-function closeAllDropdowns(): void {
-  document.querySelectorAll('.ai-panel-dropdown').forEach((el) => el.remove());
-}
-
-/* ═══════════════════════════════════════════════════════
    Handler Functions
    ═══════════════════════════════════════════════════════ */
 
@@ -925,12 +822,18 @@ function handleRemoveProvider(providerId: string): void {
   }
 
   activeProviderIds = activeProviderIds.filter((id) => id !== providerId);
+  visibleProviderIds = visibleProviderIds.filter((id) => id !== providerId);
+  if (visibleProviderIds.length === 0 && activeProviderIds.length > 0) {
+    const fallbackProviderId = activeProviderIds[0];
+    if (fallbackProviderId) {
+      visibleProviderIds = [fallbackProviderId];
+    }
+  }
   storedProviderResponses.delete(providerId);
 
   /* Reassign weight if we removed the weight provider */
   if (currentWeightId === providerId) {
     currentWeightId = activeProviderIds[0] ?? null;
-    updateWeightButton();
   }
 
   panelCallbacks?.onRemoveProvider(providerId);
@@ -939,31 +842,14 @@ function handleRemoveProvider(providerId: string): void {
 
 function handleWeightChange(providerId: string): void {
   currentWeightId = providerId;
-  updateWeightButton();
   panelCallbacks?.onWeightChange(providerId);
+  refreshAINamesRow();
 }
 
 function handleRetransmit(providerId: string): void {
   storedProviderResponses.set(providerId, 'querying');
   panelCallbacks?.onRetransmit(providerId);
   refreshFullGrid();
-}
-
-/* ═══════════════════════════════════════════════════════
-   State Helpers
-   ═══════════════════════════════════════════════════════ */
-
-function getWeightButtonText(): string {
-  if (!currentWeightId) return '\u5F53\u524D\u6743\u91CDAI: \u65E0';
-  const config = getProviderById(currentWeightId);
-  return `\u5F53\u524D\u6743\u91CDAI: ${config?.name ?? currentWeightId}`;
-}
-
-function updateWeightButton(): void {
-  const btn = currentPanel?.querySelector<HTMLElement>('#ai-panel-weight-btn button');
-  if (btn) {
-    btn.textContent = `${getWeightButtonText()} \u25BC`;
-  }
 }
 
 function toggleCollapse(): void {
