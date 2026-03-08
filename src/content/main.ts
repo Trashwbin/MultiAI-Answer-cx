@@ -5,13 +5,13 @@ import { autoFillAnswers } from './auto-fill/auto-fill';
 import { showAnswerPanel, updateAnswerPanel, updateProviderStatus, setAutoFillCallback } from './panel/panel';
 import { showQuestionList as showQuestionListModal, initQuestionList, setQuestionListSendCallback, hideQuestionList } from './panel/question-list';
 import { showAISelector } from './panel/ai-selector';
+import { startWatermarkRemoval, removePasteRestriction, removeSelectRestriction, addCopyButtons } from './page-enhancements';
 
 let extensionEnabled = true;
 let questions: Question[] = [];
 let finalAnswers: FinalAnswer[] = [];
 const providerResponses = new Map<string, ProviderResponse | 'querying'>();
 let selectedProviderIds: string[] = [];
-let weightProviderId: string | null = null;
 let keepAlivePort: chrome.runtime.Port | null = null;
 
 function connectKeepAlive(): void {
@@ -133,14 +133,13 @@ function buildPanelCallbacks(): {
       finalAnswers = aggregateFinalAnswers(providerResponses);
     },
     onWeightChange: (newWeightId: string | null) => {
-      weightProviderId = newWeightId;
+      void newWeightId;
     },
   };
 }
 
 function openPanelAndQuery(providerIds: string[], wId: string | null, batch?: boolean, promptMode?: PromptMode): void {
   selectedProviderIds = providerIds;
-  weightProviderId = wId;
   finalAnswers = [];
   providerResponses.clear();
   showAnswerPanel(
@@ -211,6 +210,21 @@ function handlePopupMessage(
       sendResponse({ success: true });
       break;
 
+    case 'togglePasteLimit':
+      location.reload();
+      sendResponse({ success: true });
+      break;
+
+    case 'toggleCopyBtn':
+      location.reload();
+      sendResponse({ success: true });
+      break;
+
+    case 'toggleTextSelect':
+      location.reload();
+      sendResponse({ success: true });
+      break;
+
     default:
       sendResponse({ success: true });
       break;
@@ -219,29 +233,17 @@ function handlePopupMessage(
   return true;
 }
 
-function removePageRestrictions(): void {
-  document.addEventListener(
-    'paste',
-    (e) => e.stopImmediatePropagation(),
-    true,
-  );
-
-  document.addEventListener(
-    'copy',
-    (e) => e.stopImmediatePropagation(),
-    true,
-  );
-
-  const style = document.createElement('style');
-  style.textContent = `
-    * { -webkit-user-select: text !important; user-select: text !important; }
-    .watermark, [class*="watermark"] { display: none !important; }
-  `;
-  document.head.appendChild(style);
-}
-
-function initialize(): void {
+async function initialize(): Promise<void> {
   if (!extensionEnabled) return;
+
+  const stored = await chrome.storage.local.get([
+    'pasteLimitDisabled',
+    'textSelectEnabled',
+    'copyBtnEnabled',
+  ]);
+  const pasteLimitDisabled = (stored.pasteLimitDisabled as boolean | undefined) ?? true;
+  const textSelectEnabled = (stored.textSelectEnabled as boolean | undefined) ?? true;
+  const copyBtnEnabled = (stored.copyBtnEnabled as boolean | undefined) ?? true;
 
   questions = extractQuestionsFromXXT();
 
@@ -267,11 +269,20 @@ function initialize(): void {
 
   chrome.runtime.onMessage.addListener(handlePopupMessage);
 
-  removePageRestrictions();
+  startWatermarkRemoval();
+  if (pasteLimitDisabled) {
+    removePasteRestriction();
+  }
+  if (textSelectEnabled) {
+    removeSelectRestriction();
+  }
+  if (copyBtnEnabled) {
+    addCopyButtons();
+  }
 
   if (questions.length > 0) {
     safeSendMessage({ type: 'QUESTION_PAGE_READY' });
   }
 }
 
-initialize();
+void initialize();

@@ -65,7 +65,7 @@
         "http://127.0.0.1:*/*",
         "http://localhost:*/*"
       ],
-      "js": ["dist/content.js"],
+      "js": ["lib/html2canvas.min.js", "dist/content.js"],
       "run_at": "document_end"
     },
     {
