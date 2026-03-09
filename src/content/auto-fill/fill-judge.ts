@@ -1,4 +1,10 @@
+const CLICK_DELAY_MS = 1000;
+
 const CORRECT_VALUES = new Set(['true', '1', '正确']);
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function normalizeJudgeAnswer(answer: string): 'true' | 'false' {
   const trimmed = answer.trim();
@@ -15,10 +21,10 @@ function normalizeJudgeAnswer(answer: string): 'true' | 'false' {
   return 'false';
 }
 
-export function fillJudgeAnswer(
+export async function fillJudgeAnswer(
   questionDiv: Element,
   answer: string,
-): boolean {
+): Promise<boolean> {
   const targetValue = normalizeJudgeAnswer(answer);
   const options = Array.from(questionDiv.querySelectorAll('.answerBg'));
 
@@ -37,6 +43,7 @@ export function fillJudgeAnswer(
           new MouseEvent('click', { bubbles: true, cancelable: true }),
         );
       }
+      await delay(CLICK_DELAY_MS);
       return true;
     }
   }

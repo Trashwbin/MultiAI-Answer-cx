@@ -1,3 +1,14 @@
+const CLICK_DELAY_MS = 1000;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function randomDelay(min: number, max: number): Promise<void> {
+  const ms = Math.floor(Math.random() * (max - min + 1)) + min;
+  return delay(ms);
+}
+
 function clickElement(el: Element): void {
   try {
     (el as HTMLElement).click();
@@ -8,7 +19,10 @@ function clickElement(el: Element): void {
   }
 }
 
-function fillSingleChoice(questionDiv: Element, letter: string): boolean {
+async function fillSingleChoice(
+  questionDiv: Element,
+  letter: string,
+): Promise<boolean> {
   const options = Array.from(questionDiv.querySelectorAll('.answerBg'));
   for (const option of options) {
     const span = option.querySelector('.num_option');
@@ -19,19 +33,19 @@ function fillSingleChoice(questionDiv: Element, letter: string): boolean {
 
     if (label === letter.toUpperCase() && !isChecked) {
       clickElement(option);
+      await delay(CLICK_DELAY_MS);
       return true;
     }
   }
   return false;
 }
 
-function fillMultipleChoice(
+async function fillMultipleChoice(
   questionDiv: Element,
   letters: string[],
-): boolean {
+): Promise<boolean> {
   const options = Array.from(questionDiv.querySelectorAll('.answerBg'));
   const selected = letters.map((l) => l.toUpperCase());
-  let filled = false;
 
   for (const option of options) {
     const span = option.querySelector('.num_option_dx');
@@ -42,9 +56,11 @@ function fillMultipleChoice(
 
     if (isChecked && !selected.includes(label)) {
       clickElement(option);
+      await randomDelay(500, 1500);
     }
   }
 
+  let filled = false;
   for (const opt of options) {
     const span = opt.querySelector('.num_option_dx');
     if (!span) continue;
@@ -55,16 +71,17 @@ function fillMultipleChoice(
     if (selected.includes(label) && !isChecked) {
       clickElement(opt);
       filled = true;
+      await randomDelay(500, 1500);
     }
   }
 
   return filled;
 }
 
-export function fillChoiceAnswer(
+export async function fillChoiceAnswer(
   questionDiv: Element,
   answer: string | string[],
-): boolean {
+): Promise<boolean> {
   if (Array.isArray(answer)) {
     return fillMultipleChoice(questionDiv, answer);
   }

@@ -1,3 +1,12 @@
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function randomDelay(min: number, max: number): Promise<void> {
+  const ms = Math.floor(Math.random() * (max - min + 1)) + min;
+  return delay(ms);
+}
+
 function setEditorContent(
   answerContainer: Element,
   text: string,
@@ -62,10 +71,10 @@ function setEditorContent(
   return true;
 }
 
-export function fillBlankAnswers(
+export async function fillBlankAnswers(
   questionDiv: Element,
   answers: string[],
-): boolean {
+): Promise<boolean> {
   const answerDivs = questionDiv.querySelectorAll('.sub_que_div, .Answer');
   const questionId = questionDiv.getAttribute('data');
   let filledAny = false;
@@ -76,6 +85,10 @@ export function fillBlankAnswers(
 
     const container = answerDivs[i];
     if (!container) continue;
+
+    if (filledAny) {
+      await randomDelay(500, 1500);
+    }
 
     const filled = setEditorContent(container, answer, questionId, i);
     if (filled) {

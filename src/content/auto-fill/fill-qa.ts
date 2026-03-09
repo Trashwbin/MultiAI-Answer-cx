@@ -1,3 +1,10 @@
+const EDITOR_CLICK_DELAY_MS = 500;
+const SAVE_CLICK_DELAY_MS = 500;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function formatAsHtml(answer: string): string {
   return answer
     .split('\n')
@@ -7,10 +14,10 @@ function formatAsHtml(answer: string): string {
     .join('');
 }
 
-export function fillQAAnswer(
+export async function fillQAAnswer(
   questionDiv: Element,
   answer: string,
-): boolean {
+): Promise<boolean> {
   const answerDiv = questionDiv.querySelector(
     '.stem_answer.examAnswer, .stem_answer',
   );
@@ -26,6 +33,7 @@ export function fillQAAnswer(
   }
 
   editorFrame.click();
+  await delay(EDITOR_CLICK_DELAY_MS);
 
   const editorDoc =
     editorFrame.contentDocument ??
@@ -57,6 +65,7 @@ export function fillQAAnswer(
     '.savebtndiv .jb_btn',
   );
   if (saveBtn) {
+    await delay(SAVE_CLICK_DELAY_MS);
     saveBtn.click();
   }
 
