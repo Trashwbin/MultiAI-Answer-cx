@@ -2,7 +2,7 @@ import type { Question, FinalAnswer, ProviderResponse, ExtensionMessage } from '
 import type { PromptMode } from '../types/provider';
 import { extractQuestionsFromXXT } from './extractor/extractor';
 import { autoFillAnswers } from './auto-fill/auto-fill';
-import { showAnswerPanel, updateAnswerPanel, updateProviderStatus, setAutoFillCallback } from './panel/panel';
+import { showAnswerPanel, updateAnswerPanel, updateProviderStatus, setAutoFillCallback, minimizePanel } from './panel/panel';
 import { showQuestionList as showQuestionListModal, initQuestionList, setQuestionListSendCallback, hideQuestionList } from './panel/question-list';
 import { showAISelector } from './panel/ai-selector';
 import { startWatermarkRemoval, removePasteRestriction, removeSelectRestriction, addCopyButtons } from './page-enhancements';
@@ -206,7 +206,8 @@ function handlePopupMessage(
       break;
 
     case 'autoFill':
-      void autoFillAnswers(finalAnswers, questions);
+      minimizePanel();
+      setTimeout(() => void autoFillAnswers(finalAnswers, questions), 350);
       sendResponse({ success: true });
       break;
 

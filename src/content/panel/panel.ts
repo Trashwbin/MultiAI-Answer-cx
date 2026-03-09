@@ -37,6 +37,7 @@ let visibleProviderIds: string[] = [];
 let currentWeightId: string | null = null;
 let storedProviderResponses = new Map<string, ProviderResponse | 'querying'>();
 let isCollapsed = false;
+let isMinimized = false;
 let stylesInjected = false;
 let dragAbortController: AbortController | null = null;
 
@@ -57,6 +58,7 @@ export function showAnswerPanel(
   visibleProviderIds = currentWeightId ? [currentWeightId] : activeProviderIds.slice(0, 1);
   storedProviderResponses = new Map();
   isCollapsed = false;
+  isMinimized = false;
 
   dragAbortController?.abort();
   dragAbortController = new AbortController();
@@ -276,10 +278,11 @@ function buildToolbar(): HTMLElement {
   const collapseBtn = mkBtn(
     '\u6536\u8D77AI\u56DE\u7B54', '#f8f9fa', '#333',
     () => {
-      toggleCollapse();
-      collapseBtn.textContent = isCollapsed
-        ? '\u5C55\u5F00AI\u56DE\u7B54'
-        : '\u6536\u8D77AI\u56DE\u7B54';
+      if (isMinimized) {
+        expandPanel();
+      } else {
+        minimizePanel();
+      }
     },
   );
   collapseBtn.id = 'ai-panel-collapse-btn';
@@ -287,11 +290,14 @@ function buildToolbar(): HTMLElement {
 
   toolbar.appendChild(
     mkBtn('\u81EA\u52A8\u586B\u5199', '#4caf50', '#fff', () => {
-      if (panelCallbacks?.onAutoFill) {
-        panelCallbacks.onAutoFill();
-      } else {
-        onAutoFill?.();
-      }
+      minimizePanel();
+      setTimeout(() => {
+        if (panelCallbacks?.onAutoFill) {
+          panelCallbacks.onAutoFill();
+        } else {
+          onAutoFill?.();
+        }
+      }, 350);
     }),
   );
 
@@ -852,8 +858,58 @@ function handleRetransmit(providerId: string): void {
   refreshFullGrid();
 }
 
-function toggleCollapse(): void {
-  isCollapsed = !isCollapsed;
+export function minimizePanel(): void {
+  if (!currentPanel || isMinimized) return;
+  isMinimized = true;
+  isCollapsed = true;
+
+  currentPanel.style.transition = 'all 0.3s ease';
+  currentPanel.style.width = '400px';
+  currentPanel.style.maxWidth = '400px';
+  currentPanel.style.left = 'auto';
+  currentPanel.style.right = '20px';
+  currentPanel.style.top = '50%';
+  currentPanel.style.transform = 'translateY(-50%)';
+
+  const toolbar = currentPanel.querySelector<HTMLElement>('[data-role="toolbar"]');
+  if (toolbar) {
+    for (const child of Array.from(toolbar.children) as HTMLElement[]) {
+      if (child.id === 'ai-panel-collapse-btn') {
+        child.textContent = '\u5C55\u5F00\u9762\u677F';
+        continue;
+      }
+      if (child.tagName === 'BUTTON' && child.textContent === '\u00D7') continue;
+      child.style.display = 'none';
+    }
+  }
+
+  refreshFullGrid();
+}
+
+export function expandPanel(): void {
+  if (!currentPanel || !isMinimized) return;
+  isMinimized = false;
+  isCollapsed = false;
+
+  currentPanel.style.transition = 'all 0.3s ease';
+  currentPanel.style.width = '90vw';
+  currentPanel.style.maxWidth = '90vw';
+  currentPanel.style.left = '50%';
+  currentPanel.style.right = '';
+  currentPanel.style.top = '50%';
+  currentPanel.style.transform = 'translate(-50%,-50%)';
+
+  const toolbar = currentPanel.querySelector<HTMLElement>('[data-role="toolbar"]');
+  if (toolbar) {
+    for (const child of Array.from(toolbar.children) as HTMLElement[]) {
+      child.style.display = '';
+    }
+    const collapseBtn = toolbar.querySelector<HTMLElement>('#ai-panel-collapse-btn');
+    if (collapseBtn) {
+      collapseBtn.textContent = '\u6536\u8D77AI\u56DE\u7B54';
+    }
+  }
+
   refreshFullGrid();
 }
 
