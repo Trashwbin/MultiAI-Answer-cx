@@ -12,11 +12,13 @@ interface VoteBucket {
 
 /**
  * Normalize an answer to a comparable string key.
- * For string[]: sort and join with null separator to avoid collisions.
+ * For string[]: join with null separator to avoid collisions.
+ * Order is preserved — 选词填空 answers are position-dependent (["A","C"] ≠ ["C","A"]).
+ * Multi-choice answers are already instructed to be in alphabetical order by the prompt.
  */
 function answerKey(answer: string | string[]): string {
   if (Array.isArray(answer)) {
-    return [...answer].sort().join('\0');
+    return answer.join('\0');
   }
   return answer;
 }

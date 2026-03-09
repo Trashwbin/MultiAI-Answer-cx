@@ -179,10 +179,23 @@ function extractSharedOptionsContent(div: Element): CompositeResult {
 }
 
 function extractWordFillContent(div: Element): CompositeResult {
-  const passage = normalizeInlineText(div.querySelector('.textContent')?.textContent ?? '');
+  const textContentDiv = div.querySelector('.textContent');
+  let passage = '';
+
+  if (textContentDiv) {
+    const clone = textContentDiv.cloneNode(true) as Element;
+    const targets = Array.from(clone.querySelectorAll('.textTarget'));
+    targets.forEach((target, index) => {
+      const marker = document.createTextNode(`____${index + 1}____`);
+      target.parentNode?.replaceChild(marker, target);
+    });
+    passage = normalizeInlineText(clone.textContent ?? '');
+  }
+
   const wordBank = parseOptionsForType(div, QuestionType.WORD_FILL);
 
-  const subQuestions = Array.from(div.querySelectorAll('.textTarget')).map((_, index) => ({
+  const blankCount = div.querySelectorAll('.textTarget').length;
+  const subQuestions = Array.from({ length: blankCount }, (_, index) => ({
     index: index + 1,
     content: `第${index + 1}空`,
     options: wordBank,
@@ -226,7 +239,9 @@ export function extractQuestionsFromXXT(): Question[] {
         break;
       }
       case QuestionType.CLOZE: {
-        const compositeResult = extractClozeContent(div);
+        const compositeResult = div.querySelector('.reading_answer')
+          ? extractReadingContent(div)
+          : extractClozeContent(div);
         content = compositeResult.content;
         subQuestions = compositeResult.subQuestions;
         break;
