@@ -65,6 +65,7 @@ function setEditorContent(
     '.savebtndiv .jb_btn, .saveAnswer',
   );
   if (saveBtn) {
+    saveBtn.addEventListener('click', (e) => e.preventDefault(), { once: true });
     saveBtn.click();
   }
 

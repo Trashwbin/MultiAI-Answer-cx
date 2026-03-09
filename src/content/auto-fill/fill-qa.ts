@@ -66,6 +66,7 @@ export async function fillQAAnswer(
   );
   if (saveBtn) {
     await delay(SAVE_CLICK_DELAY_MS);
+    saveBtn.addEventListener('click', (e) => e.preventDefault(), { once: true });
     saveBtn.click();
   }
 

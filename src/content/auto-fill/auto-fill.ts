@@ -30,6 +30,49 @@ function findQuestionElement(questionId: string): Element | null {
   );
 }
 
+function clearQuestionState(questionDiv: Element, questionType: QuestionType): void {
+  switch (questionType) {
+    case QuestionType.SINGLE_CHOICE:
+    case QuestionType.JUDGE:
+      Array.from(questionDiv.querySelectorAll('.check_answer')).forEach((el) =>
+        el.classList.remove('check_answer'),
+      );
+      break;
+
+    case QuestionType.MULTIPLE_CHOICE:
+      Array.from(questionDiv.querySelectorAll('.check_answer_dx')).forEach((el) =>
+        el.classList.remove('check_answer_dx'),
+      );
+      break;
+
+    case QuestionType.READING_COMPREHENSION:
+    case QuestionType.CLOZE:
+    case QuestionType.SHARED_OPTIONS:
+      Array.from(questionDiv.querySelectorAll('.check_answer')).forEach((el) =>
+        el.classList.remove('check_answer'),
+      );
+      Array.from(questionDiv.querySelectorAll('.check_answer_dx')).forEach((el) =>
+        el.classList.remove('check_answer_dx'),
+      );
+      break;
+
+    case QuestionType.WORD_FILL:
+      Array.from(questionDiv.querySelectorAll<HTMLSpanElement>('.textTarget')).forEach((blank) => {
+        blank.innerHTML = '';
+        blank.classList.remove('hasFill');
+        delete blank.dataset.chooseName;
+        blank.draggable = false;
+      });
+      break;
+
+    case QuestionType.FILL_BLANK:
+    case QuestionType.QA:
+    case QuestionType.WORD_DEFINITION:
+    case QuestionType.OTHER:
+      break;
+  }
+}
+
 async function fillByType(
   questionDiv: Element,
   answer: string | string[],
@@ -120,6 +163,7 @@ export async function autoFillAnswers(
 
     await randomDelay(1000, 3000);
 
+    clearQuestionState(questionDiv, question.type);
     await fillByType(questionDiv, finalAnswer.answer, question.type);
   }
 
@@ -127,6 +171,7 @@ export async function autoFillAnswers(
     document.querySelector<HTMLElement>('a[onclick="saveWork();"]');
   if (saveWorkBtn) {
     await delay(SAVE_WAIT_MS);
+    saveWorkBtn.addEventListener('click', (e) => e.preventDefault(), { once: true });
     saveWorkBtn.click();
   }
 }
