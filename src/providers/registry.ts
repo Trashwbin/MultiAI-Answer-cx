@@ -1,5 +1,6 @@
-import { AI_PROVIDERS, getEnabledProviders as getEnabledConfigs } from '../config/ai-config';
+import { AI_PROVIDERS, getEnabledProviders as getEnabledConfigs, getCustomProviders } from '../config/ai-config';
 import type { AIProvider, ProviderConfig } from '../types';
+import { OpenAICompatibleProvider } from './openai-compatible';
 import { ChatGLMProvider } from './chatglm';
 import { ChatGPTProvider } from './chatgpt';
 import { DeepSeekProvider } from './deepseek';
@@ -49,4 +50,21 @@ export function getProviderById(id: string): AIProvider | undefined {
   }
   const factory = FACTORIES[config.id];
   return factory ? factory(config) : undefined;
+}
+
+export async function getEnabledProvidersAsync(): Promise<AIProvider[]> {
+  const builtIn = getEnabledProviders();
+  const customConfigs = await getCustomProviders();
+  const custom = customConfigs.map((config) => new OpenAICompatibleProvider(config));
+  return [...builtIn, ...custom];
+}
+
+export async function getProviderByIdAsync(id: string): Promise<AIProvider | undefined> {
+  const builtIn = getProviderById(id);
+  if (builtIn) {
+    return builtIn;
+  }
+  const customConfigs = await getCustomProviders();
+  const match = customConfigs.find((config) => config.id === id);
+  return match ? new OpenAICompatibleProvider(match) : undefined;
 }

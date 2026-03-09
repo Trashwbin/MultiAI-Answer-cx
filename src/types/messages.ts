@@ -1,6 +1,6 @@
 import type { Question } from './question';
 import type { ProviderResponse } from './answer';
-import type { PromptMode } from './provider';
+import type { PromptMode, CustomProviderConfig } from './provider';
 
 interface QueryAIMessage {
   type: 'QUERY_AI';
@@ -88,6 +88,20 @@ interface ExecPageFuncMessage {
   args: string[];
 }
 
+interface SaveCustomProviderMessage {
+  type: 'SAVE_CUSTOM_PROVIDER';
+  config: CustomProviderConfig;
+}
+
+interface DeleteCustomProviderMessage {
+  type: 'DELETE_CUSTOM_PROVIDER';
+  providerId: string;
+}
+
+interface GetCustomProvidersMessage {
+  type: 'GET_CUSTOM_PROVIDERS';
+}
+
 export type ExtensionMessage =
   | QueryAIMessage
   | QueryAllAIMessage
@@ -104,4 +118,7 @@ export type ExtensionMessage =
   | ClearAllCredentialsMessage
   | StorageCapturedMessage
   | BearerCapturedMessage
-  | ExecPageFuncMessage;
+  | ExecPageFuncMessage
+  | SaveCustomProviderMessage
+  | DeleteCustomProviderMessage
+  | GetCustomProvidersMessage;

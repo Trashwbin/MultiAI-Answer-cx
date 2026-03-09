@@ -1,6 +1,6 @@
 import { AI_PROVIDERS } from '../../config/ai-config';
 import type { AuthStatus } from '../../types';
-import type { PromptMode } from '../../types/provider';
+import type { CustomProviderConfig, PromptMode } from '../../types/provider';
 
 /* ── Constants & Types ──────────────────────────────── */
 
@@ -15,9 +15,10 @@ type SelectCallback = (result: {
 }) => void;
 
 interface CardState {
-  config: (typeof AI_PROVIDERS)[number];
+  config: (typeof AI_PROVIDERS)[number] | CustomProviderConfig;
   auth: AuthStatus | 'checking';
   selected: boolean;
+  isCustom?: boolean;
 }
 
 /* ── Module state ────────────────────────────────────── */
@@ -52,6 +53,7 @@ export function showAISelector(onConfirm: SelectCallback, onCancel?: () => void)
   });
 
   void fetchAuthStatuses(modal);
+  void loadCustomProviders();
 
   visibilityHandler = () => {
     if (document.visibilityState === 'visible' && document.getElementById(MODAL_ID)) {
@@ -94,6 +96,7 @@ async function fetchAuthStatuses(modal: HTMLElement): Promise<void> {
     if (res?.success && res.statuses) {
       const statuses = res.statuses as Record<string, AuthStatus>;
       for (const card of cards) {
+        if (card.isCustom) continue;
         if (card.config.enabled) {
           card.auth = statuses[card.config.id] ?? 'error';
           card.selected = card.auth === 'authenticated';
@@ -103,10 +106,10 @@ async function fetchAuthStatuses(modal: HTMLElement): Promise<void> {
         }
       }
     } else {
-      for (const card of cards) card.auth = 'error';
+      for (const card of cards) { if (!card.isCustom) card.auth = 'error'; }
     }
   } catch {
-    for (const card of cards) card.auth = 'error';
+    for (const card of cards) { if (!card.isCustom) card.auth = 'error'; }
   }
 
   // Ensure weight provider is still valid (authenticated)
@@ -119,6 +122,43 @@ async function fetchAuthStatuses(modal: HTMLElement): Promise<void> {
   refreshGrid(modal);
   refreshWeightSelect(modal);
   refreshFooter(modal);
+}
+
+/* ── Custom provider support ─────────────────────────── */
+
+async function loadCustomProviders(): Promise<void> {
+  try {
+    const res = await chrome.runtime.sendMessage({ type: 'GET_CUSTOM_PROVIDERS' });
+    if (res?.success && Array.isArray(res.providers)) {
+      const customCards: CardState[] = (res.providers as CustomProviderConfig[]).map((config) => ({
+        config,
+        auth: 'authenticated' as const,
+        selected: true,
+        isCustom: true,
+      }));
+      cards = [...cards, ...customCards];
+      const modal = document.getElementById(MODAL_ID);
+      if (modal) {
+        refreshGrid(modal);
+        refreshWeightSelect(modal);
+        refreshFooter(modal);
+      }
+    }
+  } catch {
+    // ignore
+  }
+}
+
+async function deleteCustomCard(state: CardState, modal: HTMLElement): Promise<void> {
+  try {
+    await chrome.runtime.sendMessage({ type: 'DELETE_CUSTOM_PROVIDER', providerId: state.config.id });
+    cards = cards.filter((c) => c.config.id !== state.config.id);
+    refreshGrid(modal);
+    refreshWeightSelect(modal);
+    refreshFooter(modal);
+  } catch {
+    // ignore
+  }
 }
 
 /* ── Modal construction ──────────────────────────────── */
@@ -418,7 +458,7 @@ function buildFooter(
 
   actions.appendChild(
     mkBtn('\u5237\u65B0\u72B6\u6001', '#e8f5e9', '#2e7d32', () => {
-      for (const c of cards) c.auth = 'checking';
+      for (const c of cards) { if (!c.isCustom) c.auth = 'checking'; }
       refreshGrid(modal);
       refreshWeightSelect(modal);
       refreshFooter(modal);
@@ -454,7 +494,7 @@ function buildFooter(
 /* ── Helpers ──────────────────────────────────────────── */
 
 function isSelectable(state: CardState): boolean {
-  return state.config.enabled && state.auth === 'authenticated';
+  return state.isCustom === true || (state.config.enabled && state.auth === 'authenticated');
 }
 
 /* ── Grid rendering ──────────────────────────────────── */
@@ -466,6 +506,7 @@ function refreshGrid(modal: HTMLElement): void {
   for (const card of cards) {
     grid.appendChild(buildCard(card, modal));
   }
+  grid.appendChild(buildAddCard(modal));
 }
 
 function buildCard(state: CardState, modal: HTMLElement): HTMLElement {
@@ -490,6 +531,34 @@ function buildCard(state: CardState, modal: HTMLElement): HTMLElement {
     });
     badge.textContent = '\u6743\u91CD AI';
     card.appendChild(badge);
+  }
+
+  if (state.isCustom) {
+    const delBtn = mk('button', {
+      style: j(
+        'position:absolute', 'top:6px', 'left:6px',
+        'width:20px', 'height:20px', 'border-radius:50%',
+        'border:none', 'background:#fed7d7', 'color:#e53e3e',
+        'font-size:12px', 'cursor:pointer', 'display:flex',
+        'align-items:center', 'justify-content:center',
+        'line-height:1', 'font-family:system-ui,-apple-system,sans-serif',
+        'transition:all 0.15s',
+      ),
+    });
+    delBtn.textContent = '\u00D7';
+    delBtn.addEventListener('mouseenter', () => {
+      delBtn.style.background = '#e53e3e';
+      delBtn.style.color = '#fff';
+    });
+    delBtn.addEventListener('mouseleave', () => {
+      delBtn.style.background = '#fed7d7';
+      delBtn.style.color = '#e53e3e';
+    });
+    delBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      void deleteCustomCard(state, modal);
+    });
+    card.appendChild(delBtn);
   }
 
   /* Layout row: icon + info */
@@ -602,6 +671,164 @@ function buildCard(state: CardState, modal: HTMLElement): HTMLElement {
   return card;
 }
 
+/* ── Add custom provider card & form ─────────────────── */
+
+function buildAddCard(modal: HTMLElement): HTMLElement {
+  const card = mk('div', {
+    style: j(
+      'position:relative', 'padding:14px',
+      'border:2px dashed #cbd5e0', 'border-radius:12px',
+      'background:#fafafa', 'cursor:pointer',
+      'display:flex', 'align-items:center', 'justify-content:center',
+      'min-height:80px', 'transition:all 0.2s ease',
+    ),
+  });
+  const plus = mk('div', {
+    style: 'font-size:28px;color:#a0aec0;line-height:1;user-select:none;',
+  });
+  plus.textContent = '+';
+  card.appendChild(plus);
+  card.addEventListener('mouseenter', () => {
+    card.style.borderColor = '#667eea';
+    card.style.background = '#f0f0ff';
+    plus.style.color = '#667eea';
+  });
+  card.addEventListener('mouseleave', () => {
+    card.style.borderColor = '#cbd5e0';
+    card.style.background = '#fafafa';
+    plus.style.color = '#a0aec0';
+  });
+  card.addEventListener('click', () => showAddForm(modal));
+  return card;
+}
+
+function showAddForm(modal: HTMLElement): void {
+  const grid = modal.querySelector('#ai-sel-grid');
+  if (!grid) return;
+
+  const lastChild = grid.lastElementChild;
+  if (lastChild) lastChild.remove();
+
+  let selectedColor = '#6366f1';
+  const colors = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6'];
+
+  const form = mk('div', {
+    style: j(
+      'position:relative', 'padding:16px',
+      'border:2px solid #667eea', 'border-radius:12px',
+      'background:#fafbfe', 'grid-column:1/-1',
+    ),
+  });
+
+  const title = mk('div', {
+    style: 'font-size:14px;font-weight:700;color:#1a202c;margin-bottom:12px;',
+  });
+  title.textContent = '\u6DFB\u52A0\u81EA\u5B9A\u4E49 AI \u63D0\u4F9B\u5546';
+  form.appendChild(title);
+
+  const inputCSS = j(
+    'width:100%', 'padding:8px 12px', 'border:1px solid #e2e8f0',
+    'border-radius:6px', 'font-size:13px', 'outline:none',
+    'font-family:system-ui,-apple-system,sans-serif',
+    'box-sizing:border-box', 'transition:border-color 0.15s',
+  );
+
+  function mkField(type: string, placeholder: string): HTMLInputElement {
+    const input = document.createElement('input');
+    input.type = type;
+    input.placeholder = placeholder;
+    input.style.cssText = inputCSS;
+    input.addEventListener('focus', () => { input.style.borderColor = '#667eea'; });
+    input.addEventListener('blur', () => { input.style.borderColor = '#e2e8f0'; });
+    const wrap = mk('div', { style: 'margin-bottom:8px;' });
+    wrap.appendChild(input);
+    form.appendChild(wrap);
+    return input;
+  }
+
+  const nameInput = mkField('text', '\u663E\u793A\u540D\u79F0 (e.g. DeepSeek API)');
+  const endpointInput = mkField('url', 'API \u7AEF\u70B9 (e.g. https://api.deepseek.com)');
+  const keyInput = mkField('password', 'API Key (\u53EF\u9009)');
+  const modelInput = mkField('text', '\u6A21\u578B\u540D\u79F0 (e.g. deepseek-chat)');
+
+  const colorRow = mk('div', {
+    style: 'display:flex;align-items:center;gap:8px;margin-bottom:12px;',
+  });
+  const colorLabel = mk('span', { style: 'font-size:12px;color:#718096;' });
+  colorLabel.textContent = '\u989C\u8272\uFF1A';
+  colorRow.appendChild(colorLabel);
+
+  const swatchEls: HTMLElement[] = [];
+  for (const c of colors) {
+    const sw = mk('div', {
+      style: j(
+        'width:24px', 'height:24px', 'border-radius:50%',
+        `background:${c}`, 'cursor:pointer', 'transition:all 0.15s',
+        `box-shadow:${c === selectedColor ? `0 0 0 2px #fff, 0 0 0 4px ${c}` : 'none'}`,
+      ),
+    });
+    sw.addEventListener('click', () => {
+      selectedColor = c;
+      for (const el of swatchEls) {
+        const clr = el.dataset['color'] ?? '#6366f1';
+        el.style.boxShadow = clr === c ? `0 0 0 2px #fff, 0 0 0 4px ${clr}` : 'none';
+      }
+    });
+    sw.dataset['color'] = c;
+    swatchEls.push(sw);
+    colorRow.appendChild(sw);
+  }
+  form.appendChild(colorRow);
+
+  const actions = mk('div', { style: 'display:flex;gap:8px;justify-content:flex-end;' });
+
+  actions.appendChild(
+    mkBtn('\u53D6\u6D88', '#edf2f7', '#4a5568', () => {
+      refreshGrid(modal);
+    }),
+  );
+
+  const saveBtn = mkBtn('\u4FDD\u5B58', '#4caf50', '#fff', () => {
+    const n = nameInput.value.trim();
+    const ep = endpointInput.value.trim();
+    const m = modelInput.value.trim();
+    if (!n || !ep || !m) {
+      nameInput.style.borderColor = n ? '#e2e8f0' : '#e53e3e';
+      endpointInput.style.borderColor = ep ? '#e2e8f0' : '#e53e3e';
+      modelInput.style.borderColor = m ? '#e2e8f0' : '#e53e3e';
+      return;
+    }
+    const config: CustomProviderConfig = {
+      id: `custom-${Date.now()}`,
+      name: n,
+      domain: '',
+      color: selectedColor,
+      weight: 1.0,
+      enabled: true,
+      isCustom: true,
+      apiEndpoint: ep,
+      apiKey: keyInput.value.trim(),
+      modelName: m,
+    };
+    saveBtn.disabled = true;
+    saveBtn.style.opacity = '0.6';
+    void (async () => {
+      try {
+        await chrome.runtime.sendMessage({ type: 'SAVE_CUSTOM_PROVIDER', config });
+        cards = cards.filter((c) => !c.isCustom);
+        await loadCustomProviders();
+      } catch {
+        refreshGrid(modal);
+      }
+    })();
+  });
+  saveBtn.style.fontWeight = '600';
+  actions.appendChild(saveBtn);
+
+  form.appendChild(actions);
+  grid.appendChild(form);
+}
+
 /* ── Weight selector refresh ─────────────────────────── */
 
 function refreshWeightSelect(modal: HTMLElement): void {
@@ -652,6 +879,7 @@ function refreshFooter(modal: HTMLElement): void {
 /* ── Style helpers ───────────────────────────────────── */
 
 function labelText(s: CardState): string {
+  if (s.isCustom) return 'API Key';
   if (!s.config.enabled) return '\u672A\u542F\u7528';
   switch (s.auth) {
     case 'checking':
@@ -669,6 +897,7 @@ function labelText(s: CardState): string {
 
 function badgeCSS(s: CardState): string {
   const b = 'display:inline-block;font-size:11px;padding:2px 8px;border-radius:4px;font-weight:500;';
+  if (s.isCustom) return b + 'color:#38a169;background:#f0fff4;';
   if (!s.config.enabled) return b + 'color:#a0aec0;background:#f0f0f0;';
   switch (s.auth) {
     case 'checking':

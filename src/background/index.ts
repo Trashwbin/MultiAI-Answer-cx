@@ -1,8 +1,8 @@
 import type { ExtensionMessage, Question } from '../types';
 import type { PromptMode } from '../types/provider';
 import { QuestionType } from '../types/question';
-import { getProviderById, getProvidersByIds, getEnabledProviders } from '../providers/registry';
-import { AI_PROVIDERS, getProviderById as getProviderConfig } from '../config/ai-config';
+import { getProviderById, getProvidersByIds, getEnabledProviders, getEnabledProvidersAsync, getProviderByIdAsync } from '../providers/registry';
+import { AI_PROVIDERS, getProviderById as getProviderConfig, getCustomProviders, saveCustomProvider, deleteCustomProvider } from '../config/ai-config';
 import { startGuidedLogin } from '../auth/guided-login';
 import { clearCredentials, mergeCredentials } from '../auth/token-manager';
 import { captureAllCookies } from '../auth/cookie-capture';
@@ -234,6 +234,24 @@ chrome.runtime.onMessage.addListener(
         break;
       }
 
+      case 'SAVE_CUSTOM_PROVIDER':
+        saveCustomProvider(message.config)
+          .then(() => sendResponse({ success: true }))
+          .catch((err: unknown) => sendResponse({ success: false, error: errorMessage(err) }));
+        break;
+
+      case 'DELETE_CUSTOM_PROVIDER':
+        deleteCustomProvider(message.providerId)
+          .then(() => sendResponse({ success: true }))
+          .catch((err: unknown) => sendResponse({ success: false, error: errorMessage(err) }));
+        break;
+
+      case 'GET_CUSTOM_PROVIDERS':
+        getCustomProviders()
+          .then((providers) => sendResponse({ success: true, providers }))
+          .catch((err: unknown) => sendResponse({ success: false, error: errorMessage(err) }));
+        break;
+
       case 'SHOW_ANSWER':
       case 'QUERY_START':
       case 'QUERY_COMPLETE':
@@ -266,6 +284,10 @@ async function handleAuthStatusAll(): Promise<Record<string, string>> {
       }
     }),
   );
+  const customConfigs = await getCustomProviders();
+  for (const config of customConfigs) {
+    statuses[config.id] = 'authenticated';
+  }
   return statuses;
 }
 
@@ -279,7 +301,7 @@ async function handleQueryAllAI(
   const batch = batchMode !== false;
   const providers = providerIds?.length
     ? getProvidersByIds(providerIds)
-    : getEnabledProviders();
+    : await getEnabledProvidersAsync();
 
   const ids = providers.map((p) => p.config.id);
   console.log(`[SW] QUERY_ALL_AI: querying ${ids.join(', ')} (${batch ? 'batch' : 'single'})`);
@@ -355,7 +377,7 @@ async function handleQuerySingleAI(
   questions: Question[],
   senderTabId: number,
 ): Promise<void> {
-  const provider = getProviderById(providerId);
+  const provider = await getProviderByIdAsync(providerId);
   if (!provider) {
     throw new Error(`Unknown provider: ${providerId}`);
   }
