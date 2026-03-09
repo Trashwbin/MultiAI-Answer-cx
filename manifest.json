@@ -27,26 +27,30 @@
     "webRequest",
     "scripting"
   ],
-  "host_permissions": [
-    "https://*.chaoxing.com/*",
-    "https://chat.deepseek.com/*",
-    "https://kimi.com/*",
-    "https://www.kimi.com/*",
-    "https://kimi.moonshot.cn/*",
-    "https://tongyi.aliyun.com/*",
-    "https://chatglm.cn/*",
-    "https://doubao.com/*",
-    "https://www.doubao.com/*",
-    "https://yiyan.baidu.com/*",
-    "https://xinghuo.xfyun.cn/*",
-    "https://chatgpt.com/*",
-    "https://gemini.google.com/*",
-    "https://grok.com/*",
-    "https://*.qianwen.com/*",
-    "http://127.0.0.1:*/*",
-    "http://localhost:*/*"
-  ],
-  "content_security_policy": {
+   "host_permissions": [
+     "https://*.chaoxing.com/*",
+     "https://chat.deepseek.com/*",
+     "https://kimi.com/*",
+     "https://www.kimi.com/*",
+     "https://kimi.moonshot.cn/*",
+     "https://tongyi.aliyun.com/*",
+     "https://chatglm.cn/*",
+     "https://doubao.com/*",
+     "https://www.doubao.com/*",
+     "https://yiyan.baidu.com/*",
+     "https://xinghuo.xfyun.cn/*",
+     "https://chatgpt.com/*",
+     "https://gemini.google.com/*",
+     "https://grok.com/*",
+     "https://*.qianwen.com/*",
+     "http://127.0.0.1:*/*",
+     "http://localhost:*/*"
+   ],
+   "optional_host_permissions": [
+     "https://*/*",
+     "http://*/*"
+   ],
+   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
   },
   "background": {

@@ -1,4 +1,4 @@
-import type { ProviderConfig } from '../types/provider';
+import type { ProviderConfig, CustomProviderConfig } from '../types/provider';
 
 export const AI_PROVIDERS: readonly ProviderConfig[] = [
   {
@@ -73,4 +73,33 @@ export function getEnabledProviders(): ProviderConfig[] {
 
 export function getProviderByDomain(hostname: string): ProviderConfig | undefined {
   return AI_PROVIDERS.find((p) => hostname === p.domain || hostname.endsWith(`.${p.domain}`));
+}
+
+const CUSTOM_PROVIDERS_KEY = 'CUSTOM_PROVIDERS';
+
+export async function getCustomProviders(): Promise<CustomProviderConfig[]> {
+  const result = await chrome.storage.local.get(CUSTOM_PROVIDERS_KEY);
+  const providers = result[CUSTOM_PROVIDERS_KEY] as CustomProviderConfig[] | undefined;
+  return providers ?? [];
+}
+
+export async function saveCustomProvider(config: CustomProviderConfig): Promise<void> {
+  const providers = await getCustomProviders();
+  providers.push(config);
+  await chrome.storage.local.set({ [CUSTOM_PROVIDERS_KEY]: providers });
+}
+
+export async function deleteCustomProvider(id: string): Promise<void> {
+  const providers = await getCustomProviders();
+  const filtered = providers.filter((p) => p.id !== id);
+  await chrome.storage.local.set({ [CUSTOM_PROVIDERS_KEY]: filtered });
+}
+
+export async function updateCustomProvider(config: CustomProviderConfig): Promise<void> {
+  const providers = await getCustomProviders();
+  const index = providers.findIndex((p) => p.id === config.id);
+  if (index !== -1) {
+    providers[index] = config;
+    await chrome.storage.local.set({ [CUSTOM_PROVIDERS_KEY]: providers });
+  }
 }

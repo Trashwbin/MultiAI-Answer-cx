@@ -21,6 +21,13 @@ export interface ProviderConfig {
   enabled: boolean;
 }
 
+export interface CustomProviderConfig extends ProviderConfig {
+  isCustom: true;
+  apiEndpoint: string;
+  apiKey: string;
+  modelName: string;
+}
+
 export interface AIProvider {
   config: ProviderConfig;
   promptMode: PromptMode;
