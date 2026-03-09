@@ -8,7 +8,7 @@
     "build:watch": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
-    "package": "npm run build && rm -rf release && mkdir -p release/MultiAI-Answer/src/popup release/MultiAI-Answer/src/content/utils && cp manifest.json release/MultiAI-Answer/ && cp -r icons lib dist release/MultiAI-Answer/ && cp src/popup/popup.html src/popup/popup.js release/MultiAI-Answer/src/popup/ && cp src/content/utils/notification.js release/MultiAI-Answer/src/content/utils/ && cd release && zip -r MultiAI-Answer.zip MultiAI-Answer && rm -rf MultiAI-Answer && echo 'Packaged: release/MultiAI-Answer.zip'"
+    "package": "npm run build && rm -rf release && mkdir -p release/MultiAI-Answer/src/popup release/MultiAI-Answer/src/content/utils && cp manifest.json release/MultiAI-Answer/ && cp -r icons lib dist release/MultiAI-Answer/ && cp src/popup/popup.html src/popup/popup.js release/MultiAI-Answer/src/popup/ && cp src/content/utils/notification.js release/MultiAI-Answer/src/content/utils/ && cd release && VERSION=$(node -p \"require('../manifest.json').version\") && zip -r \"MultiAI-Answer-v${VERSION}.zip\" MultiAI-Answer && rm -rf MultiAI-Answer && echo \"Packaged: release/MultiAI-Answer-v${VERSION}.zip\""
   },
   "devDependencies": {
     "@types/chrome": "^0.0.268",
