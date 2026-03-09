@@ -86,6 +86,13 @@ export function normalizeAnswer(raw: unknown): string | string[] {
     return raw.map((item) => {
       if (typeof item === 'string') return item.trim();
       if (item === null || item === undefined) return '';
+      // Flatten sub-question objects: {subQuestionNumber, answer} or {subId, answer}
+      if (typeof item === 'object' && 'answer' in (item as Record<string, unknown>)) {
+        const sub = (item as Record<string, unknown>).answer;
+        if (typeof sub === 'string') return sub.trim();
+        if (sub === null || sub === undefined) return '';
+        return String(sub);
+      }
       return String(item);
     });
   }
