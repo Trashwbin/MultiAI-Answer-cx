@@ -82,6 +82,12 @@ interface BearerCapturedMessage {
   bearerToken: string;
 }
 
+interface ExecPageFuncMessage {
+  type: 'EXEC_PAGE_FUNC';
+  funcName: string;
+  args: string[];
+}
+
 export type ExtensionMessage =
   | QueryAIMessage
   | QueryAllAIMessage
@@ -97,4 +103,5 @@ export type ExtensionMessage =
   | DebugCookiesMessage
   | ClearAllCredentialsMessage
   | StorageCapturedMessage
-  | BearerCapturedMessage;
+  | BearerCapturedMessage
+  | ExecPageFuncMessage;

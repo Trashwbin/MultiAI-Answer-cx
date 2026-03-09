@@ -207,6 +207,33 @@ chrome.runtime.onMessage.addListener(
           .catch((err: unknown) => sendResponse({ success: false, error: errorMessage(err) }));
         break;
 
+      case 'EXEC_PAGE_FUNC': {
+        const tabId = sender.tab?.id;
+        if (tabId === undefined) {
+          sendResponse({ success: false, error: 'No sender tab' });
+          break;
+        }
+        const { funcName, args } = message;
+        chrome.scripting
+          .executeScript({
+            target: { tabId },
+            world: 'MAIN',
+            func: (fn: string, fnArgs: string[]) => {
+              const w = window as unknown as Record<string, unknown>;
+              const func = w[fn];
+              if (typeof func === 'function') {
+                (func as (...a: string[]) => void)(...fnArgs);
+              }
+            },
+            args: [funcName, args],
+          })
+          .then(() => sendResponse({ success: true }))
+          .catch((err: unknown) =>
+            sendResponse({ success: false, error: errorMessage(err) }),
+          );
+        break;
+      }
+
       case 'SHOW_ANSWER':
       case 'QUERY_START':
       case 'QUERY_COMPLETE':
