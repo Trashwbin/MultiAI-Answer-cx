@@ -1,7 +1,7 @@
 import type { ExtensionMessage, Question } from '../types';
 import type { PromptMode } from '../types/provider';
 import { QuestionType } from '../types/question';
-import { getProviderById, getProvidersByIds, getEnabledProviders, getEnabledProvidersAsync, getProviderByIdAsync } from '../providers/registry';
+import { getProviderById, getProvidersByIds, getEnabledProviders, getEnabledProvidersAsync, getProvidersByIdsAsync, getProviderByIdAsync } from '../providers/registry';
 import { AI_PROVIDERS, getProviderById as getProviderConfig, getCustomProviders, saveCustomProvider, deleteCustomProvider } from '../config/ai-config';
 import { startGuidedLogin } from '../auth/guided-login';
 import { clearCredentials, mergeCredentials } from '../auth/token-manager';
@@ -300,7 +300,7 @@ async function handleQueryAllAI(
 ): Promise<void> {
   const batch = batchMode !== false;
   const providers = providerIds?.length
-    ? getProvidersByIds(providerIds)
+    ? await getProvidersByIdsAsync(providerIds)
     : await getEnabledProvidersAsync();
 
   const ids = providers.map((p) => p.config.id);

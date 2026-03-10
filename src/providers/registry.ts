@@ -59,6 +59,24 @@ export async function getEnabledProvidersAsync(): Promise<AIProvider[]> {
   return [...builtIn, ...custom];
 }
 
+export async function getProvidersByIdsAsync(ids: string[]): Promise<AIProvider[]> {
+  const idSet = new Set(ids);
+  const builtIn = AI_PROVIDERS
+    .filter((config) => idSet.has(config.id))
+    .map((config) => {
+      const factory = FACTORIES[config.id];
+      return factory ? factory(config) : undefined;
+    })
+    .filter((provider): provider is AIProvider => provider !== undefined);
+
+  const customConfigs = await getCustomProviders();
+  const custom = customConfigs
+    .filter((config) => idSet.has(config.id))
+    .map((config) => new OpenAICompatibleProvider(config));
+
+  return [...builtIn, ...custom];
+}
+
 export async function getProviderByIdAsync(id: string): Promise<AIProvider | undefined> {
   const builtIn = getProviderById(id);
   if (builtIn) {
