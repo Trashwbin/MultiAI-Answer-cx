@@ -15,12 +15,15 @@ https://github.com/user-attachments/assets/e84fd061-df37-4767-8a38-5fedd8e6e54d
 
 同时向多个 AI 平台发送题目，通过加权投票聚合出最优答案，支持一键自动填写。
 
-**支持的 AI 平台**：DeepSeek、Kimi、通义千问、智谱清言、豆包、ChatGPT、Grok
+**内置 AI 平台**：DeepSeek、Kimi、通义千问、智谱清言、豆包、ChatGPT、Grok
+
+**自定义 API**：支持任意 OpenAI 兼容接口（DeepSeek API、Qwen API、Moonshot API、Ollama、one-api 等）
 
 ## 功能
 
 - **全题型覆盖** — 单选、多选、判断、填空、问答、阅读理解、完形填空、选词填空、共用选项、名词解释等 11 种题型
 - **多 AI 投票** — 多个模型并行回答，加权投票选出最佳答案，可自定义各 AI 权重
+- **自定义 API 源** — 支持添加多个 OpenAI 兼容格式的第三方 API，与内置平台一起参与投票
 - **两种回答模式** — 极速回答（无推理直接出答案）/ 详细解析（带分析过程）
 - **批量发送** — 所有题目合并为一条 prompt 发送，减少请求次数
 - **自动填写** — 一键将最终答案填入页面，模拟人工点击延迟
@@ -43,7 +46,7 @@ https://github.com/user-attachments/assets/e84fd061-df37-4767-8a38-5fedd8e6e54d
 4. 等待各 AI 返回结果，面板自动聚合最终答案
 5. 点击「自动填写」一键填入
 
-> 使用前需要先登录对应的 AI 平台（在浏览器中打开并登录即可）。
+> 内置平台需要先登录（在浏览器中打开对应 AI 网站并登录即可）。自定义 API 源只需填写端点和 API Key。
 
 ## 构建
 
