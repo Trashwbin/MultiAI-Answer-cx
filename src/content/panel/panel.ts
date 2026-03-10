@@ -1,6 +1,30 @@
-import type { Question, FinalAnswer, ProviderResponse } from '../../types';
+import type { Question, FinalAnswer, ProviderResponse, ProviderConfig } from '../../types';
+import type { CustomProviderConfig } from '../../types/provider';
 import { getProviderById } from '../../config/ai-config';
 import { createEditor } from '../editors/factory';
+
+/* ── Custom provider config cache ────────────────────── */
+
+const customProviderCache = new Map<string, ProviderConfig>();
+
+function refreshCustomProviderCache(): void {
+  chrome.runtime.sendMessage({ type: 'GET_CUSTOM_PROVIDERS' })
+    .then((res: { success?: boolean; providers?: CustomProviderConfig[] } | undefined) => {
+      if (res?.success && Array.isArray(res.providers)) {
+        customProviderCache.clear();
+        for (const p of res.providers) {
+          customProviderCache.set(p.id, p);
+        }
+      }
+    })
+    .catch(() => {});
+}
+
+refreshCustomProviderCache();
+
+function resolveProviderConfig(id: string): ProviderConfig | undefined {
+  return getProviderById(id) ?? customProviderCache.get(id);
+}
 
 /* ── Constants ────────────────────────────────────────── */
 
@@ -50,6 +74,7 @@ export function showAnswerPanel(
   callbacks?: AnswerPanelCallbacks,
 ): void {
   hideAnswerPanel();
+  refreshCustomProviderCache();
 
   panelState = state;
   panelCallbacks = callbacks ?? null;
@@ -356,7 +381,7 @@ function buildAINamesRow(): HTMLElement {
   row.appendChild(title);
 
   for (const id of activeProviderIds) {
-    const config = getProviderById(id);
+    const config = resolveProviderConfig(id);
     const name = config?.name ?? id;
     const color = config?.color ?? '#718096';
 
@@ -586,7 +611,7 @@ function buildQuestionCell(question: Question): HTMLElement {
 /* ── AI Answer Cell ──────────────────────────────────── */
 
 function buildAIAnswerCell(question: Question, providerId: string): HTMLElement {
-  const config = getProviderById(providerId);
+  const config = resolveProviderConfig(providerId);
   const color = config?.color ?? '#718096';
   const name = config?.name ?? providerId;
 
@@ -747,7 +772,7 @@ function showRawResponseModal(): void {
   );
 
   for (const id of activeProviderIds) {
-    const config = getProviderById(id);
+    const config = resolveProviderConfig(id);
     const opt = document.createElement('option');
     opt.value = id;
     opt.textContent = config?.name ?? id;
