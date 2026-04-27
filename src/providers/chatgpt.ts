@@ -1,5 +1,6 @@
 import { parseAIResponse } from '../core/json-parser';
 import type { AuthStatus, ProviderResponse, Question } from '../types';
+import { createGroupedTab } from '../utils/tab-group';
 import { BaseProvider } from './base-provider';
 
 export class ChatGPTProvider extends BaseProvider {
@@ -127,7 +128,7 @@ export class ChatGPTProvider extends BaseProvider {
       if (tab?.id !== undefined) return tab.id;
     }
 
-    const tab = await chrome.tabs.create({ url: 'https://chatgpt.com/', active: false });
+    const tab = await createGroupedTab({ url: 'https://chatgpt.com/', active: false });
     if (tab.id === undefined) throw new Error('ChatGPT: chrome.tabs.create 无 id');
 
     await new Promise<void>((resolve, reject) => {

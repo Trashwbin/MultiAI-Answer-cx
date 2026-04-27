@@ -1,3 +1,5 @@
+import { createGroupedTab, ensureTabGrouped } from './tab-group';
+
 /**
  * Page-context fetch proxy.
  *
@@ -85,13 +87,14 @@ async function ensureTab(domain: string): Promise<number> {
     const tabs = await chrome.tabs.query({ url: pattern });
     const tab = tabs.find((t) => t.id !== undefined);
     if (tab?.id !== undefined) {
+      await ensureTabGrouped(tab.id);
       console.log(`[PageProxy] Reusing tab ${tab.id} for ${domain}`);
       return tab.id;
     }
   }
 
   console.log(`[PageProxy] Creating background tab for ${domain}`);
-  const tab = await chrome.tabs.create({
+  const tab = await createGroupedTab({
     url: `https://${domain}/`,
     active: false,
   });

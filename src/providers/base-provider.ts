@@ -1,6 +1,7 @@
 import { getCredentials, saveCredentials } from '../auth/token-manager';
 import { captureCookies, captureAllCookies } from '../auth/cookie-capture';
 import { buildPrompt as buildRichPrompt } from '../config/prompts';
+import { ensureTabGrouped } from '../utils/tab-group';
 import type {
   AIProvider,
   AuthCredentials,
@@ -80,7 +81,10 @@ export abstract class BaseProvider implements AIProvider {
     for (const pattern of urlPatterns) {
       const tabs = await chrome.tabs.query({ url: pattern });
       const tab = tabs.find((t) => t.id !== undefined);
-      if (tab?.id !== undefined) return tab.id;
+      if (tab?.id !== undefined) {
+        await ensureTabGrouped(tab.id);
+        return tab.id;
+      }
     }
     return undefined;
   }

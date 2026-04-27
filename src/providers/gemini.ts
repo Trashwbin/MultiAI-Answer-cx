@@ -1,5 +1,6 @@
 import { parseAIResponse } from '../core/json-parser';
 import type { AuthStatus, ProviderResponse, Question } from '../types';
+import { createGroupedTab } from '../utils/tab-group';
 import { BaseProvider } from './base-provider';
 
 export class GeminiProvider extends BaseProvider {
@@ -100,7 +101,7 @@ export class GeminiProvider extends BaseProvider {
       if (tab?.id !== undefined) return tab.id;
     }
 
-    const tab = await chrome.tabs.create({
+    const tab = await createGroupedTab({
       url: 'https://gemini.google.com/app',
       active: false,
     });

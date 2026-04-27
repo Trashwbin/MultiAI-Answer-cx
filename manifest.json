@@ -19,6 +19,7 @@
   "author": "Trashwbin",
   "permissions": [
     "tabs",
+    "tabGroups",
     "clipboardRead",
     "clipboardWrite",
     "storage",
