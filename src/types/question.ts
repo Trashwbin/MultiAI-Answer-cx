@@ -21,6 +21,7 @@ export interface QuestionOption {
 export interface Question {
   id: string;
   number: string;
+  displayNumber: string;
   type: QuestionType;
   content: string;
   options: QuestionOption[];

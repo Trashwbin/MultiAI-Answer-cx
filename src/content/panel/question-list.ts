@@ -207,7 +207,9 @@ function buildQuestionRow(q: Question, groupType: QuestionType): HTMLElement {
   const content = el('div', { style: 'flex:1;min-width:0;' });
 
   const meta = el('div', { style: 'font-size:13px;color:#718096;margin-bottom:4px;' });
-  meta.textContent = `${q.number}. ${QUESTION_TYPE_LABELS[q.type]}`;
+  meta.textContent = q.displayNumber === q.number
+    ? `全卷第 ${q.number} 题 · ${QUESTION_TYPE_LABELS[q.type]}`
+    : `全卷第 ${q.number} 题 · 页面显示 ${q.displayNumber} · ${QUESTION_TYPE_LABELS[q.type]}`;
   content.appendChild(meta);
 
   const body = el('div', { style: 'color:#2d3748;line-height:1.6;' });
@@ -275,7 +277,14 @@ function getSelectedQuestions(): Question[] {
       if (stored) selected.push(stored);
     }
   }
-  return selected;
+  return selected.sort((a, b) => {
+    const orderA = a.globalOrder ?? Number.MAX_SAFE_INTEGER;
+    const orderB = b.globalOrder ?? Number.MAX_SAFE_INTEGER;
+    if (orderA !== orderB) {
+      return orderA - orderB;
+    }
+    return a.number.localeCompare(b.number, undefined, { numeric: true });
+  });
 }
 
 const questionCache = new Map<string, Question>();

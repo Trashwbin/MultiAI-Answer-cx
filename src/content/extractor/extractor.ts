@@ -78,6 +78,23 @@ function normalizeInlineText(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
 }
 
+function extractDisplayNumber(titleElem: Element): string {
+  const clone = titleElem.cloneNode(true) as Element;
+  clone.querySelector('.colorShallow')?.remove();
+  const normalized = normalizeInlineText(clone.textContent ?? '');
+  const match = normalized.match(/^(\d+)\s*[.、．]/);
+  return match?.[1] ?? '';
+}
+
+function resolveGlobalOrder(div: Element, fallbackIndex: number): number {
+  const rawStart = div.querySelector<HTMLInputElement>('input[name="start"]')?.value ?? '';
+  const parsed = Number.parseInt(rawStart, 10);
+  if (Number.isFinite(parsed) && parsed >= 0) {
+    return parsed;
+  }
+  return fallbackIndex;
+}
+
 function extractReadingContent(div: Element): CompositeResult {
   const passage = div.querySelector('.mark_name div')?.textContent?.trim() ?? '';
   const childIds = Array.from(div.querySelectorAll<HTMLInputElement>('input[name="readCompreHension-childId"]'))
@@ -216,7 +233,7 @@ export function extractQuestionsFromXXT(): Question[] {
 
   const questionDivs = document.querySelectorAll('.questionLi');
 
-  questionDivs.forEach((div) => {
+  questionDivs.forEach((div, index) => {
     const titleElem = div.querySelector('.mark_name');
     if (!titleElem) {
       return;
@@ -225,7 +242,8 @@ export function extractQuestionsFromXXT(): Question[] {
     const typeSpan = titleElem.querySelector('.colorShallow');
     const rawType = extractRawType(div, typeSpan);
     const questionType = QUESTION_TYPE_MAP[rawType] ?? QuestionType.OTHER;
-    const startVal = parseInt(div.querySelector<HTMLInputElement>('input[name="start"]')?.value ?? '0', 10);
+    const displayNumber = extractDisplayNumber(titleElem);
+    const globalOrder = resolveGlobalOrder(div, index);
 
     let content = extractContent(titleElem, questionType);
     let options: QuestionOption[] = [];
@@ -272,8 +290,9 @@ export function extractQuestionsFromXXT(): Question[] {
 
     const question: Question = {
       id: div.getAttribute('data') ?? '',
-      number: (startVal + 1).toString(),
-      globalOrder: startVal,
+      number: (globalOrder + 1).toString(),
+      displayNumber: displayNumber || (globalOrder + 1).toString(),
+      globalOrder,
       type: questionType,
       content,
       options,
