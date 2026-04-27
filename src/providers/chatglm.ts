@@ -53,7 +53,16 @@ export class ChatGLMProvider extends BaseProvider {
         target: { tabId },
         world: 'MAIN',
         func: chatglmPageQuery,
-        args: [prompt, signData, this.deviceId, requestId, X_EXP_GROUPS, accessTokenSW, refreshTokenSW],
+        args: [
+          prompt,
+          signData,
+          this.deviceId,
+          requestId,
+          X_EXP_GROUPS,
+          accessTokenSW,
+          refreshTokenSW,
+          this.promptMode === 'analysis',
+        ],
       });
 
       const result = results[0]?.result as
@@ -115,6 +124,7 @@ function chatglmPageQuery(
   xExpGroups: string,
   accessTokenFromSW: string,
   refreshTokenFromSW: string,
+  enableReasoning: boolean,
 ): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
   return (async () => {
     try {
@@ -205,7 +215,7 @@ function chatglmPageQuery(
             input_question_type: 'xxxx',
             channel: '',
             draft_id: '',
-            chat_mode: 'zero',
+            chat_mode: enableReasoning ? 'zero' : undefined,
             is_networking: false,
             quote_log_id: '',
             platform: 'pc',
@@ -219,51 +229,57 @@ function chatglmPageQuery(
         return { ok: false as const, error: `ChatGLM API ${res.status}: ${errText.slice(0, 300)}` };
       }
 
-      // ChatGLM SSE: each event contains the FULL accumulated text (not a delta).
-      // We keep only the last (most complete) value.
       const sse = await res.text();
-      let lastText = '';
+      const cachedParts: Array<{ logic_id?: string; content?: Array<Record<string, unknown>> }> = [];
+
       for (const line of sse.split('\n')) {
         const trimmed = line.trim();
         if (!trimmed.startsWith('data:')) continue;
         const payload = trimmed.slice(5).trim();
         if (!payload || payload === '[DONE]') continue;
+
         try {
           const obj = JSON.parse(payload);
-          let text = '';
 
           if (Array.isArray(obj.parts)) {
             for (const part of obj.parts) {
-              if (part && Array.isArray(part.content)) {
-                for (const c of part.content) {
-                  if (c?.type === 'text' && typeof c.text === 'string') {
-                    text = c.text;
-                    break;
-                  }
-                }
+              const logicId = typeof part?.logic_id === 'string' ? part.logic_id : '';
+              const index = logicId
+                ? cachedParts.findIndex((cached) => cached.logic_id === logicId)
+                : -1;
+              if (index >= 0) {
+                cachedParts[index] = part;
+              } else {
+                cachedParts.push(part);
               }
-              if (text) break;
             }
           }
 
-          if (!text && obj.data && typeof obj.data === 'object') {
-            const dpParts = obj.data.parts;
-            if (Array.isArray(dpParts) && dpParts[0]?.content) {
-              text = typeof dpParts[0].content === 'string' ? dpParts[0].content : '';
-            }
-          }
+          const directText =
+            (typeof obj.text === 'string' ? obj.text : '') ||
+            (typeof obj.content === 'string' ? obj.content : '') ||
+            (typeof obj.delta === 'string' ? obj.delta : '');
 
-          if (!text) {
-            text = (typeof obj.text === 'string' ? obj.text : '') ||
-                   (typeof obj.content === 'string' ? obj.content : '') ||
-                   (typeof obj.delta === 'string' ? obj.delta : '');
+          if (directText.trim()) {
+            cachedParts.push({
+              logic_id: `fallback-${cachedParts.length}`,
+              content: [{ type: 'text', text: directText }],
+            });
           }
-
-          if (text) lastText = text;
         } catch {}
       }
 
-      return { ok: true as const, text: lastText };
+      const texts: string[] = [];
+      for (const part of cachedParts) {
+        if (!Array.isArray(part.content)) continue;
+        for (const item of part.content) {
+          if (item?.type === 'text' && typeof item.text === 'string' && item.text.trim()) {
+            texts.push(item.text);
+          }
+        }
+      }
+
+      return { ok: true as const, text: texts.join('\n').trim() };
     } catch (e: unknown) {
       return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
     }

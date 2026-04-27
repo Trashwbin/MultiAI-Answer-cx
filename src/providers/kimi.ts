@@ -16,7 +16,7 @@ export class KimiProvider extends BaseProvider {
         target: { tabId },
         world: 'MAIN',
         func: kimiConnectRpc,
-        args: [prompt, kimiAuth],
+        args: [prompt, kimiAuth, this.promptMode === 'analysis'],
       });
 
       const result = results[0]?.result as
@@ -75,9 +75,30 @@ export class KimiProvider extends BaseProvider {
 function kimiConnectRpc(
   message: string,
   kimiAuth: string,
+  enableThinking: boolean,
 ): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
   return (async () => {
     try {
+      const requestHeaders = {
+        Accept: '*/*',
+        'Accept-Encoding': 'gzip, deflate, br, zstd',
+        'Accept-Language': 'zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7',
+        'Cache-Control': 'no-cache',
+        Pragma: 'no-cache',
+        Origin: 'https://www.kimi.com',
+        'R-Timezone': 'Asia/Shanghai',
+        'Sec-Ch-Ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+        'Sec-Ch-Ua-Mobile': '?0',
+        'Sec-Ch-Ua-Platform': '"Windows"',
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'same-origin',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        Priority: 'u=1, i',
+        'X-Msh-Platform': 'web',
+        'Connect-Protocol-Version': '1',
+      };
+
       if (!kimiAuth) {
         const cookieMatch = document.cookie.match(/(?:^|;\s*)kimi-auth=([^;]+)/);
         kimiAuth = cookieMatch?.[1] ?? '';
@@ -98,7 +119,7 @@ function kimiConnectRpc(
           blocks: [{ message_id: '', text: { content: message } }],
           scenario: 'SCENARIO_K2D5',
         },
-        options: { thinking: false },
+        options: { thinking: enableThinking },
       };
 
       const enc = new TextEncoder().encode(JSON.stringify(req));
@@ -113,11 +134,10 @@ function kimiConnectRpc(
         {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/connect+json',
-            Accept: '*/*',
-            'X-Language': 'zh-CN',
-            'X-Msh-Platform': 'web',
             Authorization: `Bearer ${kimiAuth}`,
+            'Content-Type': 'application/connect+json',
+            'X-Language': 'zh-CN',
+            ...requestHeaders,
           },
           body: buf,
         },
@@ -132,6 +152,7 @@ function kimiConnectRpc(
       const u8 = new Uint8Array(arr);
       const decoder = new TextDecoder();
       const texts: string[] = [];
+      let currentPhase: 'thinking' | 'answer' | undefined = undefined;
       let o = 0;
 
       while (o + 5 <= u8.length) {
@@ -147,8 +168,33 @@ function kimiConnectRpc(
               error: `Kimi RPC: ${obj.error.message ?? obj.error.code ?? JSON.stringify(obj.error).slice(0, 200)}`,
             };
           }
+
+          const stages = obj.block?.multiStage?.stages;
+          if (Array.isArray(stages) && stages.length > 0) {
+            const firstStage = stages[0];
+            if (firstStage?.name === 'STAGE_NAME_THINKING') {
+              currentPhase = firstStage.status === 'completed' ? 'answer' : 'thinking';
+            }
+          }
+
+          if (obj.block?.text?.flags === 'thinking') {
+            currentPhase = 'thinking';
+          } else if (obj.block?.text?.flags === 'answer') {
+            currentPhase = 'answer';
+          }
+
+          const mask = typeof obj.mask === 'string' ? obj.mask : '';
+          if (mask.includes('block.think')) {
+            currentPhase = 'thinking';
+          } else if (mask.includes('block.text')) {
+            currentPhase = 'answer';
+          }
+
           if (obj.block?.text?.content && ['set', 'append'].includes(obj.op ?? '')) {
-            texts.push(obj.block.text.content);
+            const content = obj.block.text.content;
+            if (!enableThinking || currentPhase !== 'thinking') {
+              texts.push(content);
+            }
           }
           if (obj.done) break;
         } catch {}
