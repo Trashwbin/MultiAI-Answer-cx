@@ -10,6 +10,7 @@ import {
   fillSharedOptionsAnswer,
   fillWordFillAnswer,
 } from './fill-composite';
+import { buildQuestionLookup } from '../../utils/question-key';
 
 const SCROLL_WAIT_MS = 500;
 const SAVE_WAIT_MS = 2000;
@@ -122,17 +123,15 @@ async function fillByType(
 
 function sortByDomOrder(
   finalAnswers: FinalAnswer[],
-  questionByNumber: Map<string, Question>,
+  questionLookup: Map<string, Question>,
 ): FinalAnswer[] {
   return [...finalAnswers].sort((a, b) => {
-    const qA = questionByNumber.get(a.questionNumber);
-    const qB = questionByNumber.get(b.questionNumber);
+    const qA = questionLookup.get(a.id);
+    const qB = questionLookup.get(b.id);
     const orderA = qA?.globalOrder ?? Number.MAX_SAFE_INTEGER;
     const orderB = qB?.globalOrder ?? Number.MAX_SAFE_INTEGER;
     if (orderA !== orderB) return orderA - orderB;
-    return a.questionNumber.localeCompare(b.questionNumber, undefined, {
-      numeric: true,
-    });
+    return a.id.localeCompare(b.id);
   });
 }
 
@@ -140,11 +139,11 @@ export async function autoFillAnswers(
   finalAnswers: FinalAnswer[],
   questions: Question[],
 ): Promise<void> {
-  const questionByNumber = new Map(questions.map((q) => [q.number, q]));
-  const sorted = sortByDomOrder(finalAnswers, questionByNumber);
+  const questionLookup = buildQuestionLookup(questions);
+  const sorted = sortByDomOrder(finalAnswers, questionLookup);
 
   for (const finalAnswer of sorted) {
-    const question = questionByNumber.get(finalAnswer.questionNumber);
+    const question = questionLookup.get(finalAnswer.id);
     if (!question) continue;
 
     if (

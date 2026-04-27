@@ -33,12 +33,12 @@ function answerKey(answer: string | string[]): string {
  * - Tie-break: highest sum of (providerWeight × confidence/100).
  */
 export function vote(
-  questionNumber: string,
+  id: string,
   answers: ProviderQuestionAnswer[],
   providerWeights: Map<string, number>,
 ): FinalAnswer {
   if (answers.length === 0) {
-    return { questionNumber, answer: '', votes: 0, totalProviders: 0 };
+    return { id, answer: '', votes: 0, totalProviders: 0 };
   }
 
   const buckets = new Map<string, VoteBucket>();
@@ -74,7 +74,7 @@ export function vote(
   }
 
   return {
-    questionNumber,
+    id,
     answer: winner?.answer ?? '',
     votes: winner?.count ?? 0,
     totalProviders: answers.length,

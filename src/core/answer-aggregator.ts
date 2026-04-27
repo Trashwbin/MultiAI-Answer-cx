@@ -21,25 +21,25 @@ export function aggregateAnswers(
   for (const response of responses) {
     for (const qa of response.answers) {
       const entry: ProviderQuestionAnswer = { ...qa, providerId: response.providerId };
-      const existing = grouped.get(qa.questionNumber);
+      const existing = grouped.get(qa.id);
       if (existing) {
         existing.push(entry);
       } else {
-        grouped.set(qa.questionNumber, [entry]);
+        grouped.set(qa.id, [entry]);
       }
     }
   }
 
   const results: FinalAnswer[] = [];
-  for (const [questionNumber, answers] of grouped) {
-    results.push(vote(questionNumber, answers, providerWeights));
+  for (const [id, answers] of grouped) {
+    results.push(vote(id, answers, providerWeights));
   }
 
   results.sort((a, b) => {
-    const numA = parseInt(a.questionNumber, 10);
-    const numB = parseInt(b.questionNumber, 10);
+    const numA = parseInt(a.id, 10);
+    const numB = parseInt(b.id, 10);
     if (isNaN(numA) || isNaN(numB)) {
-      return a.questionNumber.localeCompare(b.questionNumber);
+      return a.id.localeCompare(b.id);
     }
     return numA - numB;
   });

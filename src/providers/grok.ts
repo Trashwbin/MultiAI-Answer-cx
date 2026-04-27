@@ -1,5 +1,6 @@
 import { parseAIResponse } from '../core/json-parser';
 import type { ProviderResponse, Question } from '../types';
+import { createGroupedTab } from '../utils/tab-group';
 import { BaseProvider } from './base-provider';
 
 export class GrokProvider extends BaseProvider {
@@ -110,7 +111,7 @@ export class GrokProvider extends BaseProvider {
       if (tab?.id !== undefined) return tab.id;
     }
 
-    const tab = await chrome.tabs.create({ url: 'https://grok.com/', active: false });
+    const tab = await createGroupedTab({ url: 'https://grok.com/', active: false });
     if (tab.id === undefined) throw new Error('Grok: chrome.tabs.create 无 id');
 
     await new Promise<void>((resolve, reject) => {

@@ -1,6 +1,7 @@
 import { captureAllCookies } from '../auth/cookie-capture';
 import { parseAIResponse } from '../core/json-parser';
 import type { AuthStatus, ProviderResponse, Question } from '../types';
+import { createGroupedTab } from '../utils/tab-group';
 import { BaseProvider } from './base-provider';
 
 const SIGN_SECRET = '8a1317a7468aa3ad86e997d08f3f31cb';
@@ -83,7 +84,7 @@ export class ChatGLMProvider extends BaseProvider {
       if (tab?.id !== undefined) return tab.id;
     }
 
-    const tab = await chrome.tabs.create({ url: 'https://chatglm.cn/', active: false });
+    const tab = await createGroupedTab({ url: 'https://chatglm.cn/', active: false });
     if (tab.id === undefined) throw new Error('ChatGLM: chrome.tabs.create 无 id');
 
     await new Promise<void>((resolve, reject) => {
@@ -425,4 +426,3 @@ function wordsToHex(state: Md5State): string {
   }
   return hexParts.join('');
 }
-

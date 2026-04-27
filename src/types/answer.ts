@@ -1,5 +1,5 @@
 export interface QuestionAnswer {
-  questionNumber: string;
+  id: string;
   answer: string | string[];
   confidence?: number;
 }
@@ -12,7 +12,7 @@ export interface ProviderResponse {
 }
 
 export interface FinalAnswer {
-  questionNumber: string;
+  id: string;
   answer: string | string[];
   votes: number;
   totalProviders: number;

@@ -403,6 +403,7 @@ async function handleTestProvider(
   const testQuestion: Question = {
     id: 'test-1',
     number: '1',
+    displayNumber: '1',
     type: QuestionType.SINGLE_CHOICE,
     content: questionText,
     options: [

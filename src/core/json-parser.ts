@@ -1,8 +1,8 @@
 import type { QuestionAnswer, ProviderResponse } from '../types';
 
 interface RawAIAnswer {
-  questionNumber?: unknown;
   id?: unknown;
+  questionNumber?: unknown;
   answer?: unknown;
   confidence?: unknown;
   reasoning?: unknown;
@@ -150,7 +150,7 @@ function regexFallback(text: string): QuestionAnswer[] {
     const rawAnswer = match[2]?.trim();
     if (questionNum && rawAnswer) {
       answers.push({
-        questionNumber: questionNum,
+        id: questionNum,
         answer: normalizeExtractedAnswer(rawAnswer),
       });
     }
@@ -164,7 +164,7 @@ function regexFallback(text: string): QuestionAnswer[] {
     const rawAnswer = match[2]?.trim();
     if (questionNum && rawAnswer) {
       answers.push({
-        questionNumber: questionNum,
+        id: questionNum,
         answer: normalizeExtractedAnswer(rawAnswer),
       });
     }
@@ -178,7 +178,7 @@ function regexFallback(text: string): QuestionAnswer[] {
     const rawAnswer = match[2]?.trim();
     if (questionNum && rawAnswer) {
       answers.push({
-        questionNumber: questionNum,
+        id: questionNum,
         answer: normalizeExtractedAnswer(rawAnswer),
       });
     }
@@ -264,14 +264,14 @@ function extractAnswers(parsed: unknown): QuestionAnswer[] {
     if (!isRecord(item)) continue;
     const rawItem = item as RawAIAnswer;
 
-    const qNum = extractQuestionNumber(rawItem);
-    if (!qNum) continue;
+    const questionId = extractQuestionId(rawItem);
+    if (!questionId) continue;
 
     const answer = normalizeAnswer(rawItem.answer);
     const confidence = extractConfidence(rawItem.confidence);
 
     const qa: QuestionAnswer = {
-      questionNumber: qNum,
+      id: questionId,
       answer,
     };
 
@@ -285,13 +285,13 @@ function extractAnswers(parsed: unknown): QuestionAnswer[] {
   return results;
 }
 
-function extractQuestionNumber(item: RawAIAnswer): string | null {
-  if (item.questionNumber !== null && item.questionNumber !== undefined) {
-    return String(item.questionNumber);
-  }
-
+function extractQuestionId(item: RawAIAnswer): string | null {
   if (item.id !== null && item.id !== undefined) {
     return String(item.id);
+  }
+
+  if (item.questionNumber !== null && item.questionNumber !== undefined) {
+    return String(item.questionNumber);
   }
 
   return null;
@@ -314,14 +314,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Extracts "questionNumber": "1" ... "answer": "A" pairs from semi-structured text
+ * Extracts "id": "xxx" or "questionNumber": "1" ... "answer": "A" pairs from semi-structured text
  * where JSON parsing failed but key-value patterns are still recognizable.
  */
 function extractJsonPairAnswers(text: string): QuestionAnswer[] {
   const answers: QuestionAnswer[] = [];
 
-  // Matches: "questionNumber"|"id": "N" ... "answer": "X" or ["X","Y"]
-  const pairRegex = /["'](?:questionNumber|id)["']\s*:\s*["']?(\d+)["']?\s*[,\s]*["']answer["']\s*:\s*(\[[\s\S]*?\]|"[^"]*"|'[^']*')/g;
+  // Matches: "id": "885399949" or "questionNumber": "1" ... "answer": "X" or ["X","Y"]
+  const pairRegex = /["'](?:questionNumber|id)["']\s*:\s*["']?([A-Za-z0-9:_-]+)["']?\s*[,\s]*["']answer["']\s*:\s*(\[[\s\S]*?\]|"[^"]*"|'[^']*')/g;
   let match: RegExpExecArray | null;
 
   while ((match = pairRegex.exec(text)) !== null) {
@@ -349,7 +349,7 @@ function extractJsonPairAnswers(text: string): QuestionAnswer[] {
       answer = trimmedAnswer.replace(/^["']|["']$/g, '').trim();
     }
 
-    answers.push({ questionNumber: questionNum, answer });
+    answers.push({ id: questionNum, answer });
   }
 
   return answers;

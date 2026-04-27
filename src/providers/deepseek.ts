@@ -1,6 +1,7 @@
 import { parseAIResponse } from '../core/json-parser';
 import { getCredentials } from '../auth/token-manager';
 import type { AuthCredentials, ProviderResponse, Question } from '../types';
+import { createGroupedTab } from '../utils/tab-group';
 import { BaseProvider } from './base-provider';
 
 interface DeepSeekPowChallenge {
@@ -65,7 +66,7 @@ export class DeepSeekProvider extends BaseProvider {
     }
 
     console.log('[DeepSeek] No Bearer found, opening background tab to capture...');
-    const tab = await chrome.tabs.create({
+    const tab = await createGroupedTab({
       url: 'https://chat.deepseek.com/',
       active: false,
     });
