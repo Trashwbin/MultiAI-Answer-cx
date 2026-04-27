@@ -6,6 +6,7 @@ import { showAnswerPanel, updateAnswerPanel, updateProviderStatus, setAutoFillCa
 import { showQuestionList as showQuestionListModal, initQuestionList, setQuestionListSendCallback, hideQuestionList } from './panel/question-list';
 import { showAISelector } from './panel/ai-selector';
 import { startWatermarkRemoval, removePasteRestriction, removeSelectRestriction, addCopyButtons } from './page-enhancements';
+import { buildQuestionLookup } from '../utils/question-key';
 
 let extensionEnabled = true;
 let questions: Question[] = [];
@@ -80,7 +81,7 @@ function aggregateFinalAnswers(
     if (entry.error) continue;
 
     for (const pa of entry.answers) {
-      const existing = answerMap.get(pa.questionNumber);
+      const existing = answerMap.get(pa.id);
       if (existing) {
         const answerKey = Array.isArray(pa.answer) ? pa.answer.join(',') : pa.answer;
         const existingKey = Array.isArray(existing.answer) ? existing.answer.join(',') : existing.answer;
@@ -91,8 +92,8 @@ function aggregateFinalAnswers(
         }
         existing.totalProviders += 1;
       } else {
-        answerMap.set(pa.questionNumber, {
-          questionNumber: pa.questionNumber,
+        answerMap.set(pa.id, {
+          id: pa.id,
           answer: pa.answer,
           votes: 1,
           totalProviders: 1,
@@ -101,7 +102,18 @@ function aggregateFinalAnswers(
     }
   }
 
-  return Array.from(answerMap.values());
+  const lookup = buildQuestionLookup(questions);
+
+  return Array.from(answerMap.values()).sort((a, b) => {
+    const qA = lookup.get(a.id);
+    const qB = lookup.get(b.id);
+    const orderA = qA?.globalOrder ?? Number.MAX_SAFE_INTEGER;
+    const orderB = qB?.globalOrder ?? Number.MAX_SAFE_INTEGER;
+    if (orderA !== orderB) {
+      return orderA - orderB;
+    }
+    return a.id.localeCompare(b.id);
+  });
 }
 
 function safeSendMessage(message: ExtensionMessage): void {

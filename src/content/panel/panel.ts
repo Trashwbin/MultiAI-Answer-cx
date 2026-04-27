@@ -2,6 +2,7 @@ import type { Question, FinalAnswer, ProviderResponse, ProviderConfig } from '..
 import type { CustomProviderConfig } from '../../types/provider';
 import { getProviderById } from '../../config/ai-config';
 import { createEditor } from '../editors/factory';
+import { matchesQuestionKey } from '../../utils/question-key';
 
 /* ── Custom provider config cache ────────────────────── */
 
@@ -530,7 +531,7 @@ function renderQuestionRows(container: HTMLElement): void {
 
   panelState.questions.forEach((question, index) => {
     const answer =
-      panelState?.finalAnswers.find((a) => a.questionNumber === question.number) ?? null;
+      panelState?.finalAnswers.find((a) => matchesQuestionKey(question, a.id)) ?? null;
     container.appendChild(buildQuestionRow(question, answer, index));
   });
 }
@@ -580,7 +581,9 @@ function buildQuestionCell(question: Question): HTMLElement {
   const num = mk('div', {
     style: j('font-weight:700', 'color:#2d3748', 'margin-bottom:4px', 'font-size:14px'),
   });
-  num.textContent = `\u7B2C ${question.number} \u9898`;
+  num.textContent = question.displayNumber === question.number
+    ? `第 ${question.number} 题`
+    : `第 ${question.number} 题 · 页面显示 ${question.displayNumber}`;
 
   const typeBadge = mk('span', {
     style: j(
@@ -617,7 +620,7 @@ function buildAIAnswerCell(question: Question, providerId: string): HTMLElement 
 
   const cell = mk('div', {
     'data-provider': providerId,
-    'data-question': question.number,
+    'data-question': question.id,
     style: j(
       `background:${color}10`, `border:1px solid ${color}20`,
       'border-radius:4px', 'padding:10px',
@@ -658,7 +661,7 @@ function buildAIAnswerCell(question: Question, providerId: string): HTMLElement 
   } else {
     /* Answer state */
     const matched = providerData.answers.find(
-      (a) => a.questionNumber === question.number,
+      (a) => matchesQuestionKey(question, a.id),
     );
     if (matched) {
       const answerText = Array.isArray(matched.answer)
