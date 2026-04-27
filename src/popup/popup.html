@@ -198,7 +198,18 @@
     }
 
     .icon {
-      font-size: 18px;
+      width: 18px;
+      height: 18px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .icon svg {
+      width: 18px;
+      height: 18px;
+      stroke: currentColor;
     }
 
     .title {
@@ -483,7 +494,7 @@
       </button>
     </div>
 
-    <h1 class="title">MultiAI Answer v1.0.3</h1>
+    <h1 class="title">MultiAI Answer</h1>
     <div class="features-container">
       <div class="feature-item">
         <label class="switch">
@@ -509,11 +520,19 @@
     </div>
     <div class="button-container">
       <button class="show-questions">
-        <span class="icon">📝</span>
+        <span class="icon" aria-hidden="true">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6M7 4h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" />
+          </svg>
+        </span>
         显示题目列表
       </button>
       <button class="show-answers">
-        <span class="icon">🤖</span>
+        <span class="icon" aria-hidden="true">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v3m-4.5 3.5h9A2.5 2.5 0 0 1 19 12v4.5A2.5 2.5 0 0 1 16.5 19h-9A2.5 2.5 0 0 1 5 16.5V12a2.5 2.5 0 0 1 2.5-2.5ZM9 13h.01M15 13h.01M8 19v2m8-2v2M7 7 5.5 5.5M17 7l1.5-1.5" />
+          </svg>
+        </span>
         显示AI答案
       </button>
     </div>
@@ -523,9 +542,6 @@
       </a>
       <a href="#" id="showUsage">
         <img src="https://img.shields.io/badge/使用说明-4CAF50?logo=bookstack&logoColor=white">
-      </a>
-      <a href="https://gitee.com/trashwbin">
-        <img src="https://img.shields.io/badge/Trashwbin-C71D23?logo=gitee&color=%23C71D23">
       </a>
     </div>
 
