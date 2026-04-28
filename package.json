@@ -1,6 +1,6 @@
 {
   "name": "multiai-answer-cx",
-  "version": "2.1.1",
+  "version": "2.2.0",
   "description": "Multi-AI voting answer assistant for Chaoxing (学习通) - TypeScript rewrite",
   "private": true,
   "scripts": {
