@@ -44,16 +44,7 @@ function createProviderIcon(config: ProviderConfig | undefined, size = 18): HTML
     ),
   });
 
-  const img = document.createElement('img');
-  img.src = chrome.runtime.getURL(config?.iconPath ?? 'icons/providers/openai-compatible.svg');
-  img.alt = name;
-  img.style.cssText = j(
-    `width:${size}px`,
-    `height:${size}px`,
-    'object-fit:contain',
-    'display:block',
-  );
-  img.onerror = () => {
+  const appendFallback = (): void => {
     wrap.innerHTML = '';
     const fallback = mk('span', {
       style: j(
@@ -66,6 +57,22 @@ function createProviderIcon(config: ProviderConfig | undefined, size = 18): HTML
     fallback.textContent = name.charAt(0);
     wrap.appendChild(fallback);
   };
+
+  if (!config?.iconPath) {
+    appendFallback();
+    return wrap;
+  }
+
+  const img = document.createElement('img');
+  img.src = chrome.runtime.getURL(config.iconPath);
+  img.alt = name;
+  img.style.cssText = j(
+    `width:${size}px`,
+    `height:${size}px`,
+    'object-fit:contain',
+    'display:block',
+  );
+  img.onerror = appendFallback;
   wrap.appendChild(img);
 
   return wrap;

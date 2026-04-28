@@ -89,5 +89,18 @@
       "js": ["dist/auth-content.js"],
       "run_at": "document_end"
     }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "icons/*",
+        "icons/providers/*"
+      ],
+      "matches": [
+        "https://*.chaoxing.com/*",
+        "http://127.0.0.1:*/*",
+        "http://localhost:*/*"
+      ]
+    }
   ]
 }
