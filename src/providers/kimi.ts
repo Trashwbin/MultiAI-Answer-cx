@@ -41,11 +41,16 @@ export class KimiProvider extends BaseProvider {
 
       const result = results[0]?.result as
         | { ok: true; text: string; chatId?: string }
-        | { ok: false; error: string }
+        | { ok: false; error: string; debugPayload?: string }
         | undefined;
 
       if (!result) throw new Error('Kimi: executeScript 无返回');
-      if (!result.ok) throw new Error(result.error);
+      if (!result.ok) {
+        if (result.debugPayload) {
+          console.error('[Kimi] Error payload:', result.debugPayload);
+        }
+        throw new Error(result.error);
+      }
 
       const rawText = result.text;
       const parsed = parseAIResponse(rawText, this.config.id);
@@ -144,7 +149,7 @@ function kimiConnectRpc(
   message: string,
   kimiAuth: string,
   enableThinking: boolean,
-): Promise<{ ok: true; text: string; chatId?: string } | { ok: false; error: string }> {
+): Promise<{ ok: true; text: string; chatId?: string } | { ok: false; error: string; debugPayload?: string }> {
   return (async () => {
     try {
       const requestHeaders = {
@@ -234,6 +239,24 @@ function kimiConnectRpc(
           if (!realChatId && typeof obj.chat?.id === 'string') {
             realChatId = obj.chat.id;
           }
+
+          const blockException = obj.block?.exception?.error;
+          const localizedMessage = blockException?.localizedMessage?.message;
+          if (typeof localizedMessage === 'string' && localizedMessage) {
+            return {
+              ok: false as const,
+              error: `Kimi: ${localizedMessage}`,
+              debugPayload: JSON.stringify(obj),
+            };
+          }
+          if (blockException) {
+            return {
+              ok: false as const,
+              error: `Kimi: ${blockException.reason ?? blockException.code ?? JSON.stringify(blockException).slice(0, 200)}`,
+              debugPayload: JSON.stringify(obj),
+            };
+          }
+
           if (
             typeof obj.message === 'string' &&
             /请登录后继续使用|请登录后继续|登录后继续使用|登录后继续/.test(obj.message)
@@ -241,6 +264,7 @@ function kimiConnectRpc(
             return {
               ok: false as const,
               error: `Kimi: ${obj.message}`,
+              debugPayload: JSON.stringify(obj),
             };
           }
           if (
@@ -250,12 +274,14 @@ function kimiConnectRpc(
             return {
               ok: false as const,
               error: `Kimi: ${obj.msg}`,
+              debugPayload: JSON.stringify(obj),
             };
           }
           if (obj.error) {
             return {
               ok: false as const,
               error: `Kimi RPC: ${obj.error.message ?? obj.error.code ?? JSON.stringify(obj.error).slice(0, 200)}`,
+              debugPayload: JSON.stringify(obj),
             };
           }
 

@@ -67,11 +67,16 @@ export class ChatGLMProvider extends BaseProvider {
 
       const result = results[0]?.result as
         | { ok: true; text: string; conversationId?: string }
-        | { ok: false; error: string }
+        | { ok: false; error: string; debugPayload?: string }
         | undefined;
 
       if (!result) throw new Error('ChatGLM: executeScript 无返回');
-      if (!result.ok) throw new Error(result.error);
+      if (!result.ok) {
+        if (result.debugPayload) {
+          console.error('[ChatGLM] Error payload:', result.debugPayload);
+        }
+        throw new Error(result.error);
+      }
 
       const rawText = result.text;
       const parsed = parseAIResponse(rawText, this.config.id);
@@ -230,7 +235,7 @@ function chatglmPageQuery(
   accessTokenFromSW: string,
   refreshTokenFromSW: string,
   enableReasoning: boolean,
-): Promise<{ ok: true; text: string; conversationId?: string } | { ok: false; error: string }> {
+): Promise<{ ok: true; text: string; conversationId?: string } | { ok: false; error: string; debugPayload?: string }> {
   return (async () => {
     try {
       const cookieAccess = document.cookie.match(/(?:^|;\s*)chatglm_token=([^;]+)/)?.[1] ?? '';
@@ -342,10 +347,10 @@ function chatglmPageQuery(
             typeof errObj.message === 'string' &&
             /请登录后继续使用|请登录后继续|登录后继续使用|登录后继续/.test(errObj.message)
           ) {
-            return { ok: false as const, error: `ChatGLM: ${errObj.message}` };
+            return { ok: false as const, error: `ChatGLM: ${errObj.message}`, debugPayload: sse };
           }
           if (typeof errObj.message === 'string' && errObj.message) {
-            return { ok: false as const, error: `ChatGLM: ${errObj.message}` };
+            return { ok: false as const, error: `ChatGLM: ${errObj.message}`, debugPayload: sse };
           }
         } catch {
           // fall through to SSE parsing below
@@ -369,7 +374,7 @@ function chatglmPageQuery(
             typeof obj.message === 'string' &&
             /请登录后继续使用|请登录后继续|登录后继续使用|登录后继续/.test(obj.message)
           ) {
-            return { ok: false as const, error: `ChatGLM: ${obj.message}` };
+            return { ok: false as const, error: `ChatGLM: ${obj.message}`, debugPayload: JSON.stringify(obj) };
           }
 
           if (Array.isArray(obj.parts)) {
