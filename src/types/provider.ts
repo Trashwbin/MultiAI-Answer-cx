@@ -18,6 +18,7 @@ export interface ProviderConfig {
   name: string;
   domain: string;
   color: string;
+  iconPath?: string;
   weight: number;
   enabled: boolean;
 }

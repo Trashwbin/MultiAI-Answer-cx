@@ -631,9 +631,24 @@ function buildCard(state: CardState, modal: HTMLElement): HTMLElement {
       `background:${clr}18`, 'display:flex', 'align-items:center',
       'justify-content:center', 'font-size:18px', 'font-weight:700',
       `color:${clr}`, 'flex-shrink:0',
+      'overflow:hidden',
     ),
   });
-  icon.textContent = state.config.name.charAt(0);
+  const iconUrl = chrome.runtime.getURL(state.config.iconPath ?? 'icons/providers/openai-compatible.svg');
+  const iconImg = document.createElement('img');
+  iconImg.src = iconUrl;
+  iconImg.alt = state.config.name;
+  iconImg.style.cssText = j(
+    'width:24px',
+    'height:24px',
+    'object-fit:contain',
+    'display:block',
+  );
+  iconImg.onerror = () => {
+    icon.innerHTML = '';
+    icon.textContent = state.config.name.charAt(0);
+  };
+  icon.appendChild(iconImg);
 
   /* Info column */
   const info = mk('div', { style: 'flex:1;min-width:0;' });
@@ -869,6 +884,7 @@ function showAddForm(modal: HTMLElement): void {
       name: n,
       domain: '',
       color: selectedColor,
+      iconPath: 'icons/providers/openai-compatible.svg',
       weight: 1.0,
       enabled: true,
       isCustom: true,
