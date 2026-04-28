@@ -1,5 +1,5 @@
 import type { Question, FinalAnswer, ProviderResponse, ExtensionMessage } from '../types';
-import type { PromptMode } from '../types/provider';
+import type { PromptMode, SessionCleanupMode } from '../types/provider';
 import { extractQuestionsFromXXT } from './extractor/extractor';
 import { autoFillAnswers } from './auto-fill/auto-fill';
 import { showAnswerPanel, updateAnswerPanel, updateProviderStatus, setAutoFillCallback, minimizePanel } from './panel/panel';
@@ -13,6 +13,7 @@ let questions: Question[] = [];
 let finalAnswers: FinalAnswer[] = [];
 const providerResponses = new Map<string, ProviderResponse | 'querying'>();
 let selectedProviderIds: string[] = [];
+let selectedSessionCleanupMode: SessionCleanupMode = 'on_success';
 let keepAlivePort: chrome.runtime.Port | null = null;
 
 function connectKeepAlive(): void {
@@ -121,10 +122,22 @@ function safeSendMessage(message: ExtensionMessage): void {
   chrome.runtime.sendMessage(message).catch(() => {});
 }
 
-function sendQueryAllAI(providerIds?: string[], batchMode?: boolean, promptMode?: PromptMode): void {
+function sendQueryAllAI(
+  providerIds?: string[],
+  batchMode?: boolean,
+  promptMode?: PromptMode,
+  sessionCleanupMode?: SessionCleanupMode,
+): void {
   if (questions.length === 0) return;
 
-  safeSendMessage({ type: 'QUERY_ALL_AI', questions, providerIds, batchMode, promptMode });
+  safeSendMessage({
+    type: 'QUERY_ALL_AI',
+    questions,
+    providerIds,
+    batchMode,
+    promptMode,
+    sessionCleanupMode,
+  });
 }
 
 function buildPanelCallbacks(): {
@@ -137,7 +150,7 @@ function buildPanelCallbacks(): {
     onAutoFill: () => void autoFillAnswers(finalAnswers, questions),
     onRetransmit: (providerId: string) => {
       providerResponses.set(providerId, 'querying');
-      safeSendMessage({ type: 'QUERY_AI', providerId, questions });
+      safeSendMessage({ type: 'QUERY_AI', providerId, questions, sessionCleanupMode: selectedSessionCleanupMode });
     },
     onRemoveProvider: (providerId: string) => {
       providerResponses.delete(providerId);
@@ -150,15 +163,22 @@ function buildPanelCallbacks(): {
   };
 }
 
-function openPanelAndQuery(providerIds: string[], wId: string | null, batch?: boolean, promptMode?: PromptMode): void {
+function openPanelAndQuery(
+  providerIds: string[],
+  wId: string | null,
+  batch?: boolean,
+  promptMode?: PromptMode,
+  sessionCleanupMode?: SessionCleanupMode,
+): void {
   selectedProviderIds = providerIds;
+  selectedSessionCleanupMode = sessionCleanupMode ?? 'on_success';
   finalAnswers = [];
   providerResponses.clear();
   showAnswerPanel(
     { questions, finalAnswers, providerIds, weightProviderId: wId, isLoading: true },
     buildPanelCallbacks(),
   );
-  sendQueryAllAI(providerIds, batch, promptMode);
+  sendQueryAllAI(providerIds, batch, promptMode, selectedSessionCleanupMode);
 }
 
 function handlePopupMessage(
@@ -211,8 +231,8 @@ function handlePopupMessage(
         sendResponse({ success: false, error: '\u5F53\u524D\u9875\u9762\u672A\u627E\u5230\u9898\u76EE' });
         break;
       }
-      showAISelector(({ providerIds, weightProviderId: wId, batchMode: batch, promptMode: pm }) => {
-        openPanelAndQuery(providerIds, wId, batch, pm);
+      showAISelector(({ providerIds, weightProviderId: wId, batchMode: batch, promptMode: pm, sessionCleanupMode: scm }) => {
+        openPanelAndQuery(providerIds, wId, batch, pm, scm);
       });
       sendResponse({ success: true });
       break;
@@ -267,8 +287,8 @@ async function initialize(): Promise<void> {
   setQuestionListSendCallback((selected) => {
     questions = selected;
     hideQuestionList();
-    showAISelector(({ providerIds, weightProviderId: wId, batchMode: batch, promptMode: pm }) => {
-      openPanelAndQuery(providerIds, wId, batch, pm);
+    showAISelector(({ providerIds, weightProviderId: wId, batchMode: batch, promptMode: pm, sessionCleanupMode: scm }) => {
+      openPanelAndQuery(providerIds, wId, batch, pm, scm);
     });
   });
 

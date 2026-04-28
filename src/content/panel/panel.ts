@@ -27,6 +27,57 @@ function resolveProviderConfig(id: string): ProviderConfig | undefined {
   return getProviderById(id) ?? customProviderCache.get(id);
 }
 
+function createProviderIcon(config: ProviderConfig | undefined, size = 18): HTMLElement {
+  const color = config?.color ?? '#718096';
+  const name = config?.name ?? 'Provider';
+  const wrap = mk('span', {
+    style: j(
+      `width:${size + 8}px`,
+      `height:${size + 8}px`,
+      'border-radius:8px',
+      `background:${color}18`,
+      'display:inline-flex',
+      'align-items:center',
+      'justify-content:center',
+      'overflow:hidden',
+      'flex-shrink:0',
+    ),
+  });
+
+  const appendFallback = (): void => {
+    wrap.innerHTML = '';
+    const fallback = mk('span', {
+      style: j(
+        'font-size:12px',
+        'font-weight:700',
+        `color:${color}`,
+        'line-height:1',
+      ),
+    });
+    fallback.textContent = name.charAt(0);
+    wrap.appendChild(fallback);
+  };
+
+  if (!config?.iconPath) {
+    appendFallback();
+    return wrap;
+  }
+
+  const img = document.createElement('img');
+  img.src = chrome.runtime.getURL(config.iconPath);
+  img.alt = name;
+  img.style.cssText = j(
+    `width:${size}px`,
+    `height:${size}px`,
+    'object-fit:contain',
+    'display:block',
+  );
+  img.onerror = appendFallback;
+  wrap.appendChild(img);
+
+  return wrap;
+}
+
 /* ── Constants ────────────────────────────────────────── */
 
 const PANEL_ID = 'ai-answers-panel';
@@ -395,6 +446,7 @@ function buildAINamesRow(): HTMLElement {
         'white-space:nowrap', 'flex-shrink:0',
       ),
     });
+    cell.title = name;
 
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
@@ -420,11 +472,6 @@ function buildAINamesRow(): HTMLElement {
       style: j('display:flex', 'align-items:center', 'gap:4px'),
     });
 
-    const nameSpan = mk('span', {
-      style: j('font-weight:700', `color:${color}`, 'font-size:13px'),
-    });
-    nameSpan.textContent = name;
-
     const status = mk('span', {
       style: j('font-size:12px', 'color:#718096'),
     });
@@ -438,7 +485,7 @@ function buildAINamesRow(): HTMLElement {
       status.textContent = '\u2713';
     }
 
-    nameWrap.appendChild(nameSpan);
+    nameWrap.appendChild(createProviderIcon(config, 16));
     nameWrap.appendChild(status);
 
     const actions = mk('div', {
@@ -633,12 +680,13 @@ function buildAIAnswerCell(question: Question, providerId: string): HTMLElement 
   const badge = mk('div', {
     style: j(
       'position:absolute', 'top:6px', 'right:6px',
-      `background:${color}20`, `color:${color}`,
-      'font-size:10px', 'font-weight:600',
-      'padding:1px 6px', 'border-radius:3px',
+      `background:${color}20`,
+      'padding:2px', 'border-radius:6px',
+      'display:flex', 'align-items:center', 'justify-content:center',
     ),
   });
-  badge.textContent = name;
+  badge.title = name;
+  badge.appendChild(createProviderIcon(config, 14));
   cell.appendChild(badge);
 
   /* Content area */
@@ -912,6 +960,7 @@ export function minimizePanel(): void {
   }
 
   refreshFullGrid();
+  scheduleAnswerTextareaResize(320);
 }
 
 export function expandPanel(): void {
@@ -939,6 +988,7 @@ export function expandPanel(): void {
   }
 
   refreshFullGrid();
+  scheduleAnswerTextareaResize(320);
 }
 
 function refreshFullGrid(): void {
@@ -950,6 +1000,34 @@ function refreshFullGrid(): void {
   if (!body) return;
   body.innerHTML = '';
   renderQuestionRows(body);
+  scheduleAnswerTextareaResize();
+}
+
+function resizeAnswerTextareas(): void {
+  if (!currentPanel) return;
+
+  const textareas = Array.from(
+    currentPanel.querySelectorAll<HTMLTextAreaElement>('.answer-textarea'),
+  );
+
+  for (const textarea of textareas) {
+    textarea.style.height = 'auto';
+    textarea.style.height = `${textarea.scrollHeight + 2}px`;
+  }
+}
+
+function scheduleAnswerTextareaResize(delayMs = 0): void {
+  const run = (): void => {
+    requestAnimationFrame(() => {
+      resizeAnswerTextareas();
+    });
+  };
+
+  if (delayMs > 0) {
+    window.setTimeout(run, delayMs);
+  } else {
+    run();
+  }
 }
 
 /* ── Toast ───────────────────────────────────────────── */

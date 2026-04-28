@@ -71,7 +71,7 @@ window.AI_CONFIG = {
     name: '豆包',
     color: '#FF6A00',
     weight: 1,
-    enabled: false
+    enabled: true
   },
   yiyan: {
     name: '文心一言',

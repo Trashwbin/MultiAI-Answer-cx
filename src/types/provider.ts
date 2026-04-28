@@ -11,12 +11,14 @@ export interface AuthCredentials {
 export type AuthStatus = 'authenticated' | 'unauthenticated' | 'expired' | 'error';
 
 export type PromptMode = 'standard' | 'analysis';
+export type SessionCleanupMode = 'off' | 'on_success';
 
 export interface ProviderConfig {
   id: string;
   name: string;
   domain: string;
   color: string;
+  iconPath?: string;
   weight: number;
   enabled: boolean;
 }
@@ -31,6 +33,8 @@ export interface CustomProviderConfig extends ProviderConfig {
 export interface AIProvider {
   config: ProviderConfig;
   promptMode: PromptMode;
+  sessionCleanupMode: SessionCleanupMode;
   query(questions: Question[]): Promise<ProviderResponse>;
   checkAuth(): Promise<AuthStatus>;
+  deleteConversation?(sessionId: string): Promise<boolean>;
 }

@@ -1,6 +1,6 @@
 import { AI_PROVIDERS } from '../../config/ai-config';
 import type { AuthStatus } from '../../types';
-import type { CustomProviderConfig, PromptMode } from '../../types/provider';
+import type { CustomProviderConfig, PromptMode, SessionCleanupMode } from '../../types/provider';
 
 /* ── Constants & Types ──────────────────────────────── */
 
@@ -12,6 +12,7 @@ type SelectCallback = (result: {
   weightProviderId: string | null;
   batchMode: boolean;
   promptMode: PromptMode;
+  sessionCleanupMode: SessionCleanupMode;
 }) => void;
 
 interface CardState {
@@ -29,6 +30,7 @@ let visibilityHandler: (() => void) | null = null;
 let stylesInjected = false;
 let batchMode = true;
 let promptMode: PromptMode = 'standard';
+let sessionCleanupMode: SessionCleanupMode = 'on_success';
 
 /* ── Public API ──────────────────────────────────────── */
 
@@ -43,6 +45,7 @@ export function showAISelector(onConfirm: SelectCallback, onCancel?: () => void)
 
   currentWeightId = AI_PROVIDERS.find((p) => p.enabled)?.id ?? null;
   promptMode = 'standard';
+  sessionCleanupMode = 'on_success';
 
   injectStyles();
   const modal = buildModal(onConfirm, onCancel);
@@ -452,6 +455,57 @@ function buildFooter(
   promptToggleRow.appendChild(promptToggleText);
   leftGroup.appendChild(promptToggleRow);
 
+  /* ── Session cleanup toggle ── */
+  const cleanupToggleRow = mk('div', {
+    style: j('display:flex', 'align-items:center', 'gap:8px'),
+  });
+
+  const cleanupToggleLabel = mk('span', {
+    style: 'color:#718096;font-size:12px;white-space:nowrap;',
+  });
+  cleanupToggleLabel.textContent = '会话清理：';
+
+  const cleanupToggleTrack = mk('div', {
+    id: 'ai-sel-cleanup-toggle',
+    style: j(
+      'width:36px', 'height:20px', 'border-radius:10px',
+      'background:#cbd5e0', 'position:relative', 'cursor:pointer',
+      'transition:background 0.2s', 'flex-shrink:0',
+    ),
+  });
+  const cleanupToggleThumb = mk('div', {
+    style: j(
+      'width:16px', 'height:16px', 'border-radius:50%',
+      'background:#fff', 'position:absolute', 'top:2px', 'left:2px',
+      'transition:left 0.2s', 'box-shadow:0 1px 3px rgba(0,0,0,0.2)',
+    ),
+  });
+  cleanupToggleTrack.appendChild(cleanupToggleThumb);
+
+  const cleanupToggleText = mk('span', {
+    id: 'ai-sel-cleanup-text',
+    style: 'color:#4a5568;font-size:12px;font-weight:500;white-space:nowrap;',
+  });
+  cleanupToggleText.textContent = '保留会话';
+
+  function updateCleanupToggleUI(): void {
+    cleanupToggleTrack.style.background = sessionCleanupMode === 'on_success' ? '#4caf50' : '#cbd5e0';
+    cleanupToggleThumb.style.left = sessionCleanupMode === 'on_success' ? '18px' : '2px';
+    cleanupToggleText.textContent = sessionCleanupMode === 'on_success' ? '成功后删除' : '保留会话';
+  }
+
+  cleanupToggleTrack.addEventListener('click', () => {
+    sessionCleanupMode = sessionCleanupMode === 'off' ? 'on_success' : 'off';
+    updateCleanupToggleUI();
+  });
+
+  updateCleanupToggleUI();
+
+  cleanupToggleRow.appendChild(cleanupToggleLabel);
+  cleanupToggleRow.appendChild(cleanupToggleTrack);
+  cleanupToggleRow.appendChild(cleanupToggleText);
+  leftGroup.appendChild(cleanupToggleRow);
+
   footer.appendChild(leftGroup);
 
   const actions = mk('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;' });
@@ -481,7 +535,13 @@ function buildFooter(
   const send = mkBtn('\u53D1\u9001\u5230 AI', '#4caf50', '#fff', () => {
     const ids = cards.filter((c) => c.selected).map((c) => c.config.id);
     if (ids.length === 0) return;
-    animateClose(() => onConfirm({ providerIds: ids, weightProviderId: currentWeightId, batchMode, promptMode }));
+    animateClose(() => onConfirm({
+      providerIds: ids,
+      weightProviderId: currentWeightId,
+      batchMode,
+      promptMode,
+      sessionCleanupMode,
+    }));
   });
   send.id = 'ai-sel-send';
   send.style.fontWeight = '600';
@@ -571,9 +631,28 @@ function buildCard(state: CardState, modal: HTMLElement): HTMLElement {
       `background:${clr}18`, 'display:flex', 'align-items:center',
       'justify-content:center', 'font-size:18px', 'font-weight:700',
       `color:${clr}`, 'flex-shrink:0',
+      'overflow:hidden',
     ),
   });
-  icon.textContent = state.config.name.charAt(0);
+  if (state.config.iconPath) {
+    const iconUrl = chrome.runtime.getURL(state.config.iconPath);
+    const iconImg = document.createElement('img');
+    iconImg.src = iconUrl;
+    iconImg.alt = state.config.name;
+    iconImg.style.cssText = j(
+      'width:24px',
+      'height:24px',
+      'object-fit:contain',
+      'display:block',
+    );
+    iconImg.onerror = () => {
+      icon.innerHTML = '';
+      icon.textContent = state.config.name.charAt(0);
+    };
+    icon.appendChild(iconImg);
+  } else {
+    icon.textContent = state.config.name.charAt(0);
+  }
 
   /* Info column */
   const info = mk('div', { style: 'flex:1;min-width:0;' });
@@ -676,15 +755,15 @@ function buildCard(state: CardState, modal: HTMLElement): HTMLElement {
 function buildAddCard(modal: HTMLElement): HTMLElement {
   const card = mk('div', {
     style: j(
-      'position:relative', 'padding:14px',
+      'position:relative', 'padding:12px 14px',
       'border:2px dashed #cbd5e0', 'border-radius:12px',
       'background:#fafafa', 'cursor:pointer',
       'display:flex', 'align-items:center', 'justify-content:center',
-      'min-height:80px', 'transition:all 0.2s ease',
+      'min-height:64px', 'transition:all 0.2s ease',
     ),
   });
   const plus = mk('div', {
-    style: 'font-size:28px;color:#a0aec0;line-height:1;user-select:none;',
+    style: 'font-size:24px;color:#a0aec0;line-height:1;user-select:none;',
   });
   plus.textContent = '+';
   card.appendChild(plus);
@@ -703,27 +782,33 @@ function buildAddCard(modal: HTMLElement): HTMLElement {
 }
 
 function showAddForm(modal: HTMLElement): void {
-  const grid = modal.querySelector('#ai-sel-grid');
-  if (!grid) return;
-
-  const lastChild = grid.lastElementChild;
-  if (lastChild) lastChild.remove();
+  document.getElementById('ai-sel-add-overlay')?.remove();
 
   let selectedColor = '#6366f1';
   const colors = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6'];
+
+  const overlay = mk('div', {
+    id: 'ai-sel-add-overlay',
+    style: j(
+      'position:absolute', 'inset:0', 'background:rgba(15,23,42,0.24)',
+      'display:flex', 'align-items:center', 'justify-content:center',
+      'padding:24px', 'z-index:2',
+    ),
+  });
 
   const form = mk('div', {
     style: j(
       'position:relative', 'padding:16px',
       'border:2px solid #667eea', 'border-radius:12px',
-      'background:#fafbfe', 'grid-column:1/-1',
+      'background:#fafbfe', 'width:100%', 'max-width:560px',
+      'box-shadow:0 18px 48px rgba(15,23,42,0.22)',
     ),
   });
 
   const title = mk('div', {
     style: 'font-size:14px;font-weight:700;color:#1a202c;margin-bottom:12px;',
   });
-  title.textContent = '\u6DFB\u52A0\u81EA\u5B9A\u4E49 AI \u63D0\u4F9B\u5546';
+  title.textContent = '\u6DFB\u52A0\u81EA\u5B9A\u4E49 OpenAI \u517C\u5BB9 Provider';
   form.appendChild(title);
 
   const inputCSS = j(
@@ -746,10 +831,10 @@ function showAddForm(modal: HTMLElement): void {
     return input;
   }
 
-  const nameInput = mkField('text', '\u663E\u793A\u540D\u79F0 (e.g. DeepSeek API)');
-  const endpointInput = mkField('url', 'API \u7AEF\u70B9 (e.g. https://api.deepseek.com)');
+  const nameInput = mkField('text', '\u663E\u793A\u540D\u79F0 (e.g. OpenAI Compatible)');
+  const endpointInput = mkField('url', 'API \u7AEF\u70B9 (e.g. https://api.openai.com/v1)');
   const keyInput = mkField('password', 'API Key (\u53EF\u9009)');
-  const modelInput = mkField('text', '\u6A21\u578B\u540D\u79F0 (e.g. deepseek-chat)');
+  const modelInput = mkField('text', '\u6A21\u578B\u540D\u79F0 (e.g. gpt-4.1-mini)');
 
   const colorRow = mk('div', {
     style: 'display:flex;align-items:center;gap:8px;margin-bottom:12px;',
@@ -784,7 +869,7 @@ function showAddForm(modal: HTMLElement): void {
 
   actions.appendChild(
     mkBtn('\u53D6\u6D88', '#edf2f7', '#4a5568', () => {
-      refreshGrid(modal);
+      overlay.remove();
     }),
   );
 
@@ -815,9 +900,11 @@ function showAddForm(modal: HTMLElement): void {
     void (async () => {
       try {
         await chrome.runtime.sendMessage({ type: 'SAVE_CUSTOM_PROVIDER', config });
+        overlay.remove();
         cards = cards.filter((c) => !c.isCustom);
         await loadCustomProviders();
       } catch {
+        overlay.remove();
         refreshGrid(modal);
       }
     })();
@@ -826,7 +913,13 @@ function showAddForm(modal: HTMLElement): void {
   actions.appendChild(saveBtn);
 
   form.appendChild(actions);
-  grid.appendChild(form);
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) {
+      overlay.remove();
+    }
+  });
+  overlay.appendChild(form);
+  modal.appendChild(overlay);
 }
 
 /* ── Weight selector refresh ─────────────────────────── */

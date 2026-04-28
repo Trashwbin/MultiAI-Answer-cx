@@ -9,6 +9,7 @@ export interface ProviderResponse {
   answers: QuestionAnswer[];
   rawText: string;
   error?: string;
+  cleanupSessionId?: string;
 }
 
 export interface FinalAnswer {

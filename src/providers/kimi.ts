@@ -1,9 +1,29 @@
+import { captureAllCookies } from '../auth/cookie-capture';
 import { parseAIResponse } from '../core/json-parser';
+import type { AuthStatus } from '../types';
 import type { ProviderResponse, Question } from '../types';
 import { createGroupedTab } from '../utils/tab-group';
 import { BaseProvider } from './base-provider';
 
 export class KimiProvider extends BaseProvider {
+  async checkAuth(): Promise<AuthStatus> {
+    try {
+      const auth = await this.getAuth().catch(() => null);
+      const allCookies = await captureAllCookies(this.config.id, this.config.domain);
+
+      const hasKimiAuth =
+        Boolean(auth?.cookies['kimi-auth']) || Boolean(allCookies['kimi-auth']) || Boolean(auth?.bearerToken);
+      const hasAccessToken =
+        Boolean(auth?.cookies['access_token']) || Boolean(allCookies['access_token']);
+      const hasRefreshToken =
+        Boolean(auth?.cookies['refresh_token']) || Boolean(allCookies['refresh_token']);
+
+      return hasKimiAuth || hasAccessToken || hasRefreshToken ? 'authenticated' : 'unauthenticated';
+    } catch {
+      return 'error';
+    }
+  }
+
   async query(questions: Question[]): Promise<ProviderResponse> {
     try {
       const prompt = this.buildPrompt(questions);
@@ -16,20 +36,31 @@ export class KimiProvider extends BaseProvider {
         target: { tabId },
         world: 'MAIN',
         func: kimiConnectRpc,
-        args: [prompt, kimiAuth],
+        args: [prompt, kimiAuth, this.promptMode === 'analysis'],
       });
 
       const result = results[0]?.result as
-        | { ok: true; text: string }
-        | { ok: false; error: string }
+        | { ok: true; text: string; chatId?: string }
+        | { ok: false; error: string; debugPayload?: string }
         | undefined;
 
       if (!result) throw new Error('Kimi: executeScript 无返回');
-      if (!result.ok) throw new Error(result.error);
+      if (!result.ok) {
+        if (result.debugPayload) {
+          console.error('[Kimi] Error payload:', result.debugPayload);
+        }
+        throw new Error(result.error);
+      }
 
       const rawText = result.text;
       const parsed = parseAIResponse(rawText, this.config.id);
-      return { ...parsed, rawText };
+      const response = { ...parsed, rawText, cleanupSessionId: result.chatId };
+      if ((parsed.answers.length > 0 || rawText.trim()) && result.chatId && this.sessionCleanupMode === 'on_success') {
+        void this.deleteConversation(result.chatId).catch((err) => {
+          console.warn('[Kimi] Auto cleanup failed:', err);
+        });
+      }
+      return response;
     } catch (error) {
       return {
         providerId: this.config.id,
@@ -38,6 +69,48 @@ export class KimiProvider extends BaseProvider {
         error: error instanceof Error ? error.message : String(error),
       };
     }
+  }
+
+  async deleteConversation(sessionId: string): Promise<boolean> {
+    if (!sessionId) return false;
+
+    const auth = await this.getAuth();
+    const kimiAuth = auth.cookies['kimi-auth'] ?? auth.bearerToken ?? '';
+    if (!kimiAuth) return false;
+
+    const res = await fetch('https://www.kimi.com/apiv2/kimi.chat.v1.ChatService/DeleteChat', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${kimiAuth}`,
+        'Content-Type': 'application/json',
+        Accept: '*/*',
+        'Accept-Encoding': 'gzip, deflate, br, zstd',
+        'Accept-Language': 'zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7',
+        'Cache-Control': 'no-cache',
+        Pragma: 'no-cache',
+        Origin: 'https://www.kimi.com',
+        'R-Timezone': 'Asia/Shanghai',
+        'Sec-Ch-Ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+        'Sec-Ch-Ua-Mobile': '?0',
+        'Sec-Ch-Ua-Platform': '"Windows"',
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'same-origin',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        Priority: 'u=1, i',
+        'X-Msh-Platform': 'web',
+        'Connect-Protocol-Version': '1',
+      },
+      body: JSON.stringify({ chat_id: sessionId }),
+    });
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.warn(`[Kimi] delete chat failed ${res.status}: ${errorText.slice(0, 200)}`);
+      return false;
+    }
+
+    return true;
   }
 
   private async ensureKimiTab(): Promise<number> {
@@ -75,9 +148,30 @@ export class KimiProvider extends BaseProvider {
 function kimiConnectRpc(
   message: string,
   kimiAuth: string,
-): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
+  enableThinking: boolean,
+): Promise<{ ok: true; text: string; chatId?: string } | { ok: false; error: string; debugPayload?: string }> {
   return (async () => {
     try {
+      const requestHeaders = {
+        Accept: '*/*',
+        'Accept-Encoding': 'gzip, deflate, br, zstd',
+        'Accept-Language': 'zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7',
+        'Cache-Control': 'no-cache',
+        Pragma: 'no-cache',
+        Origin: 'https://www.kimi.com',
+        'R-Timezone': 'Asia/Shanghai',
+        'Sec-Ch-Ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+        'Sec-Ch-Ua-Mobile': '?0',
+        'Sec-Ch-Ua-Platform': '"Windows"',
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'same-origin',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        Priority: 'u=1, i',
+        'X-Msh-Platform': 'web',
+        'Connect-Protocol-Version': '1',
+      };
+
       if (!kimiAuth) {
         const cookieMatch = document.cookie.match(/(?:^|;\s*)kimi-auth=([^;]+)/);
         kimiAuth = cookieMatch?.[1] ?? '';
@@ -98,7 +192,7 @@ function kimiConnectRpc(
           blocks: [{ message_id: '', text: { content: message } }],
           scenario: 'SCENARIO_K2D5',
         },
-        options: { thinking: false },
+        options: { thinking: enableThinking },
       };
 
       const enc = new TextEncoder().encode(JSON.stringify(req));
@@ -113,11 +207,10 @@ function kimiConnectRpc(
         {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/connect+json',
-            Accept: '*/*',
-            'X-Language': 'zh-CN',
-            'X-Msh-Platform': 'web',
             Authorization: `Bearer ${kimiAuth}`,
+            'Content-Type': 'application/connect+json',
+            'X-Language': 'zh-CN',
+            ...requestHeaders,
           },
           body: buf,
         },
@@ -128,35 +221,172 @@ function kimiConnectRpc(
         return { ok: false as const, error: `Kimi API ${res.status}: ${errText.slice(0, 300)}` };
       }
 
-      const arr = await res.arrayBuffer();
-      const u8 = new Uint8Array(arr);
       const decoder = new TextDecoder();
       const texts: string[] = [];
-      let o = 0;
-
-      while (o + 5 <= u8.length) {
-        const len = new DataView(u8.buffer, u8.byteOffset + o + 1, 4).getUint32(0, false);
-        if (o + 5 + len > u8.length) break;
-
-        const chunk = u8.slice(o + 5, o + 5 + len);
-        try {
-          const obj = JSON.parse(decoder.decode(chunk));
-          if (obj.error) {
-            return {
-              ok: false as const,
-              error: `Kimi RPC: ${obj.error.message ?? obj.error.code ?? JSON.stringify(obj.error).slice(0, 200)}`,
-            };
-          }
-          if (obj.block?.text?.content && ['set', 'append'].includes(obj.op ?? '')) {
-            texts.push(obj.block.text.content);
-          }
-          if (obj.done) break;
-        } catch {}
-
-        o += 5 + len;
+      let realChatId = '';
+      let currentPhase: 'thinking' | 'answer' | undefined = undefined;
+      const reader = res.body?.getReader();
+      if (!reader) {
+        return { ok: false as const, error: 'Kimi: 响应流不可读' };
       }
 
-      return { ok: true as const, text: texts.join('') };
+      let buffer: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
+
+      const appendChunk = (
+        existing: Uint8Array<ArrayBufferLike>,
+        incoming: Uint8Array<ArrayBufferLike>,
+      ): Uint8Array<ArrayBufferLike> => {
+        const merged = new Uint8Array(existing.length + incoming.length);
+        merged.set(existing, 0);
+        merged.set(incoming, existing.length);
+        return merged;
+      };
+
+      const processObject = (obj: any):
+        | { done: false }
+        | { done: true; result: { ok: true; text: string; chatId?: string } | { ok: false; error: string; debugPayload?: string } } => {
+        try {
+          if (!realChatId && typeof obj.chat?.id === 'string') {
+            realChatId = obj.chat.id;
+          }
+
+          const blockException = obj.block?.exception?.error;
+          const localizedMessage = blockException?.localizedMessage?.message;
+          if (typeof localizedMessage === 'string' && localizedMessage) {
+            return {
+              done: true,
+              result: {
+                ok: false as const,
+                error: `Kimi: ${localizedMessage}`,
+                debugPayload: JSON.stringify(obj),
+              },
+            };
+          }
+          if (blockException) {
+            return {
+              done: true,
+              result: {
+                ok: false as const,
+                error: `Kimi: ${blockException.reason ?? blockException.code ?? JSON.stringify(blockException).slice(0, 200)}`,
+                debugPayload: JSON.stringify(obj),
+              },
+            };
+          }
+
+          if (
+            typeof obj.message === 'string' &&
+            /请登录后继续使用|请登录后继续|登录后继续使用|登录后继续/.test(obj.message)
+          ) {
+            return {
+              done: true,
+              result: {
+                ok: false as const,
+                error: `Kimi: ${obj.message}`,
+                debugPayload: JSON.stringify(obj),
+              },
+            };
+          }
+          if (
+            typeof obj.msg === 'string' &&
+            /请登录后继续使用|请登录后继续|登录后继续使用|登录后继续/.test(obj.msg)
+          ) {
+            return {
+              done: true,
+              result: {
+                ok: false as const,
+                error: `Kimi: ${obj.msg}`,
+                debugPayload: JSON.stringify(obj),
+              },
+            };
+          }
+          if (obj.error) {
+            return {
+              done: true,
+              result: {
+                ok: false as const,
+                error: `Kimi RPC: ${obj.error.message ?? obj.error.code ?? JSON.stringify(obj.error).slice(0, 200)}`,
+                debugPayload: JSON.stringify(obj),
+              },
+            };
+          }
+
+          const stages = obj.block?.multiStage?.stages;
+          if (Array.isArray(stages) && stages.length > 0) {
+            const firstStage = stages[0];
+            if (firstStage?.name === 'STAGE_NAME_THINKING') {
+              currentPhase = firstStage.status === 'completed' ? 'answer' : 'thinking';
+            }
+          }
+
+          if (obj.block?.text?.flags === 'thinking') {
+            currentPhase = 'thinking';
+          } else if (obj.block?.text?.flags === 'answer') {
+            currentPhase = 'answer';
+          }
+
+          const mask = typeof obj.mask === 'string' ? obj.mask : '';
+          if (mask.includes('block.think')) {
+            currentPhase = 'thinking';
+          } else if (mask.includes('block.text')) {
+            currentPhase = 'answer';
+          }
+
+          if (obj.block?.text?.content && ['set', 'append'].includes(obj.op ?? '')) {
+            const content = obj.block.text.content;
+            if (!enableThinking || currentPhase !== 'thinking') {
+              texts.push(content);
+            }
+          }
+          if (obj.done) {
+            return {
+              done: true,
+              result: { ok: true as const, text: texts.join(''), chatId: realChatId },
+            };
+          }
+        } catch {
+          // ignore malformed frame payloads
+        }
+
+        return { done: false };
+      };
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (value) {
+          buffer = appendChunk(buffer, value);
+        }
+
+        let offset = 0;
+        while (offset + 5 <= buffer.length) {
+          const len = new DataView(buffer.buffer, buffer.byteOffset + offset + 1, 4).getUint32(0, false);
+          if (offset + 5 + len > buffer.length) break;
+
+          const chunk = buffer.slice(offset + 5, offset + 5 + len);
+          offset += 5 + len;
+
+          let obj: unknown;
+          try {
+            obj = JSON.parse(decoder.decode(chunk));
+          } catch {
+            continue;
+          }
+
+          const processed = processObject(obj);
+          if (processed.done) {
+            return processed.result;
+          }
+        }
+
+        if (offset > 0) {
+          buffer = buffer.slice(offset);
+        }
+
+        if (done) {
+          break;
+        }
+      }
+
+      return { ok: true as const, text: texts.join(''), chatId: realChatId };
     } catch (e: unknown) {
       return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
     }
