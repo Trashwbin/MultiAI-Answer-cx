@@ -1,9 +1,29 @@
+import { captureAllCookies } from '../auth/cookie-capture';
 import { parseAIResponse } from '../core/json-parser';
+import type { AuthStatus } from '../types';
 import type { ProviderResponse, Question } from '../types';
 import { createGroupedTab } from '../utils/tab-group';
 import { BaseProvider } from './base-provider';
 
 export class KimiProvider extends BaseProvider {
+  async checkAuth(): Promise<AuthStatus> {
+    try {
+      const auth = await this.getAuth().catch(() => null);
+      const allCookies = await captureAllCookies(this.config.id, this.config.domain);
+
+      const hasKimiAuth =
+        Boolean(auth?.cookies['kimi-auth']) || Boolean(allCookies['kimi-auth']) || Boolean(auth?.bearerToken);
+      const hasAccessToken =
+        Boolean(auth?.cookies['access_token']) || Boolean(allCookies['access_token']);
+      const hasRefreshToken =
+        Boolean(auth?.cookies['refresh_token']) || Boolean(allCookies['refresh_token']);
+
+      return hasKimiAuth || hasAccessToken || hasRefreshToken ? 'authenticated' : 'unauthenticated';
+    } catch {
+      return 'error';
+    }
+  }
+
   async query(questions: Question[]): Promise<ProviderResponse> {
     try {
       const prompt = this.buildPrompt(questions);
@@ -213,6 +233,24 @@ function kimiConnectRpc(
           const obj = JSON.parse(decoder.decode(chunk));
           if (!realChatId && typeof obj.chat?.id === 'string') {
             realChatId = obj.chat.id;
+          }
+          if (
+            typeof obj.message === 'string' &&
+            /请登录后继续使用|请登录后继续|登录后继续使用|登录后继续/.test(obj.message)
+          ) {
+            return {
+              ok: false as const,
+              error: `Kimi: ${obj.message}`,
+            };
+          }
+          if (
+            typeof obj.msg === 'string' &&
+            /请登录后继续使用|请登录后继续|登录后继续使用|登录后继续/.test(obj.msg)
+          ) {
+            return {
+              ok: false as const,
+              error: `Kimi: ${obj.msg}`,
+            };
           }
           if (obj.error) {
             return {

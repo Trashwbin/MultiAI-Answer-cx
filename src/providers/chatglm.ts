@@ -335,6 +335,22 @@ function chatglmPageQuery(
       }
 
       const sse = await res.text();
+      if (!sse.includes('data:')) {
+        try {
+          const errObj = JSON.parse(sse) as { message?: unknown; status?: unknown };
+          if (
+            typeof errObj.message === 'string' &&
+            /请登录后继续使用|请登录后继续|登录后继续使用|登录后继续/.test(errObj.message)
+          ) {
+            return { ok: false as const, error: `ChatGLM: ${errObj.message}` };
+          }
+          if (typeof errObj.message === 'string' && errObj.message) {
+            return { ok: false as const, error: `ChatGLM: ${errObj.message}` };
+          }
+        } catch {
+          // fall through to SSE parsing below
+        }
+      }
       const cachedParts: Array<{ logic_id?: string; content?: Array<Record<string, unknown>> }> = [];
       let conversationId = '';
 
@@ -348,6 +364,12 @@ function chatglmPageQuery(
           const obj = JSON.parse(payload);
           if (!conversationId && typeof obj.conversation_id === 'string') {
             conversationId = obj.conversation_id;
+          }
+          if (
+            typeof obj.message === 'string' &&
+            /请登录后继续使用|请登录后继续|登录后继续使用|登录后继续/.test(obj.message)
+          ) {
+            return { ok: false as const, error: `ChatGLM: ${obj.message}` };
           }
 
           if (Array.isArray(obj.parts)) {

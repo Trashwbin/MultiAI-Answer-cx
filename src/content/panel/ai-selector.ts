@@ -499,6 +499,8 @@ function buildFooter(
     updateCleanupToggleUI();
   });
 
+  updateCleanupToggleUI();
+
   cleanupToggleRow.appendChild(cleanupToggleLabel);
   cleanupToggleRow.appendChild(cleanupToggleTrack);
   cleanupToggleRow.appendChild(cleanupToggleText);
@@ -734,15 +736,15 @@ function buildCard(state: CardState, modal: HTMLElement): HTMLElement {
 function buildAddCard(modal: HTMLElement): HTMLElement {
   const card = mk('div', {
     style: j(
-      'position:relative', 'padding:14px',
+      'position:relative', 'padding:12px 14px',
       'border:2px dashed #cbd5e0', 'border-radius:12px',
       'background:#fafafa', 'cursor:pointer',
       'display:flex', 'align-items:center', 'justify-content:center',
-      'min-height:80px', 'transition:all 0.2s ease',
+      'min-height:64px', 'transition:all 0.2s ease',
     ),
   });
   const plus = mk('div', {
-    style: 'font-size:28px;color:#a0aec0;line-height:1;user-select:none;',
+    style: 'font-size:24px;color:#a0aec0;line-height:1;user-select:none;',
   });
   plus.textContent = '+';
   card.appendChild(plus);
@@ -761,27 +763,33 @@ function buildAddCard(modal: HTMLElement): HTMLElement {
 }
 
 function showAddForm(modal: HTMLElement): void {
-  const grid = modal.querySelector('#ai-sel-grid');
-  if (!grid) return;
-
-  const lastChild = grid.lastElementChild;
-  if (lastChild) lastChild.remove();
+  document.getElementById('ai-sel-add-overlay')?.remove();
 
   let selectedColor = '#6366f1';
   const colors = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6'];
+
+  const overlay = mk('div', {
+    id: 'ai-sel-add-overlay',
+    style: j(
+      'position:absolute', 'inset:0', 'background:rgba(15,23,42,0.24)',
+      'display:flex', 'align-items:center', 'justify-content:center',
+      'padding:24px', 'z-index:2',
+    ),
+  });
 
   const form = mk('div', {
     style: j(
       'position:relative', 'padding:16px',
       'border:2px solid #667eea', 'border-radius:12px',
-      'background:#fafbfe', 'grid-column:1/-1',
+      'background:#fafbfe', 'width:100%', 'max-width:560px',
+      'box-shadow:0 18px 48px rgba(15,23,42,0.22)',
     ),
   });
 
   const title = mk('div', {
     style: 'font-size:14px;font-weight:700;color:#1a202c;margin-bottom:12px;',
   });
-  title.textContent = '\u6DFB\u52A0\u81EA\u5B9A\u4E49 AI \u63D0\u4F9B\u5546';
+  title.textContent = '\u6DFB\u52A0\u81EA\u5B9A\u4E49 OpenAI \u517C\u5BB9 Provider';
   form.appendChild(title);
 
   const inputCSS = j(
@@ -804,10 +812,10 @@ function showAddForm(modal: HTMLElement): void {
     return input;
   }
 
-  const nameInput = mkField('text', '\u663E\u793A\u540D\u79F0 (e.g. DeepSeek API)');
-  const endpointInput = mkField('url', 'API \u7AEF\u70B9 (e.g. https://api.deepseek.com)');
+  const nameInput = mkField('text', '\u663E\u793A\u540D\u79F0 (e.g. OpenAI Compatible)');
+  const endpointInput = mkField('url', 'API \u7AEF\u70B9 (e.g. https://api.openai.com/v1)');
   const keyInput = mkField('password', 'API Key (\u53EF\u9009)');
-  const modelInput = mkField('text', '\u6A21\u578B\u540D\u79F0 (e.g. deepseek-chat)');
+  const modelInput = mkField('text', '\u6A21\u578B\u540D\u79F0 (e.g. gpt-4.1-mini)');
 
   const colorRow = mk('div', {
     style: 'display:flex;align-items:center;gap:8px;margin-bottom:12px;',
@@ -842,7 +850,7 @@ function showAddForm(modal: HTMLElement): void {
 
   actions.appendChild(
     mkBtn('\u53D6\u6D88', '#edf2f7', '#4a5568', () => {
-      refreshGrid(modal);
+      overlay.remove();
     }),
   );
 
@@ -873,9 +881,11 @@ function showAddForm(modal: HTMLElement): void {
     void (async () => {
       try {
         await chrome.runtime.sendMessage({ type: 'SAVE_CUSTOM_PROVIDER', config });
+        overlay.remove();
         cards = cards.filter((c) => !c.isCustom);
         await loadCustomProviders();
       } catch {
+        overlay.remove();
         refreshGrid(modal);
       }
     })();
@@ -884,7 +894,13 @@ function showAddForm(modal: HTMLElement): void {
   actions.appendChild(saveBtn);
 
   form.appendChild(actions);
-  grid.appendChild(form);
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) {
+      overlay.remove();
+    }
+  });
+  overlay.appendChild(form);
+  modal.appendChild(overlay);
 }
 
 /* ── Weight selector refresh ─────────────────────────── */
