@@ -221,21 +221,31 @@ function kimiConnectRpc(
         return { ok: false as const, error: `Kimi API ${res.status}: ${errText.slice(0, 300)}` };
       }
 
-      const arr = await res.arrayBuffer();
-      const u8 = new Uint8Array(arr);
       const decoder = new TextDecoder();
       const texts: string[] = [];
       let realChatId = '';
       let currentPhase: 'thinking' | 'answer' | undefined = undefined;
-      let o = 0;
+      const reader = res.body?.getReader();
+      if (!reader) {
+        return { ok: false as const, error: 'Kimi: 响应流不可读' };
+      }
 
-      while (o + 5 <= u8.length) {
-        const len = new DataView(u8.buffer, u8.byteOffset + o + 1, 4).getUint32(0, false);
-        if (o + 5 + len > u8.length) break;
+      let buffer: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
 
-        const chunk = u8.slice(o + 5, o + 5 + len);
+      const appendChunk = (
+        existing: Uint8Array<ArrayBufferLike>,
+        incoming: Uint8Array<ArrayBufferLike>,
+      ): Uint8Array<ArrayBufferLike> => {
+        const merged = new Uint8Array(existing.length + incoming.length);
+        merged.set(existing, 0);
+        merged.set(incoming, existing.length);
+        return merged;
+      };
+
+      const processObject = (obj: any):
+        | { done: false }
+        | { done: true; result: { ok: true; text: string; chatId?: string } | { ok: false; error: string; debugPayload?: string } } => {
         try {
-          const obj = JSON.parse(decoder.decode(chunk));
           if (!realChatId && typeof obj.chat?.id === 'string') {
             realChatId = obj.chat.id;
           }
@@ -244,16 +254,22 @@ function kimiConnectRpc(
           const localizedMessage = blockException?.localizedMessage?.message;
           if (typeof localizedMessage === 'string' && localizedMessage) {
             return {
-              ok: false as const,
-              error: `Kimi: ${localizedMessage}`,
-              debugPayload: JSON.stringify(obj),
+              done: true,
+              result: {
+                ok: false as const,
+                error: `Kimi: ${localizedMessage}`,
+                debugPayload: JSON.stringify(obj),
+              },
             };
           }
           if (blockException) {
             return {
-              ok: false as const,
-              error: `Kimi: ${blockException.reason ?? blockException.code ?? JSON.stringify(blockException).slice(0, 200)}`,
-              debugPayload: JSON.stringify(obj),
+              done: true,
+              result: {
+                ok: false as const,
+                error: `Kimi: ${blockException.reason ?? blockException.code ?? JSON.stringify(blockException).slice(0, 200)}`,
+                debugPayload: JSON.stringify(obj),
+              },
             };
           }
 
@@ -262,9 +278,12 @@ function kimiConnectRpc(
             /请登录后继续使用|请登录后继续|登录后继续使用|登录后继续/.test(obj.message)
           ) {
             return {
-              ok: false as const,
-              error: `Kimi: ${obj.message}`,
-              debugPayload: JSON.stringify(obj),
+              done: true,
+              result: {
+                ok: false as const,
+                error: `Kimi: ${obj.message}`,
+                debugPayload: JSON.stringify(obj),
+              },
             };
           }
           if (
@@ -272,16 +291,22 @@ function kimiConnectRpc(
             /请登录后继续使用|请登录后继续|登录后继续使用|登录后继续/.test(obj.msg)
           ) {
             return {
-              ok: false as const,
-              error: `Kimi: ${obj.msg}`,
-              debugPayload: JSON.stringify(obj),
+              done: true,
+              result: {
+                ok: false as const,
+                error: `Kimi: ${obj.msg}`,
+                debugPayload: JSON.stringify(obj),
+              },
             };
           }
           if (obj.error) {
             return {
-              ok: false as const,
-              error: `Kimi RPC: ${obj.error.message ?? obj.error.code ?? JSON.stringify(obj.error).slice(0, 200)}`,
-              debugPayload: JSON.stringify(obj),
+              done: true,
+              result: {
+                ok: false as const,
+                error: `Kimi RPC: ${obj.error.message ?? obj.error.code ?? JSON.stringify(obj.error).slice(0, 200)}`,
+                debugPayload: JSON.stringify(obj),
+              },
             };
           }
 
@@ -312,10 +337,53 @@ function kimiConnectRpc(
               texts.push(content);
             }
           }
-          if (obj.done) break;
-        } catch {}
+          if (obj.done) {
+            return {
+              done: true,
+              result: { ok: true as const, text: texts.join(''), chatId: realChatId },
+            };
+          }
+        } catch {
+          // ignore malformed frame payloads
+        }
 
-        o += 5 + len;
+        return { done: false };
+      };
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (value) {
+          buffer = appendChunk(buffer, value);
+        }
+
+        let offset = 0;
+        while (offset + 5 <= buffer.length) {
+          const len = new DataView(buffer.buffer, buffer.byteOffset + offset + 1, 4).getUint32(0, false);
+          if (offset + 5 + len > buffer.length) break;
+
+          const chunk = buffer.slice(offset + 5, offset + 5 + len);
+          offset += 5 + len;
+
+          let obj: unknown;
+          try {
+            obj = JSON.parse(decoder.decode(chunk));
+          } catch {
+            continue;
+          }
+
+          const processed = processObject(obj);
+          if (processed.done) {
+            return processed.result;
+          }
+        }
+
+        if (offset > 0) {
+          buffer = buffer.slice(offset);
+        }
+
+        if (done) {
+          break;
+        }
       }
 
       return { ok: true as const, text: texts.join(''), chatId: realChatId };

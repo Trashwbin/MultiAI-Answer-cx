@@ -960,6 +960,7 @@ export function minimizePanel(): void {
   }
 
   refreshFullGrid();
+  scheduleAnswerTextareaResize(320);
 }
 
 export function expandPanel(): void {
@@ -987,6 +988,7 @@ export function expandPanel(): void {
   }
 
   refreshFullGrid();
+  scheduleAnswerTextareaResize(320);
 }
 
 function refreshFullGrid(): void {
@@ -998,6 +1000,34 @@ function refreshFullGrid(): void {
   if (!body) return;
   body.innerHTML = '';
   renderQuestionRows(body);
+  scheduleAnswerTextareaResize();
+}
+
+function resizeAnswerTextareas(): void {
+  if (!currentPanel) return;
+
+  const textareas = Array.from(
+    currentPanel.querySelectorAll<HTMLTextAreaElement>('.answer-textarea'),
+  );
+
+  for (const textarea of textareas) {
+    textarea.style.height = 'auto';
+    textarea.style.height = `${textarea.scrollHeight + 2}px`;
+  }
+}
+
+function scheduleAnswerTextareaResize(delayMs = 0): void {
+  const run = (): void => {
+    requestAnimationFrame(() => {
+      resizeAnswerTextareas();
+    });
+  };
+
+  if (delayMs > 0) {
+    window.setTimeout(run, delayMs);
+  } else {
+    run();
+  }
 }
 
 /* ── Toast ───────────────────────────────────────────── */
