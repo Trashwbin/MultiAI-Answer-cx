@@ -39,6 +39,7 @@ export class QwenCnProvider extends BaseProvider {
       const ut = auth.cookies['b-user-id'] || `random-${crypto.randomUUID().slice(0, 12)}`;
       const xsrfToken = auth.cookies['XSRF-TOKEN'] ?? '';
       const deviceId = ut;
+      const sessionId = this.generateSessionId();
 
       const url = new URL('https://chat2.qianwen.com/api/v2/chat');
       url.searchParams.set('biz_id', 'ai_qwen');
@@ -67,7 +68,7 @@ export class QwenCnProvider extends BaseProvider {
             meta_data: { ori_query: prompt },
           },
         ],
-        session_id: this.generateSessionId(),
+        session_id: sessionId,
         parent_req_id: '0',
         deep_search: '0',
         req_id: `req-${crypto.randomUUID()}`,
@@ -94,7 +95,13 @@ export class QwenCnProvider extends BaseProvider {
 
       const rawText = this.parseSse(res.body);
       const parsed = parseAIResponse(rawText, this.config.id);
-      return { ...parsed, rawText };
+      const response = { ...parsed, rawText, cleanupSessionId: sessionId };
+      if ((parsed.answers.length > 0 || rawText.trim()) && this.sessionCleanupMode === 'on_success') {
+        void this.deleteConversation(sessionId).catch((err) => {
+          console.warn('[Qwen CN] Auto cleanup failed:', err);
+        });
+      }
+      return response;
     } catch (error) {
       return {
         providerId: this.config.id,
@@ -102,6 +109,49 @@ export class QwenCnProvider extends BaseProvider {
         rawText: '',
         error: error instanceof Error ? error.message : String(error),
       };
+    }
+  }
+
+  async deleteConversation(sessionId: string): Promise<boolean> {
+    if (!sessionId) return false;
+
+    const auth = await this.getAuth();
+    const ut = auth.cookies['b-user-id'] || `random-${crypto.randomUUID().slice(0, 12)}`;
+    const xsrfToken = auth.cookies['XSRF-TOKEN'] ?? '';
+    const deviceId = ut;
+
+    const url = new URL('https://chat2-api.qianwen.com/api/v1/session/delete/batch');
+    url.searchParams.set('biz_id', 'ai_qwen');
+    url.searchParams.set('chat_client', 'h5');
+    url.searchParams.set('device', 'pc');
+    url.searchParams.set('fr', 'pc');
+    url.searchParams.set('pr', 'qwen');
+    url.searchParams.set('ut', deviceId);
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      Accept: 'application/json, text/plain, */*',
+      'x-xsrf-token': xsrfToken,
+      'x-deviceid': deviceId,
+      'x-platform': 'pc_tongyi',
+    };
+
+    const res = await proxyFetch('www.qianwen.com', url.toString(), {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ session_ids: [sessionId] }),
+    });
+
+    if (!res.ok) {
+      console.warn(`[Qwen CN] delete session failed ${res.status}: ${res.body.slice(0, 200)}`);
+      return false;
+    }
+
+    try {
+      const data = JSON.parse(res.body) as { success?: boolean; code?: number; msg?: string };
+      return data.success !== false && (data.code === undefined || data.code === 0);
+    } catch {
+      return false;
     }
   }
 

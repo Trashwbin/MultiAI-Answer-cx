@@ -1,5 +1,5 @@
 import type { ExtensionMessage, Question } from '../types';
-import type { PromptMode } from '../types/provider';
+import type { PromptMode, SessionCleanupMode } from '../types/provider';
 import { QuestionType } from '../types/question';
 import { getProviderById, getProvidersByIds, getEnabledProviders, getEnabledProvidersAsync, getProvidersByIdsAsync, getProviderByIdAsync } from '../providers/registry';
 import { AI_PROVIDERS, getProviderById as getProviderConfig, getCustomProviders, saveCustomProvider, deleteCustomProvider } from '../config/ai-config';
@@ -82,7 +82,14 @@ chrome.runtime.onMessage.addListener(
           sendResponse({ success: false, error: 'No sender tab' });
           break;
         }
-        handleQueryAllAI(message.questions, tabId, message.providerIds, message.batchMode, message.promptMode).catch((err: unknown) => {
+        handleQueryAllAI(
+          message.questions,
+          tabId,
+          message.providerIds,
+          message.batchMode,
+          message.promptMode,
+          message.sessionCleanupMode,
+        ).catch((err: unknown) => {
           console.error('[SW] QUERY_ALL_AI failed:', err);
         });
         sendResponse({ success: true });
@@ -95,7 +102,7 @@ chrome.runtime.onMessage.addListener(
           sendResponse({ success: false, error: 'No sender tab' });
           break;
         }
-        handleQuerySingleAI(message.providerId, message.questions, tabId).catch(
+        handleQuerySingleAI(message.providerId, message.questions, tabId, message.sessionCleanupMode).catch(
           (err: unknown) => {
             console.error('[SW] QUERY_AI failed:', err);
           },
@@ -297,6 +304,7 @@ async function handleQueryAllAI(
   providerIds?: string[],
   batchMode?: boolean,
   promptMode?: PromptMode,
+  sessionCleanupMode?: SessionCleanupMode,
 ): Promise<void> {
   const batch = batchMode !== false;
   const providers = providerIds?.length
@@ -318,6 +326,7 @@ async function handleQueryAllAI(
       const pid = provider.config.id;
       console.log(`[SW] ${pid}: starting query (${batch ? 'batch' : 'single'})...`);
       (provider as BaseProvider).promptMode = promptMode ?? 'standard';
+      (provider as BaseProvider).sessionCleanupMode = sessionCleanupMode ?? 'on_success';
 
       try {
         if (batch) {
@@ -376,12 +385,14 @@ async function handleQuerySingleAI(
   providerId: string,
   questions: Question[],
   senderTabId: number,
+  sessionCleanupMode?: SessionCleanupMode,
 ): Promise<void> {
   const provider = await getProviderByIdAsync(providerId);
   if (!provider) {
     throw new Error(`Unknown provider: ${providerId}`);
   }
 
+  (provider as BaseProvider).sessionCleanupMode = sessionCleanupMode ?? 'on_success';
   const response = await provider.query(questions);
 
   await safeSendToTab(senderTabId, {

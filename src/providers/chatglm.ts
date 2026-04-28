@@ -66,7 +66,7 @@ export class ChatGLMProvider extends BaseProvider {
       });
 
       const result = results[0]?.result as
-        | { ok: true; text: string }
+        | { ok: true; text: string; conversationId?: string }
         | { ok: false; error: string }
         | undefined;
 
@@ -75,7 +75,13 @@ export class ChatGLMProvider extends BaseProvider {
 
       const rawText = result.text;
       const parsed = parseAIResponse(rawText, this.config.id);
-      return { ...parsed, rawText };
+      const response = { ...parsed, rawText, cleanupSessionId: result.conversationId };
+      if ((parsed.answers.length > 0 || rawText.trim()) && result.conversationId && this.sessionCleanupMode === 'on_success') {
+        void this.deleteConversation(result.conversationId).catch((err) => {
+          console.warn('[ChatGLM] Auto cleanup failed:', err);
+        });
+      }
+      return response;
     } catch (error) {
       return {
         providerId: this.config.id,
@@ -84,6 +90,105 @@ export class ChatGLMProvider extends BaseProvider {
         error: error instanceof Error ? error.message : String(error),
       };
     }
+  }
+
+  async deleteConversation(sessionId: string): Promise<boolean> {
+    if (!sessionId) return false;
+
+    const auth = await this.getAuth();
+    const accessToken = await this.resolveAccessToken(auth);
+    if (!accessToken) return false;
+
+    const signData = createSign();
+    const requestId = crypto.randomUUID();
+    const res = await fetch('https://chatglm.cn/chatglm/backend-api/assistant/conversation/delete', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+        'App-Name': 'chatglm',
+        'X-App-Platform': 'pc',
+        'X-App-Version': '0.0.1',
+        'X-Device-Id': this.deviceId,
+        'X-Lang': 'zh',
+        'X-Request-Id': requestId,
+        'X-Sign': signData.sign,
+        'X-Nonce': signData.nonce,
+        'X-Timestamp': signData.timestamp,
+        'X-Exp-Groups': X_EXP_GROUPS,
+        'X-App-fr': 'default',
+        'X-Device-Brand': '',
+        'X-Device-Model': '',
+      },
+      body: JSON.stringify({
+        assistant_id: '65940acff94777010aa6b796',
+        conversation_id: sessionId,
+      }),
+    });
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.warn(`[ChatGLM] delete conversation failed ${res.status}: ${errorText.slice(0, 200)}`);
+      return false;
+    }
+
+    try {
+      const data = (await res.json()) as { status?: number; code?: number };
+      return data.status === 0 || data.code === 0;
+    } catch {
+      return false;
+    }
+  }
+
+  private async resolveAccessToken(auth: Awaited<ReturnType<ChatGLMProvider['getAuth']>>): Promise<string> {
+    const accessToken = auth.cookies['chatglm_token'] ?? '';
+    const refreshToken = auth.cookies['chatglm_refresh_token'] ?? '';
+    const expiresRaw = auth.cookies['chatglm_token_expires'] ?? '';
+
+    let needsRefresh = !accessToken;
+    if (accessToken && expiresRaw) {
+      const expiresMs = new Date(decodeURIComponent(expiresRaw)).getTime();
+      if (!isNaN(expiresMs) && Date.now() > expiresMs) {
+        needsRefresh = true;
+      }
+    }
+
+    if (!needsRefresh) {
+      return accessToken;
+    }
+
+    if (!refreshToken) {
+      return '';
+    }
+
+    const signData = createSign();
+    const refreshRes = await fetch('https://chatglm.cn/chatglm/user-api/user/refresh', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${refreshToken}`,
+        'App-Name': 'chatglm',
+        'X-App-Platform': 'pc',
+        'X-App-Version': '0.0.1',
+        'X-App-Fr': 'browser_extension',
+        'X-Lang': 'zh',
+        'X-Device-Brand': '',
+        'X-Device-Model': '',
+        'X-Device-Id': this.deviceId.replace(/-/g, ''),
+        'X-Request-Id': crypto.randomUUID().replace(/-/g, ''),
+        'X-Sign': signData.sign,
+        'X-Nonce': signData.nonce,
+        'X-Timestamp': signData.timestamp,
+      },
+      body: '{}',
+    });
+
+    if (!refreshRes.ok) {
+      return '';
+    }
+
+    const refreshData = await refreshRes.json() as { result?: { access_token?: string } };
+    return refreshData?.result?.access_token ?? '';
   }
 
   private async ensureChatGLMTab(): Promise<number> {
@@ -125,7 +230,7 @@ function chatglmPageQuery(
   accessTokenFromSW: string,
   refreshTokenFromSW: string,
   enableReasoning: boolean,
-): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
+): Promise<{ ok: true; text: string; conversationId?: string } | { ok: false; error: string }> {
   return (async () => {
     try {
       const cookieAccess = document.cookie.match(/(?:^|;\s*)chatglm_token=([^;]+)/)?.[1] ?? '';
@@ -231,6 +336,7 @@ function chatglmPageQuery(
 
       const sse = await res.text();
       const cachedParts: Array<{ logic_id?: string; content?: Array<Record<string, unknown>> }> = [];
+      let conversationId = '';
 
       for (const line of sse.split('\n')) {
         const trimmed = line.trim();
@@ -240,6 +346,9 @@ function chatglmPageQuery(
 
         try {
           const obj = JSON.parse(payload);
+          if (!conversationId && typeof obj.conversation_id === 'string') {
+            conversationId = obj.conversation_id;
+          }
 
           if (Array.isArray(obj.parts)) {
             for (const part of obj.parts) {
@@ -279,7 +388,7 @@ function chatglmPageQuery(
         }
       }
 
-      return { ok: true as const, text: texts.join('\n').trim() };
+      return { ok: true as const, text: texts.join('\n').trim(), conversationId };
     } catch (e: unknown) {
       return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
     }

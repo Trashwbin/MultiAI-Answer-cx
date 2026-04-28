@@ -158,7 +158,13 @@ export class DeepSeekProvider extends BaseProvider {
       const text = await res.text();
       const rawText = this.parseSseText(text);
       const parsed = parseAIResponse(rawText, this.config.id);
-      return { ...parsed, rawText };
+      const response = { ...parsed, rawText, cleanupSessionId: sessionId };
+      if ((parsed.answers.length > 0 || rawText.trim()) && this.sessionCleanupMode === 'on_success') {
+        void this.deleteConversation(sessionId).catch((err) => {
+          console.warn('[DeepSeek] Auto cleanup failed:', err);
+        });
+      }
+      return response;
     } catch (error) {
       return {
         providerId: this.config.id,
@@ -167,6 +173,28 @@ export class DeepSeekProvider extends BaseProvider {
         error: error instanceof Error ? error.message : String(error),
       };
     }
+  }
+
+  async deleteConversation(sessionId: string): Promise<boolean> {
+    if (!sessionId) return false;
+
+    const auth = await this.getAuth();
+    await this.resolveBearer(auth);
+
+    const res = await fetch('https://chat.deepseek.com/api/v0/chat_session/delete', {
+      method: 'POST',
+      headers: this.buildDeepSeekHeaders(auth),
+      body: JSON.stringify({ chat_session_id: sessionId }),
+    });
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.warn(`[DeepSeek] delete session failed ${res.status}: ${errorText.slice(0, 200)}`);
+      return false;
+    }
+
+    const data = (await res.json()) as { code?: number; data?: { biz_code?: number } };
+    return data.code === 0 || data.data?.biz_code === 0;
   }
 
   private async createPowChallenge(auth: AuthCredentials): Promise<DeepSeekPowChallenge> {

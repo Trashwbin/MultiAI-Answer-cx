@@ -10,12 +10,14 @@ import type {
   ProviderConfig,
   ProviderResponse,
   Question,
+  SessionCleanupMode,
 } from '../types';
 
 const CREDENTIAL_TTL_MS = 86_400_000;
 
 export abstract class BaseProvider implements AIProvider {
   promptMode: PromptMode = 'standard';
+  sessionCleanupMode: SessionCleanupMode = 'on_success';
 
   constructor(public readonly config: ProviderConfig) {}
 

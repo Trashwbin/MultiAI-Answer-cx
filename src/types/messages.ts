@@ -1,11 +1,12 @@
 import type { Question } from './question';
 import type { ProviderResponse } from './answer';
-import type { PromptMode, CustomProviderConfig } from './provider';
+import type { PromptMode, CustomProviderConfig, SessionCleanupMode } from './provider';
 
 interface QueryAIMessage {
   type: 'QUERY_AI';
   providerId: string;
   questions: Question[];
+  sessionCleanupMode?: SessionCleanupMode;
 }
 
 interface QueryAllAIMessage {
@@ -14,6 +15,7 @@ interface QueryAllAIMessage {
   providerIds?: string[];
   batchMode?: boolean;
   promptMode?: PromptMode;
+  sessionCleanupMode?: SessionCleanupMode;
 }
 
 interface ShowAnswerMessage {

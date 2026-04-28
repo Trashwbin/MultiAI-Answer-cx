@@ -20,7 +20,7 @@ export class KimiProvider extends BaseProvider {
       });
 
       const result = results[0]?.result as
-        | { ok: true; text: string }
+        | { ok: true; text: string; chatId?: string }
         | { ok: false; error: string }
         | undefined;
 
@@ -29,7 +29,13 @@ export class KimiProvider extends BaseProvider {
 
       const rawText = result.text;
       const parsed = parseAIResponse(rawText, this.config.id);
-      return { ...parsed, rawText };
+      const response = { ...parsed, rawText, cleanupSessionId: result.chatId };
+      if ((parsed.answers.length > 0 || rawText.trim()) && result.chatId && this.sessionCleanupMode === 'on_success') {
+        void this.deleteConversation(result.chatId).catch((err) => {
+          console.warn('[Kimi] Auto cleanup failed:', err);
+        });
+      }
+      return response;
     } catch (error) {
       return {
         providerId: this.config.id,
@@ -38,6 +44,48 @@ export class KimiProvider extends BaseProvider {
         error: error instanceof Error ? error.message : String(error),
       };
     }
+  }
+
+  async deleteConversation(sessionId: string): Promise<boolean> {
+    if (!sessionId) return false;
+
+    const auth = await this.getAuth();
+    const kimiAuth = auth.cookies['kimi-auth'] ?? auth.bearerToken ?? '';
+    if (!kimiAuth) return false;
+
+    const res = await fetch('https://www.kimi.com/apiv2/kimi.chat.v1.ChatService/DeleteChat', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${kimiAuth}`,
+        'Content-Type': 'application/json',
+        Accept: '*/*',
+        'Accept-Encoding': 'gzip, deflate, br, zstd',
+        'Accept-Language': 'zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7',
+        'Cache-Control': 'no-cache',
+        Pragma: 'no-cache',
+        Origin: 'https://www.kimi.com',
+        'R-Timezone': 'Asia/Shanghai',
+        'Sec-Ch-Ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+        'Sec-Ch-Ua-Mobile': '?0',
+        'Sec-Ch-Ua-Platform': '"Windows"',
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'same-origin',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        Priority: 'u=1, i',
+        'X-Msh-Platform': 'web',
+        'Connect-Protocol-Version': '1',
+      },
+      body: JSON.stringify({ chat_id: sessionId }),
+    });
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.warn(`[Kimi] delete chat failed ${res.status}: ${errorText.slice(0, 200)}`);
+      return false;
+    }
+
+    return true;
   }
 
   private async ensureKimiTab(): Promise<number> {
@@ -76,7 +124,7 @@ function kimiConnectRpc(
   message: string,
   kimiAuth: string,
   enableThinking: boolean,
-): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
+): Promise<{ ok: true; text: string; chatId?: string } | { ok: false; error: string }> {
   return (async () => {
     try {
       const requestHeaders = {
@@ -152,6 +200,7 @@ function kimiConnectRpc(
       const u8 = new Uint8Array(arr);
       const decoder = new TextDecoder();
       const texts: string[] = [];
+      let realChatId = '';
       let currentPhase: 'thinking' | 'answer' | undefined = undefined;
       let o = 0;
 
@@ -162,6 +211,9 @@ function kimiConnectRpc(
         const chunk = u8.slice(o + 5, o + 5 + len);
         try {
           const obj = JSON.parse(decoder.decode(chunk));
+          if (!realChatId && typeof obj.chat?.id === 'string') {
+            realChatId = obj.chat.id;
+          }
           if (obj.error) {
             return {
               ok: false as const,
@@ -202,7 +254,7 @@ function kimiConnectRpc(
         o += 5 + len;
       }
 
-      return { ok: true as const, text: texts.join('') };
+      return { ok: true as const, text: texts.join(''), chatId: realChatId };
     } catch (e: unknown) {
       return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
     }

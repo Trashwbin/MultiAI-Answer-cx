@@ -1,6 +1,6 @@
 import { AI_PROVIDERS } from '../../config/ai-config';
 import type { AuthStatus } from '../../types';
-import type { CustomProviderConfig, PromptMode } from '../../types/provider';
+import type { CustomProviderConfig, PromptMode, SessionCleanupMode } from '../../types/provider';
 
 /* ── Constants & Types ──────────────────────────────── */
 
@@ -12,6 +12,7 @@ type SelectCallback = (result: {
   weightProviderId: string | null;
   batchMode: boolean;
   promptMode: PromptMode;
+  sessionCleanupMode: SessionCleanupMode;
 }) => void;
 
 interface CardState {
@@ -29,6 +30,7 @@ let visibilityHandler: (() => void) | null = null;
 let stylesInjected = false;
 let batchMode = true;
 let promptMode: PromptMode = 'standard';
+let sessionCleanupMode: SessionCleanupMode = 'on_success';
 
 /* ── Public API ──────────────────────────────────────── */
 
@@ -43,6 +45,7 @@ export function showAISelector(onConfirm: SelectCallback, onCancel?: () => void)
 
   currentWeightId = AI_PROVIDERS.find((p) => p.enabled)?.id ?? null;
   promptMode = 'standard';
+  sessionCleanupMode = 'on_success';
 
   injectStyles();
   const modal = buildModal(onConfirm, onCancel);
@@ -452,6 +455,55 @@ function buildFooter(
   promptToggleRow.appendChild(promptToggleText);
   leftGroup.appendChild(promptToggleRow);
 
+  /* ── Session cleanup toggle ── */
+  const cleanupToggleRow = mk('div', {
+    style: j('display:flex', 'align-items:center', 'gap:8px'),
+  });
+
+  const cleanupToggleLabel = mk('span', {
+    style: 'color:#718096;font-size:12px;white-space:nowrap;',
+  });
+  cleanupToggleLabel.textContent = '会话清理：';
+
+  const cleanupToggleTrack = mk('div', {
+    id: 'ai-sel-cleanup-toggle',
+    style: j(
+      'width:36px', 'height:20px', 'border-radius:10px',
+      'background:#cbd5e0', 'position:relative', 'cursor:pointer',
+      'transition:background 0.2s', 'flex-shrink:0',
+    ),
+  });
+  const cleanupToggleThumb = mk('div', {
+    style: j(
+      'width:16px', 'height:16px', 'border-radius:50%',
+      'background:#fff', 'position:absolute', 'top:2px', 'left:2px',
+      'transition:left 0.2s', 'box-shadow:0 1px 3px rgba(0,0,0,0.2)',
+    ),
+  });
+  cleanupToggleTrack.appendChild(cleanupToggleThumb);
+
+  const cleanupToggleText = mk('span', {
+    id: 'ai-sel-cleanup-text',
+    style: 'color:#4a5568;font-size:12px;font-weight:500;white-space:nowrap;',
+  });
+  cleanupToggleText.textContent = '保留会话';
+
+  function updateCleanupToggleUI(): void {
+    cleanupToggleTrack.style.background = sessionCleanupMode === 'on_success' ? '#4caf50' : '#cbd5e0';
+    cleanupToggleThumb.style.left = sessionCleanupMode === 'on_success' ? '18px' : '2px';
+    cleanupToggleText.textContent = sessionCleanupMode === 'on_success' ? '成功后删除' : '保留会话';
+  }
+
+  cleanupToggleTrack.addEventListener('click', () => {
+    sessionCleanupMode = sessionCleanupMode === 'off' ? 'on_success' : 'off';
+    updateCleanupToggleUI();
+  });
+
+  cleanupToggleRow.appendChild(cleanupToggleLabel);
+  cleanupToggleRow.appendChild(cleanupToggleTrack);
+  cleanupToggleRow.appendChild(cleanupToggleText);
+  leftGroup.appendChild(cleanupToggleRow);
+
   footer.appendChild(leftGroup);
 
   const actions = mk('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;' });
@@ -481,7 +533,13 @@ function buildFooter(
   const send = mkBtn('\u53D1\u9001\u5230 AI', '#4caf50', '#fff', () => {
     const ids = cards.filter((c) => c.selected).map((c) => c.config.id);
     if (ids.length === 0) return;
-    animateClose(() => onConfirm({ providerIds: ids, weightProviderId: currentWeightId, batchMode, promptMode }));
+    animateClose(() => onConfirm({
+      providerIds: ids,
+      weightProviderId: currentWeightId,
+      batchMode,
+      promptMode,
+      sessionCleanupMode,
+    }));
   });
   send.id = 'ai-sel-send';
   send.style.fontWeight = '600';
