@@ -7,8 +7,25 @@ import { startGuidedLogin } from '../auth/guided-login';
 import { clearCredentials, mergeCredentials } from '../auth/token-manager';
 import { captureAllCookies } from '../auth/cookie-capture';
 import { BaseProvider } from '../providers/base-provider';
+import { cleanupAllMultiAiGroups } from '../utils/tab-group';
 
 const activePorts = new Set<chrome.runtime.Port>();
+
+void cleanupAllMultiAiGroups().catch((err) => {
+  console.warn('[TabGroup] startup cleanup failed:', err);
+});
+
+chrome.runtime.onStartup?.addListener(() => {
+  void cleanupAllMultiAiGroups().catch((err) => {
+    console.warn('[TabGroup] onStartup cleanup failed:', err);
+  });
+});
+
+chrome.runtime.onInstalled.addListener(() => {
+  void cleanupAllMultiAiGroups().catch((err) => {
+    console.warn('[TabGroup] onInstalled cleanup failed:', err);
+  });
+});
 
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name === 'keepalive') {

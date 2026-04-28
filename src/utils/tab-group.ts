@@ -1,6 +1,6 @@
-const MULTIAI_GROUP_TITLE = 'MultiAI';
+const MULTIAI_GROUP_TITLE = 'MultiAI Answer';
 const MULTIAI_GROUP_COLOR: chrome.tabGroups.ColorEnum = 'blue';
-const MULTIAI_GROUP_COLLAPSED = false;
+const MULTIAI_GROUP_COLLAPSED = true;
 const inFlightGroups = new Map<number, Promise<number>>();
 
 async function findMultiAiGroups(windowId: number): Promise<chrome.tabGroups.TabGroup[]> {
@@ -75,6 +75,33 @@ async function ensureWindowGroup(windowId: number, seedTabId: number): Promise<n
     return await task;
   } finally {
     inFlightGroups.delete(windowId);
+  }
+}
+
+export async function cleanupAllMultiAiGroups(): Promise<void> {
+  const groups = await chrome.tabGroups.query({
+    title: MULTIAI_GROUP_TITLE,
+  });
+
+  const windowIds = Array.from(
+    new Set(
+      groups
+        .map((group) => group.windowId)
+        .filter((windowId): windowId is number => windowId !== undefined),
+    ),
+  );
+
+  for (const windowId of windowIds) {
+    const scopedGroups = await findMultiAiGroups(windowId);
+    if (scopedGroups.length <= 1) continue;
+
+    const canonical = scopedGroups[0]!;
+    await mergeDuplicateGroups(windowId, canonical.id, scopedGroups.slice(1));
+    await chrome.tabGroups.update(canonical.id, {
+      title: MULTIAI_GROUP_TITLE,
+      color: MULTIAI_GROUP_COLOR,
+      collapsed: MULTIAI_GROUP_COLLAPSED,
+    });
   }
 }
 
