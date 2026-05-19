@@ -12,7 +12,12 @@
   },
   "devDependencies": {
     "@types/chrome": "^0.0.268",
+    "@types/md5": "^2.3.6",
     "tsup": "^8.0.0",
     "typescript": "^5.4.0"
+  },
+  "dependencies": {
+    "md5": "^2.3.0",
+    "typr.js": "^1.0.0"
   }
 }

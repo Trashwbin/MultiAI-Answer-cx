@@ -228,12 +228,10 @@ function extractWordFillContent(div: Element): CompositeResult {
   };
 }
 
-export function extractQuestionsFromXXT(): Question[] {
+export function extractQuestionsFromElements(questionDivs: ArrayLike<Element>): Question[] {
   const questions: Question[] = [];
 
-  const questionDivs = document.querySelectorAll('.questionLi');
-
-  questionDivs.forEach((div, index) => {
+  Array.from(questionDivs).forEach((div, index) => {
     const titleElem = div.querySelector('.mark_name');
     if (!titleElem) {
       return;
@@ -288,8 +286,11 @@ export function extractQuestionsFromXXT(): Question[] {
         ? detectBlankCount(div, questionType)
       : 0;
 
+    const elementId = div.getAttribute('id') ?? '';
+    const id = div.getAttribute('data') ?? elementId.replace(/^sigleQuestionDiv_/, '');
+
     const question: Question = {
-      id: div.getAttribute('data') ?? '',
+      id,
       number: (globalOrder + 1).toString(),
       displayNumber: displayNumber || (globalOrder + 1).toString(),
       globalOrder,
@@ -304,4 +305,12 @@ export function extractQuestionsFromXXT(): Question[] {
   });
 
   return questions;
+}
+
+export function extractWorkQuestions(root: ParentNode = document): Question[] {
+  return extractQuestionsFromElements(root.querySelectorAll('.questionLi'));
+}
+
+export function extractQuestionsFromXXT(): Question[] {
+  return extractWorkQuestions(document);
 }

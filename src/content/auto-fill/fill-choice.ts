@@ -19,11 +19,23 @@ function clickElement(el: Element): void {
   }
 }
 
+function getSingleChoiceOptions(questionDiv: Element): Element[] {
+  return Array.from(
+    questionDiv.querySelectorAll('.answerBg, li[onclick*="addChoice"]'),
+  );
+}
+
+function getMultipleChoiceOptions(questionDiv: Element): Element[] {
+  return Array.from(
+    questionDiv.querySelectorAll('.answerBg, li[onclick*="addMultipleChoice"]'),
+  );
+}
+
 async function fillSingleChoice(
   questionDiv: Element,
   letter: string,
 ): Promise<boolean> {
-  const options = Array.from(questionDiv.querySelectorAll('.answerBg'));
+  const options = getSingleChoiceOptions(questionDiv);
   for (const option of options) {
     const span = option.querySelector('.num_option');
     if (!span) continue;
@@ -44,7 +56,7 @@ async function fillMultipleChoice(
   questionDiv: Element,
   letters: string[],
 ): Promise<boolean> {
-  const options = Array.from(questionDiv.querySelectorAll('.answerBg'));
+  const options = getMultipleChoiceOptions(questionDiv);
   const selected = letters.map((l) => l.toUpperCase());
 
   for (const option of options) {
