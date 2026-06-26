@@ -1,15 +1,18 @@
 import type { Question, FinalAnswer, ProviderResponse, ExtensionMessage } from '../types';
 import type { PromptMode, SessionCleanupMode } from '../types/provider';
-import { extractQuestionsFromXXT } from './extractor/extractor';
 import { autoFillAnswers } from './auto-fill/auto-fill';
 import { showAnswerPanel, updateAnswerPanel, updateProviderStatus, setAutoFillCallback, minimizePanel } from './panel/panel';
 import { showQuestionList as showQuestionListModal, initQuestionList, setQuestionListSendCallback, hideQuestionList } from './panel/question-list';
 import { showAISelector } from './panel/ai-selector';
 import { startWatermarkRemoval, removePasteRestriction, removeSelectRestriction, addCopyButtons } from './page-enhancements';
 import { buildQuestionLookup } from '../utils/question-key';
+import { resolveQuestionRuntime } from './question-runtime/adapters';
+import type { QuestionRuntime } from './question-runtime/types';
+import { decodeSecretFontInDocument } from './secret-font/decoder';
 
 let extensionEnabled = true;
 let questions: Question[] = [];
+let questionRuntime: QuestionRuntime | null = null;
 let finalAnswers: FinalAnswer[] = [];
 const providerResponses = new Map<string, ProviderResponse | 'querying'>();
 let selectedProviderIds: string[] = [];
@@ -33,6 +36,22 @@ function connectKeepAlive(): void {
       setTimeout(connectKeepAlive, 5000);
     }
   }
+}
+
+function refreshQuestions(): Question[] {
+  questionRuntime = resolveQuestionRuntime();
+  if (questionRuntime) {
+    decodeSecretFontInDocument(questionRuntime.root.doc);
+  }
+  questions = questionRuntime ? questionRuntime.adapter.extract(questionRuntime.root) : [];
+  return questions;
+}
+
+function ensureQuestions(): boolean {
+  if (questions.length === 0) {
+    refreshQuestions();
+  }
+  return questions.length > 0;
 }
 
 function handleBackgroundMessage(message: ExtensionMessage): void {
@@ -128,7 +147,7 @@ function sendQueryAllAI(
   promptMode?: PromptMode,
   sessionCleanupMode?: SessionCleanupMode,
 ): void {
-  if (questions.length === 0) return;
+  if (!ensureQuestions()) return;
 
   safeSendMessage({
     type: 'QUERY_ALL_AI',
@@ -147,7 +166,7 @@ function buildPanelCallbacks(): {
   onWeightChange: (providerId: string | null) => void;
 } {
   return {
-    onAutoFill: () => void autoFillAnswers(finalAnswers, questions),
+    onAutoFill: () => void autoFillAnswers(finalAnswers, questions, questionRuntime),
     onRetransmit: (providerId: string) => {
       providerResponses.set(providerId, 'querying');
       safeSendMessage({ type: 'QUERY_AI', providerId, questions, sessionCleanupMode: selectedSessionCleanupMode });
@@ -194,9 +213,7 @@ function handlePopupMessage(
       break;
 
     case 'showQuestionList': {
-      if (questions.length === 0) {
-        questions = extractQuestionsFromXXT();
-      }
+      ensureQuestions();
 
       if (questions.length > 0) {
         initQuestionList(questions);
@@ -224,9 +241,7 @@ function handlePopupMessage(
     }
 
     case 'showAnswers':
-      if (questions.length === 0) {
-        questions = extractQuestionsFromXXT();
-      }
+      ensureQuestions();
       if (questions.length === 0) {
         sendResponse({ success: false, error: '\u5F53\u524D\u9875\u9762\u672A\u627E\u5230\u9898\u76EE' });
         break;
@@ -239,7 +254,7 @@ function handlePopupMessage(
 
     case 'autoFill':
       minimizePanel();
-      setTimeout(() => void autoFillAnswers(finalAnswers, questions), 350);
+      setTimeout(() => void autoFillAnswers(finalAnswers, questions, questionRuntime), 350);
       sendResponse({ success: true });
       break;
 
@@ -278,10 +293,10 @@ async function initialize(): Promise<void> {
   const textSelectEnabled = (stored.textSelectEnabled as boolean | undefined) ?? true;
   const copyBtnEnabled = (stored.copyBtnEnabled as boolean | undefined) ?? true;
 
-  questions = extractQuestionsFromXXT();
+  refreshQuestions();
 
   setAutoFillCallback(() => {
-    void autoFillAnswers(finalAnswers, questions);
+    void autoFillAnswers(finalAnswers, questions, questionRuntime);
   });
 
   setQuestionListSendCallback((selected) => {

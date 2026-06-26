@@ -26,7 +26,9 @@ export async function fillJudgeAnswer(
   answer: string,
 ): Promise<boolean> {
   const targetValue = normalizeJudgeAnswer(answer);
-  const options = Array.from(questionDiv.querySelectorAll('.answerBg'));
+  const options = Array.from(
+    questionDiv.querySelectorAll('.answerBg, li[onclick*="addChoice"]'),
+  );
 
   for (const option of options) {
     const optionSpan = option.querySelector('.num_option');
