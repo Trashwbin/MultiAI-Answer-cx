@@ -170,7 +170,7 @@ export const chapterWorkAdapter: QuestionPageAdapter = {
   id: 'chapter-work',
 
   detect(root) {
-    return root.doc.querySelector('.singleQuesId[data]') !== null;
+    return root.doc.querySelector('.singleQuesId[data] .TiMu[data]') !== null;
   },
 
   extract: extractChapterQuestions,

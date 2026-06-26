@@ -5,9 +5,9 @@ import { examAdapter } from './exam-adapter';
 import { workAdapter } from './work-adapter';
 
 const ADAPTERS: QuestionPageAdapter[] = [
-  chapterWorkAdapter,
   examAdapter,
   workAdapter,
+  chapterWorkAdapter,
 ];
 
 export function resolveQuestionRuntime(): QuestionRuntime | null {
