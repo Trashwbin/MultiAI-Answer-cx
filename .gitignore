@@ -4,3 +4,7 @@ testhtml/
 
 node_modules/
 dist/
+
+# 会话/工具临时目录
+.zcode/
+.DS_Store
