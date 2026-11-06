@@ -1,6 +1,6 @@
 import type { Question } from './question';
 import type { ProviderResponse } from './answer';
-import type { PromptMode, CustomProviderConfig, SessionCleanupMode } from './provider';
+import type { PromptMode, ApiSource, AggregationConfig, SessionCleanupMode } from './provider';
 
 interface QueryAIMessage {
   type: 'QUERY_AI';
@@ -24,28 +24,10 @@ interface ShowAnswerMessage {
   response: ProviderResponse;
 }
 
-interface AuthLoginMessage {
-  type: 'AUTH_LOGIN';
-  providerId: string;
-}
-
-interface AuthStatusMessage {
-  type: 'AUTH_STATUS';
-  providerId: string;
-}
-
-interface AuthLogoutMessage {
-  type: 'AUTH_LOGOUT';
-  providerId: string;
-}
-
-interface AuthStatusAllMessage {
-  type: 'AUTH_STATUS_ALL';
-}
-
 interface QueryStartMessage {
   type: 'QUERY_START';
   providerIds: string[];
+  weightProviderId?: string | null;
 }
 
 interface QueryCompleteMessage {
@@ -57,51 +39,41 @@ interface QuestionPageReadyMessage {
   type: 'QUESTION_PAGE_READY';
 }
 
-interface TestProviderMessage {
-  type: 'TEST_PROVIDER';
-  providerId: string;
-  question: string;
+interface ProbeModelsMessage {
+  type: 'PROBE_MODELS';
+  baseUrl: string;
+  apiKey: string;
 }
 
-interface DebugCookiesMessage {
-  type: 'DEBUG_COOKIES';
-  providerId: string;
+interface GetApiSourcesMessage {
+  type: 'GET_API_SOURCES';
 }
 
-interface ClearAllCredentialsMessage {
-  type: 'CLEAR_ALL_CREDENTIALS';
+interface SaveApiSourceMessage {
+  type: 'SAVE_API_SOURCE';
+  source: ApiSource;
 }
 
-interface StorageCapturedMessage {
-  type: 'STORAGE_CAPTURED';
-  providerId: string;
-  storage: Record<string, string>;
+interface DeleteApiSourceMessage {
+  type: 'DELETE_API_SOURCE';
+  sourceId: string;
 }
 
-interface BearerCapturedMessage {
-  type: 'BEARER_CAPTURED';
-  providerId: string;
-  bearerToken: string;
+interface GetEnabledModelsMessage {
+  type: 'GET_ENABLED_MODELS';
 }
 
-interface ExecPageFuncMessage {
-  type: 'EXEC_PAGE_FUNC';
-  funcName: string;
-  args: string[];
+interface GetCatalogStatusMessage {
+  type: 'GET_CATALOG_STATUS';
 }
 
-interface SaveCustomProviderMessage {
-  type: 'SAVE_CUSTOM_PROVIDER';
-  config: CustomProviderConfig;
+interface GetAggregationConfigMessage {
+  type: 'GET_AGGREGATION_CONFIG';
 }
 
-interface DeleteCustomProviderMessage {
-  type: 'DELETE_CUSTOM_PROVIDER';
-  providerId: string;
-}
-
-interface GetCustomProvidersMessage {
-  type: 'GET_CUSTOM_PROVIDERS';
+interface SetAggregationConfigMessage {
+  type: 'SET_AGGREGATION_CONFIG';
+  config: AggregationConfig;
 }
 
 export type ExtensionMessage =
@@ -110,17 +82,25 @@ export type ExtensionMessage =
   | ShowAnswerMessage
   | QueryStartMessage
   | QueryCompleteMessage
-  | AuthLoginMessage
-  | AuthStatusMessage
-  | AuthLogoutMessage
-  | AuthStatusAllMessage
   | QuestionPageReadyMessage
-  | TestProviderMessage
-  | DebugCookiesMessage
-  | ClearAllCredentialsMessage
-  | StorageCapturedMessage
-  | BearerCapturedMessage
-  | ExecPageFuncMessage
-  | SaveCustomProviderMessage
-  | DeleteCustomProviderMessage
-  | GetCustomProvidersMessage;
+  | ProbeModelsMessage
+  | GetApiSourcesMessage
+  | SaveApiSourceMessage
+  | DeleteApiSourceMessage
+  | GetEnabledModelsMessage
+  | GetCatalogStatusMessage
+  | GetAggregationConfigMessage
+  | SetAggregationConfigMessage;
+
+/** Result of PROBE_MODELS, sent back through sendResponse. */
+export interface ProbeResult {
+  success: boolean;
+  error?: string;
+  errorKind?: 'auth' | 'network' | 'not_found' | 'parse' | 'permission' | 'unknown';
+  catalogStyle?: ApiSource['catalogStyle'];
+  catalogPath?: string;
+  chatStyle?: ApiSource['chatStyle'];
+  chatPath?: string;
+  models?: import('./provider').DiscoveredModel[];
+  baseUrl?: string;
+}
