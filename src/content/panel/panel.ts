@@ -1,20 +1,19 @@
 import type { Question, FinalAnswer, ProviderResponse, ProviderConfig } from '../../types';
-import type { CustomProviderConfig } from '../../types/provider';
-import { getProviderById } from '../../config/ai-config';
+import type { ModelProviderConfig } from '../../types/provider';
 import { createEditor } from '../editors/factory';
 import { matchesQuestionKey } from '../../utils/question-key';
 
-/* ── Custom provider config cache ────────────────────── */
+/* ── Enabled-model config cache ──────────────────────── */
 
-const customProviderCache = new Map<string, ProviderConfig>();
+const enabledModelCache = new Map<string, ProviderConfig>();
 
 function refreshCustomProviderCache(): void {
-  chrome.runtime.sendMessage({ type: 'GET_CUSTOM_PROVIDERS' })
-    .then((res: { success?: boolean; providers?: CustomProviderConfig[] } | undefined) => {
-      if (res?.success && Array.isArray(res.providers)) {
-        customProviderCache.clear();
-        for (const p of res.providers) {
-          customProviderCache.set(p.id, p);
+  chrome.runtime.sendMessage({ type: 'GET_ENABLED_MODELS' })
+    .then((res: { success?: boolean; models?: ModelProviderConfig[] } | undefined) => {
+      if (res?.success && Array.isArray(res.models)) {
+        enabledModelCache.clear();
+        for (const m of res.models) {
+          enabledModelCache.set(m.id, m);
         }
       }
     })
@@ -24,7 +23,7 @@ function refreshCustomProviderCache(): void {
 refreshCustomProviderCache();
 
 function resolveProviderConfig(id: string): ProviderConfig | undefined {
-  return getProviderById(id) ?? customProviderCache.get(id);
+  return enabledModelCache.get(id);
 }
 
 function createProviderIcon(config: ProviderConfig | undefined, size = 18): HTMLElement {
@@ -58,23 +57,8 @@ function createProviderIcon(config: ProviderConfig | undefined, size = 18): HTML
     wrap.appendChild(fallback);
   };
 
-  if (!config?.iconPath) {
-    appendFallback();
-    return wrap;
-  }
-
-  const img = document.createElement('img');
-  img.src = chrome.runtime.getURL(config.iconPath);
-  img.alt = name;
-  img.style.cssText = j(
-    `width:${size}px`,
-    `height:${size}px`,
-    'object-fit:contain',
-    'display:block',
-  );
-  img.onerror = appendFallback;
-  wrap.appendChild(img);
-
+  // Models have no per-model icon: always render the first character.
+  appendFallback();
   return wrap;
 }
 
@@ -89,7 +73,6 @@ export interface AnswerPanelState {
   questions: Question[];
   finalAnswers: FinalAnswer[];
   providerIds?: string[];
-  weightProviderId?: string | null;
   isLoading: boolean;
 }
 
@@ -97,7 +80,6 @@ export interface AnswerPanelCallbacks {
   onAutoFill: () => void;
   onRetransmit: (providerId: string) => void;
   onRemoveProvider: (providerId: string) => void;
-  onWeightChange: (providerId: string | null) => void;
 }
 
 export type AutoFillCallback = () => void;
@@ -110,7 +92,6 @@ let panelCallbacks: AnswerPanelCallbacks | null = null;
 let onAutoFill: AutoFillCallback | null = null;
 let activeProviderIds: string[] = [];
 let visibleProviderIds: string[] = [];
-let currentWeightId: string | null = null;
 let storedProviderResponses = new Map<string, ProviderResponse | 'querying'>();
 let isCollapsed = false;
 let isMinimized = false;
@@ -131,8 +112,7 @@ export function showAnswerPanel(
   panelState = state;
   panelCallbacks = callbacks ?? null;
   activeProviderIds = state.providerIds ? [...state.providerIds] : [];
-  currentWeightId = state.weightProviderId ?? null;
-  visibleProviderIds = currentWeightId ? [currentWeightId] : activeProviderIds.slice(0, 1);
+  visibleProviderIds = activeProviderIds.slice(0, 1);
   storedProviderResponses = new Map();
   isCollapsed = false;
   isMinimized = false;
@@ -160,10 +140,7 @@ export function updateAnswerPanel(
     storedProviderResponses = new Map(providerResponses);
     if (activeProviderIds.length === 0) {
       activeProviderIds = Array.from(providerResponses.keys());
-      if (currentWeightId === null && activeProviderIds.length > 0) {
-        currentWeightId = activeProviderIds[0] ?? null;
-      }
-      visibleProviderIds = currentWeightId ? [currentWeightId] : activeProviderIds.slice(0, 1);
+      visibleProviderIds = activeProviderIds.slice(0, 1);
     }
   }
 
@@ -180,10 +157,7 @@ export function updateProviderStatus(
 
   if (activeProviderIds.length === 0) {
     activeProviderIds = Array.from(providerResponses.keys());
-    if (currentWeightId === null && activeProviderIds.length > 0) {
-      currentWeightId = activeProviderIds[0] ?? null;
-    }
-    visibleProviderIds = currentWeightId ? [currentWeightId] : activeProviderIds.slice(0, 1);
+    visibleProviderIds = activeProviderIds.slice(0, 1);
   }
 
   refreshFullGrid();
@@ -503,20 +477,6 @@ function buildAINamesRow(): HTMLElement {
     retryBtn.title = `\u91CD\u53D1 ${name}`;
     retryBtn.addEventListener('click', () => handleRetransmit(id));
 
-    const weightBtn = mk('button', {
-      style: j(
-        'background:none', 'border:none',
-        'cursor:pointer', 'font-size:13px', 'padding:2px 4px',
-        'border-radius:4px', 'line-height:1',
-      ),
-    });
-    weightBtn.style.color = currentWeightId === id ? '#f59e0b' : '#718096';
-    weightBtn.textContent = currentWeightId === id ? '\u2605' : '\u2606';
-    weightBtn.title = currentWeightId === id
-      ? `${name}\uFF08\u5F53\u524D\u6743\u91CDAI\uFF09`
-      : `\u8BBE\u4E3A\u6743\u91CDAI\uFF1A${name}`;
-    weightBtn.addEventListener('click', () => handleWeightChange(id));
-
     const removeBtn = mk('button', {
       style: j(
         'background:none', 'border:none', 'color:#dc2626',
@@ -529,7 +489,6 @@ function buildAINamesRow(): HTMLElement {
     removeBtn.addEventListener('click', () => handleRemoveProvider(id));
 
     actions.appendChild(retryBtn);
-    actions.appendChild(weightBtn);
     actions.appendChild(removeBtn);
 
     cell.appendChild(checkbox);
@@ -913,19 +872,8 @@ function handleRemoveProvider(providerId: string): void {
   }
   storedProviderResponses.delete(providerId);
 
-  /* Reassign weight if we removed the weight provider */
-  if (currentWeightId === providerId) {
-    currentWeightId = activeProviderIds[0] ?? null;
-  }
-
   panelCallbacks?.onRemoveProvider(providerId);
   refreshFullGrid();
-}
-
-function handleWeightChange(providerId: string): void {
-  currentWeightId = providerId;
-  panelCallbacks?.onWeightChange(providerId);
-  refreshAINamesRow();
 }
 
 function handleRetransmit(providerId: string): void {
@@ -1059,7 +1007,7 @@ function showToast(message: string): void {
 }
 
 /* ═══════════════════════════════════════════════════════
-   DOM Utilities (matching ai-selector.ts patterns)
+   DOM Utilities
    ═══════════════════════════════════════════════════════ */
 
 /** Join CSS declarations with semicolons */

@@ -1,9 +1,9 @@
 import type { Question, FinalAnswer, ProviderResponse, ExtensionMessage } from '../types';
-import type { PromptMode, SessionCleanupMode } from '../types/provider';
+import { QuestionType } from '../types';
+import type { SessionCleanupMode } from '../types/provider';
 import { autoFillAnswers } from './auto-fill/auto-fill';
 import { showAnswerPanel, updateAnswerPanel, updateProviderStatus, setAutoFillCallback, minimizePanel } from './panel/panel';
 import { showQuestionList as showQuestionListModal, initQuestionList, setQuestionListSendCallback, hideQuestionList } from './panel/question-list';
-import { showAISelector } from './panel/ai-selector';
 import { startWatermarkRemoval, removePasteRestriction, removeSelectRestriction, addCopyButtons } from './page-enhancements';
 import { buildQuestionLookup } from '../utils/question-key';
 import { resolveQuestionRuntime } from './question-runtime/adapters';
@@ -17,12 +17,17 @@ let finalAnswers: FinalAnswer[] = [];
 const providerResponses = new Map<string, ProviderResponse | 'querying'>();
 let selectedProviderIds: string[] = [];
 let selectedSessionCleanupMode: SessionCleanupMode = 'on_success';
+/** Model whose answer wins open questions and breaks ties (from QUERY_START). */
+let weightProviderId: string | null = null;
 let keepAlivePort: chrome.runtime.Port | null = null;
 
 function connectKeepAlive(): void {
   if (!chrome.runtime?.id) return; // Extension context invalidated, stop reconnecting
   try {
     keepAlivePort = chrome.runtime.connect({ name: 'keepalive' });
+    // The SW pings us during long queries to stay alive; receiving the ping
+    // keeps this end of the port healthy too.
+    keepAlivePort.onMessage.addListener(() => {});
     keepAlivePort.onDisconnect.addListener(() => {
       keepAlivePort = null;
       void chrome.runtime.lastError;
@@ -58,6 +63,7 @@ function handleBackgroundMessage(message: ExtensionMessage): void {
   switch (message.type) {
     case 'QUERY_START': {
       console.log('[CX] Query started:', message.providerIds.join(', '));
+      weightProviderId = message.weightProviderId ?? null;
       providerResponses.clear();
       finalAnswers = [];
       for (const id of message.providerIds) {
@@ -91,38 +97,101 @@ function handleBackgroundMessage(message: ExtensionMessage): void {
   }
 }
 
+const OPEN_QUESTION_TYPES = new Set<QuestionType>([
+  QuestionType.QA,
+  QuestionType.WORD_DEFINITION,
+  QuestionType.READING_COMPREHENSION,
+  QuestionType.OTHER,
+]);
+
+function answerKey(answer: string | string[]): string {
+  return Array.isArray(answer) ? answer.join('\0') : answer;
+}
+
+/**
+ * Open questions have free-form answers that cannot be compared for equality,
+ * so the weight model's answer is used directly. For objective questions we
+ * keep plain majority voting, but break ties in favour of the weight model.
+ */
 function aggregateFinalAnswers(
   responses: Map<string, ProviderResponse | 'querying'>,
 ): FinalAnswer[] {
-  const answerMap = new Map<string, FinalAnswer>();
+  const lookup = buildQuestionLookup(questions);
 
-  for (const entry of responses.values()) {
-    if (entry === 'querying') continue;
-    if (entry.error) continue;
+  // Collect valid answers per question id, remembering which provider said what.
+  const byQuestion = new Map<string, Array<{
+    providerId: string;
+    answer: string | string[];
+  }>>();
 
+  for (const [providerId, entry] of responses) {
+    if (entry === 'querying' || entry.error) continue;
     for (const pa of entry.answers) {
-      const existing = answerMap.get(pa.id);
-      if (existing) {
-        const answerKey = Array.isArray(pa.answer) ? pa.answer.join(',') : pa.answer;
-        const existingKey = Array.isArray(existing.answer) ? existing.answer.join(',') : existing.answer;
-        if (answerKey === existingKey) {
-          existing.votes += 1;
-        } else if (existing.votes <= 1) {
-          existing.answer = pa.answer;
-        }
-        existing.totalProviders += 1;
-      } else {
-        answerMap.set(pa.id, {
-          id: pa.id,
-          answer: pa.answer,
-          votes: 1,
-          totalProviders: 1,
-        });
-      }
+      const list = byQuestion.get(pa.id) ?? [];
+      list.push({ providerId, answer: pa.answer });
+      byQuestion.set(pa.id, list);
     }
   }
 
-  const lookup = buildQuestionLookup(questions);
+  const answerMap = new Map<string, FinalAnswer>();
+
+  for (const [id, votes] of byQuestion) {
+    const question = lookup.get(id);
+    const isOpen = question ? OPEN_QUESTION_TYPES.has(question.type) : false;
+    const weightVote = weightProviderId
+      ? votes.find((v) => v.providerId === weightProviderId)
+      : undefined;
+
+    // Open question: take the weight model's answer verbatim, if it answered.
+    if (isOpen && weightVote) {
+      answerMap.set(id, {
+        id,
+        answer: weightVote.answer,
+        votes: 1,
+        totalProviders: votes.length,
+      });
+      continue;
+    }
+
+    // Otherwise group identical answers and count.
+    const buckets = new Map<string, { answer: string | string[]; count: number; weightCount: number }>();
+    for (const v of votes) {
+      const key = answerKey(v.answer);
+      const existing = buckets.get(key);
+      if (existing) {
+        existing.count += 1;
+        if (v.providerId === weightProviderId) existing.weightCount += 1;
+      } else {
+        buckets.set(key, {
+          answer: v.answer,
+          count: 1,
+          weightCount: v.providerId === weightProviderId ? 1 : 0,
+        });
+      }
+    }
+
+    // Highest count wins; on a tie prefer the group containing the weight
+    // model's answer (equivalent to giving it one extra vote).
+    let winner: { answer: string | string[]; count: number } | undefined;
+    for (const bucket of buckets.values()) {
+      if (
+        !winner ||
+        bucket.count > winner.count ||
+        (bucket.count === winner.count && bucket.weightCount > 0)
+      ) {
+        winner = bucket;
+      }
+    }
+
+    if (winner) {
+      answerMap.set(id, {
+        id,
+        answer: winner.answer,
+        votes: winner.count,
+        totalProviders: votes.length,
+      });
+    }
+  }
 
   return Array.from(answerMap.values()).sort((a, b) => {
     const qA = lookup.get(a.id);
@@ -141,21 +210,17 @@ function safeSendMessage(message: ExtensionMessage): void {
   chrome.runtime.sendMessage(message).catch(() => {});
 }
 
-function sendQueryAllAI(
-  providerIds?: string[],
-  batchMode?: boolean,
-  promptMode?: PromptMode,
-  sessionCleanupMode?: SessionCleanupMode,
-): void {
+function sendQueryAllAI(): void {
   if (!ensureQuestions()) return;
 
+  // No providerIds: the background expands every enabled model from the
+  // configuration page. Sending is configuration-free.
   safeSendMessage({
     type: 'QUERY_ALL_AI',
     questions,
-    providerIds,
-    batchMode,
-    promptMode,
-    sessionCleanupMode,
+    batchMode: true,
+    promptMode: 'standard' as const,
+    sessionCleanupMode: 'on_success' as const,
   });
 }
 
@@ -163,7 +228,6 @@ function buildPanelCallbacks(): {
   onAutoFill: () => void;
   onRetransmit: (providerId: string) => void;
   onRemoveProvider: (providerId: string) => void;
-  onWeightChange: (providerId: string | null) => void;
 } {
   return {
     onAutoFill: () => void autoFillAnswers(finalAnswers, questions, questionRuntime),
@@ -176,28 +240,19 @@ function buildPanelCallbacks(): {
       selectedProviderIds = selectedProviderIds.filter((id) => id !== providerId);
       finalAnswers = aggregateFinalAnswers(providerResponses);
     },
-    onWeightChange: (newWeightId: string | null) => {
-      void newWeightId;
-    },
   };
 }
 
-function openPanelAndQuery(
-  providerIds: string[],
-  wId: string | null,
-  batch?: boolean,
-  promptMode?: PromptMode,
-  sessionCleanupMode?: SessionCleanupMode,
-): void {
-  selectedProviderIds = providerIds;
-  selectedSessionCleanupMode = sessionCleanupMode ?? 'on_success';
+function openPanelAndQuery(): void {
+  selectedProviderIds = [];
+  selectedSessionCleanupMode = 'on_success';
   finalAnswers = [];
   providerResponses.clear();
   showAnswerPanel(
-    { questions, finalAnswers, providerIds, weightProviderId: wId, isLoading: true },
+    { questions, finalAnswers, providerIds: [], isLoading: true },
     buildPanelCallbacks(),
   );
-  sendQueryAllAI(providerIds, batch, promptMode, selectedSessionCleanupMode);
+  sendQueryAllAI();
 }
 
 function handlePopupMessage(
@@ -246,9 +301,7 @@ function handlePopupMessage(
         sendResponse({ success: false, error: '\u5F53\u524D\u9875\u9762\u672A\u627E\u5230\u9898\u76EE' });
         break;
       }
-      showAISelector(({ providerIds, weightProviderId: wId, batchMode: batch, promptMode: pm, sessionCleanupMode: scm }) => {
-        openPanelAndQuery(providerIds, wId, batch, pm, scm);
-      });
+      openPanelAndQuery();
       sendResponse({ success: true });
       break;
 
@@ -302,9 +355,7 @@ async function initialize(): Promise<void> {
   setQuestionListSendCallback((selected) => {
     questions = selected;
     hideQuestionList();
-    showAISelector(({ providerIds, weightProviderId: wId, batchMode: batch, promptMode: pm, sessionCleanupMode: scm }) => {
-      openPanelAndQuery(providerIds, wId, batch, pm, scm);
-    });
+    openPanelAndQuery();
   });
 
   connectKeepAlive();
