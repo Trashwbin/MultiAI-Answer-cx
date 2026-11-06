@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', async function () {
   // 获取其他按钮元素
   const showQuestionsBtn = document.querySelector('.show-questions');
   const showAnswersBtn = document.querySelector('.show-answers');
+  const openSettingsBtn = document.querySelector('.open-settings');
   const removePasteLimitSwitch = document.getElementById('remove-paste-limit');
   const enableCopyBtnSwitch = document.getElementById('enable-copy-btn');
   const enableTextSelectSwitch = document.getElementById('enable-text-select');
@@ -144,6 +145,12 @@ document.addEventListener('DOMContentLoaded', async function () {
         window.close();
       });
     });
+  });
+
+  // 模型接入管理按钮：打开独立配置页
+  openSettingsBtn.addEventListener('click', () => {
+    chrome.runtime.openOptionsPage();
+    window.close();
   });
 
   // 显示AI答案按钮点击事件

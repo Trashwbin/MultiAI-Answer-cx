@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <title>MultiAI Answer — 模型接入管理</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f5f7fa; color: #1a202c; min-height: 100vh; padding: 32px 16px;
+    }
+    .container { max-width: 960px; margin: 0 auto; }
+    .header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+    .header h1 { font-size: 22px; font-weight: 700; }
+    .header p { font-size: 13px; color: #718096; margin-top: 6px; line-height: 1.6; }
+    .btn {
+      padding: 8px 16px; border: none; border-radius: 8px; font-size: 13px;
+      font-weight: 600; cursor: pointer; font-family: inherit;
+      transition: opacity .15s, transform .15s; white-space: nowrap;
+    }
+    .btn:hover { opacity: .88; transform: translateY(-1px); }
+    .btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+    .btn-primary { background: #4caf50; color: #fff; }
+    .btn-ghost { background: #edf2f7; color: #4a5568; }
+    .btn-blue { background: #667eea; color: #fff; }
+    .btn-danger { background: #fed7d7; color: #e53e3e; }
+    .btn-sm { padding: 5px 10px; font-size: 12px; border-radius: 6px; }
+    .card {
+      background: #fff; border: 1px solid #e2e8f0; border-radius: 12px;
+      padding: 18px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.04);
+    }
+    .source-head { display: flex; align-items: center; gap: 12px; }
+    .dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+    .source-info { flex: 1; min-width: 0; }
+    .source-name { font-size: 15px; font-weight: 700; }
+    .source-url { font-size: 12px; color: #718096; margin-top: 3px; word-break: break-all; }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .chip {
+      font-size: 11px; padding: 2px 8px; border-radius: 10px;
+      background: #edf2f7; color: #4a5568;
+    }
+    .source-actions { display: flex; gap: 6px; flex-shrink: 0; }
+    .empty { text-align: center; padding: 48px 20px; color: #a0aec0; font-size: 14px; }
+    .status-bar {
+      font-size: 12px; color: #718096; background: #fff; border: 1px solid #e2e8f0;
+      border-radius: 10px; padding: 12px 16px; margin-top: 16px; line-height: 1.7;
+    }
+    .status-bar strong { color: #2d3748; }
+    .tag-runtime { color: #2f855a; font-weight: 600; }
+    .tag-bundled { color: #b7791f; font-weight: 600; }
+
+    /* add-form */
+    .field { margin-bottom: 10px; }
+    .field label { display: block; font-size: 12px; color: #4a5568; margin-bottom: 4px; font-weight: 600; }
+    .field input {
+      width: 100%; padding: 9px 12px; border: 1px solid #e2e8f0; border-radius: 8px;
+      font-size: 13px; font-family: inherit; outline: none; transition: border-color .15s;
+    }
+    .field input:focus { border-color: #667eea; }
+    .field input.err { border-color: #e53e3e; }
+    .form-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+    .form-row .field { flex: 1; min-width: 180px; margin-bottom: 0; }
+    .form-actions { display: flex; gap: 8px; margin-top: 14px; }
+    .msg { font-size: 12px; margin-top: 10px; line-height: 1.6; }
+    .msg-error { color: #e53e3e; }
+    .msg-ok { color: #2f855a; }
+
+    /* model table */
+    .probe-summary {
+      font-size: 12px; color: #4a5568; background: #f7fafc; border: 1px solid #e2e8f0;
+      border-radius: 8px; padding: 10px 12px; margin: 14px 0; line-height: 1.7; word-break: break-all;
+    }
+    .table-tools { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+    .model-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .model-table th {
+      text-align: left; padding: 8px 6px; border-bottom: 2px solid #e2e8f0;
+      color: #718096; font-weight: 600; font-size: 11px; white-space: nowrap;
+    }
+    .model-table td { padding: 8px 6px; border-bottom: 1px solid #f0f2f5; vertical-align: middle; }
+    .model-table tr:hover td { background: #fafbfe; }
+    .model-id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; word-break: break-all; }
+    .model-name { color: #718096; font-size: 11px; }
+    .badge {
+      display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 4px;
+      font-weight: 600; margin-right: 4px;
+    }
+    .badge-reasoning { background: #e0e7ff; color: #4338ca; }
+    .badge-vision { background: #c6f6d5; color: #276749; }
+    .badge-off { background: #f0f2f5; color: #a0aec0; }
+    .src-tag { font-size: 9px; color: #a0aec0; margin-left: 2px; }
+    .meta-cell { color: #718096; white-space: nowrap; }
+    .scroll { max-height: 420px; overflow-y: auto; border: 1px solid #f0f2f5; border-radius: 8px; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div class="header">
+      <div>
+        <h1>模型接入管理</h1>
+        <p>填入任意 OpenAI 兼容 / Ollama 端点的 Base URL 与 API Key，自动拉取模型列表；<br>
+          勾选「启用」的模型即为每次发送的目标。配置一次，之后发题不再需要选择。</p>
+      </div>
+      <button class="btn btn-primary" id="addBtn">+ 添加接入源</button>
+    </div>
+
+    <!-- add / edit form -->
+    <div class="card hidden" id="addCard">
+      <div style="font-size:15px;font-weight:700;margin-bottom:14px" id="formTitle">添加接入源</div>
+      <div class="form-row">
+        <div class="field">
+          <label>显示名称</label>
+          <input id="inName" type="text" placeholder="例如：我的中转 / 本地 Ollama">
+        </div>
+        <div class="field">
+          <label>Base URL</label>
+          <input id="inUrl" type="text" placeholder="http://127.0.0.1:3425/v1">
+        </div>
+      </div>
+      <div class="field" style="margin-top:10px">
+        <label>API Key（本机网关可留空）</label>
+        <input id="inKey" type="password" placeholder="sk-...">
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-blue" id="probeBtn">拉取模型</button>
+        <button class="btn btn-ghost hidden" id="refetchBtn">重新拉取模型</button>
+        <button class="btn btn-ghost" id="cancelBtn">取消</button>
+      </div>
+      <div class="msg" id="probeMsg"></div>
+
+      <!-- model list (from probe or from a saved source being edited) -->
+      <div id="probeResult" class="hidden">
+        <div class="probe-summary" id="probeSummary"></div>
+        <div class="table-tools">
+          <button class="btn btn-ghost btn-sm" id="selAll">全选</button>
+          <button class="btn btn-ghost btn-sm" id="selNone">全不选</button>
+          <span id="selCount" style="font-size:12px;color:#718096;margin-left:auto"></span>
+        </div>
+        <div class="scroll">
+          <table class="model-table">
+            <thead>
+              <tr>
+                <th style="width:36px">启用</th>
+                <th>模型 ID</th>
+                <th>能力 / 来源</th>
+                <th>上下文</th>
+                <th>供应商</th>
+              </tr>
+            </thead>
+            <tbody id="modelBody"></tbody>
+          </table>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-primary" id="saveBtn">保存接入源</button>
+          <button class="btn btn-ghost" id="discardBtn">放弃</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="sourceList"></div>
+
+    <div class="card" id="aggCard">
+      <div style="font-size:15px;font-weight:700;margin-bottom:6px">答案聚合 · 权重模型</div>
+      <div style="font-size:12px;color:#718096;line-height:1.7;margin-bottom:12px">
+        简答题、名词解释等开放题没有标准答案可比，直接采用权重模型的回答；<br>
+        客观题平票时优先采纳权重模型的答案。不选则全部按普通投票处理。
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <select id="weightSelect" style="flex:1;min-width:260px;padding:8px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
+          <option value="">不设置（全部按普通投票）</option>
+        </select>
+        <button class="btn btn-primary btn-sm" id="saveWeightBtn">保存</button>
+      </div>
+      <div class="msg" id="weightMsg"></div>
+    </div>
+
+    <div class="status-bar" id="statusBar">正在加载…</div>
+  </div>
+
+  <script src="../../dist/manager.js"></script>
+</body>
+
+</html>
