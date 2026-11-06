@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "MultiAI Answer",
   "description": "基于多模型 AI 投票的智能答题助手。填入任意 OpenAI 兼容 API 的 Base URL 与 API Key，自动拉取可用模型，勾选后即可发送题目。",
-  "version": "2.2.1",
+  "version": "2.3.0",
   "icons": {
     "16": "icons/icon.png",
     "48": "icons/icon.png",
