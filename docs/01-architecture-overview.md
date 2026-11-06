@@ -1,3 +1,5 @@
+> ⚠️ **历史文档 / HISTORICAL**：本文件描述 v2 早期基于 AI 网页登录态与 chat2api 逆向的架构，相关实现已在「模型接入器」重构中彻底移除。当前架构请以 [README](../README.md) 与 `src/providers/` 为准。
+
 # MultiAI-Answer-cx v2 架构设计文档
 
 > **文档状态**: Draft  
