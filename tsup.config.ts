@@ -26,7 +26,7 @@ export default defineConfig([
   },
   {
     ...shared,
-    entry: { 'auth-content': 'src/auth/auth-content.ts' },
-    globalName: 'AuthContentScript',
+    entry: { manager: 'src/options/manager.ts' },
+    globalName: 'ManagerScript',
   },
 ]);

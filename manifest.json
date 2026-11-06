@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "MultiAI Answer",
-  "description": "基于多模型 AI 投票的智能答题助手，让答题更轻松、更准确。支持多个主流 AI 模型，智能分析题目，自动生成答案。",
+  "description": "基于多模型 AI 投票的智能答题助手。填入任意 OpenAI 兼容 API 的 Base URL 与 API Key，自动拉取可用模型，勾选后即可发送题目。",
   "version": "2.2.1",
   "icons": {
     "16": "icons/icon.png",
@@ -17,6 +17,10 @@
     }
   },
   "author": "Trashwbin",
+  "options_ui": {
+    "page": "src/options/manager.html",
+    "open_in_tab": true
+  },
   "permissions": [
     "tabs",
     "tabGroups",
@@ -24,26 +28,12 @@
     "clipboardWrite",
     "storage",
     "system.display",
-    "cookies",
-    "webRequest",
     "scripting"
   ],
    "host_permissions": [
      "https://*.chaoxing.com/*",
-     "https://chat.deepseek.com/*",
-     "https://kimi.com/*",
-     "https://www.kimi.com/*",
-     "https://kimi.moonshot.cn/*",
-     "https://tongyi.aliyun.com/*",
-     "https://chatglm.cn/*",
-     "https://doubao.com/*",
-     "https://www.doubao.com/*",
-     "https://yiyan.baidu.com/*",
-     "https://xinghuo.xfyun.cn/*",
-     "https://chatgpt.com/*",
-     "https://gemini.google.com/*",
-     "https://grok.com/*",
-     "https://*.qianwen.com/*",
+     "https://models.dev/*",
+     "https://cdn.jsdelivr.net/*",
      "http://127.0.0.1:*/*",
      "http://localhost:*/*"
    ],
@@ -52,7 +42,7 @@
      "http://*/*"
    ],
    "content_security_policy": {
-    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+    "extension_pages": "script-src 'self'; object-src 'self'"
   },
   "background": {
     "service_worker": "dist/background.js"
@@ -72,29 +62,12 @@
       ],
       "js": ["lib/html2canvas.min.js", "dist/content.js"],
       "run_at": "document_end"
-    },
-    {
-      "matches": [
-        "https://chat.deepseek.com/*",
-        "https://kimi.com/*",
-        "https://www.kimi.com/*",
-        "https://kimi.moonshot.cn/*",
-        "https://chatgpt.com/*",
-        "https://gemini.google.com/*",
-        "https://www.doubao.com/*",
-        "https://grok.com/*",
-        "https://*.qianwen.com/*",
-        "https://chatglm.cn/*"
-      ],
-      "js": ["dist/auth-content.js"],
-      "run_at": "document_end"
     }
   ],
   "web_accessible_resources": [
     {
       "resources": [
-        "icons/*",
-        "icons/providers/*"
+        "icons/*"
       ],
       "matches": [
         "https://*.chaoxing.com/*",
