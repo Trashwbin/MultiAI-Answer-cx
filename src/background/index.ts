@@ -1,31 +1,50 @@
-import type { ExtensionMessage, Question } from '../types';
+import type { ExtensionMessage, Question, ProbeResult } from '../types';
 import type { PromptMode, SessionCleanupMode } from '../types/provider';
-import { QuestionType } from '../types/question';
-import { getProviderById, getProvidersByIds, getEnabledProviders, getEnabledProvidersAsync, getProvidersByIdsAsync, getProviderByIdAsync } from '../providers/registry';
-import { AI_PROVIDERS, getProviderById as getProviderConfig, getCustomProviders, saveCustomProvider, deleteCustomProvider } from '../config/ai-config';
-import { startGuidedLogin } from '../auth/guided-login';
-import { clearCredentials, mergeCredentials } from '../auth/token-manager';
-import { captureAllCookies } from '../auth/cookie-capture';
+import {
+  getEnabledProvidersAsync,
+  getProvidersByIdsAsync,
+  getProviderByIdAsync,
+} from '../providers/registry';
 import { BaseProvider } from '../providers/base-provider';
-import { cleanupAllMultiAiGroups } from '../utils/tab-group';
+import { probeApiSource } from '../providers/model-discovery';
+import { prefetchCatalog, getCatalogStatus } from '../providers/model-catalog';
+import {
+  getApiSources,
+  saveApiSource,
+  deleteApiSource,
+  getEnabledModels,
+  getAggregationConfig,
+  saveAggregationConfig,
+  createSourceId,
+} from '../config/model-sources';
 
 const activePorts = new Set<chrome.runtime.Port>();
+let activeQueries = 0;
+let keepaliveTimer: ReturnType<typeof setInterval> | null = null;
 
-void cleanupAllMultiAiGroups().catch((err) => {
-  console.warn('[TabGroup] startup cleanup failed:', err);
-});
+/**
+ * A silent chrome.runtime.Port does NOT keep an MV3 service worker alive:
+ * Chrome terminates idle workers after ~30s, which aborts in-flight fetches
+ * (visible upstream as HTTP 499). While queries are running, ping the ports
+ * every 20s so the worker keeps receiving events.
+ */
+function startKeepalive(): void {
+  activeQueries += 1;
+  if (keepaliveTimer) return;
+  keepaliveTimer = setInterval(() => {
+    for (const port of activePorts) {
+      try { port.postMessage({ type: 'keepalive-ping' }); } catch { /* closed */ }
+    }
+  }, 20_000);
+}
 
-chrome.runtime.onStartup?.addListener(() => {
-  void cleanupAllMultiAiGroups().catch((err) => {
-    console.warn('[TabGroup] onStartup cleanup failed:', err);
-  });
-});
-
-chrome.runtime.onInstalled.addListener(() => {
-  void cleanupAllMultiAiGroups().catch((err) => {
-    console.warn('[TabGroup] onInstalled cleanup failed:', err);
-  });
-});
+function stopKeepalive(): void {
+  activeQueries = Math.max(0, activeQueries - 1);
+  if (activeQueries === 0 && keepaliveTimer) {
+    clearInterval(keepaliveTimer);
+    keepaliveTimer = null;
+  }
+}
 
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name === 'keepalive') {
@@ -36,51 +55,8 @@ chrome.runtime.onConnect.addListener((port) => {
   }
 });
 
-const BEARER_INTERCEPT_URLS = [
-  'https://chat.deepseek.com/api/*',
-  'https://kimi.moonshot.cn/api/*',
-  'https://www.kimi.com/api/*',
-  'https://www.kimi.com/apiv2/*',
-  'https://kimi.com/api/*',
-  'https://www.doubao.com/samantha/*',
-  'https://chatglm.cn/chatglm/*',
-  'https://chat2.qianwen.com/*',
-];
-
-const URL_TO_PROVIDER: Record<string, string> = {
-  'chat.deepseek.com': 'deepseek',
-  'kimi.moonshot.cn': 'kimi',
-  'www.kimi.com': 'kimi',
-  'kimi.com': 'kimi',
-  'www.doubao.com': 'doubao',
-  'chatglm.cn': 'chatglm',
-  'chat2.qianwen.com': 'qwen-cn',
-};
-
-chrome.webRequest.onSendHeaders.addListener(
-  (details) => {
-    if (!details.requestHeaders) return;
-
-    const authHeader = details.requestHeaders.find(
-      (h) => h.name.toLowerCase() === 'authorization',
-    );
-    if (!authHeader?.value?.startsWith('Bearer ')) return;
-
-    const bearer = authHeader.value.slice(7);
-    if (bearer.length < 10) return;
-
-    try {
-      const url = new URL(details.url);
-      const providerId = URL_TO_PROVIDER[url.hostname];
-      if (!providerId) return;
-
-      console.log(`[WebRequest] Captured Bearer for ${providerId} (${bearer.length} chars)`);
-      mergeCredentials(providerId, { bearerToken: bearer }).catch(() => {});
-    } catch {}
-  },
-  { urls: BEARER_INTERCEPT_URLS },
-  ['requestHeaders', 'extraHeaders'],
-);
+// Refresh the runtime model catalog in the background; never blocks messages.
+void prefetchCatalog().catch(() => {});
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -119,160 +95,69 @@ chrome.runtime.onMessage.addListener(
           sendResponse({ success: false, error: 'No sender tab' });
           break;
         }
-        handleQuerySingleAI(message.providerId, message.questions, tabId, message.sessionCleanupMode).catch(
-          (err: unknown) => {
-            console.error('[SW] QUERY_AI failed:', err);
-          },
-        );
+        handleQuerySingleAI(
+          message.providerId,
+          message.questions,
+          tabId,
+          message.sessionCleanupMode,
+        ).catch((err: unknown) => {
+          console.error('[SW] QUERY_AI failed:', err);
+        });
         sendResponse({ success: true });
         break;
       }
-
-      case 'AUTH_LOGIN':
-        startGuidedLogin(message.providerId)
-          .then(() => sendResponse({ success: true }))
-          .catch((err: unknown) => sendResponse({ success: false, error: errorMessage(err) }));
-        break;
-
-      case 'AUTH_STATUS': {
-        const provider = getProviderById(message.providerId);
-        if (!provider) {
-          sendResponse({ success: false, error: `Unknown provider: ${message.providerId}` });
-          break;
-        }
-        provider
-          .checkAuth()
-          .then((status) => sendResponse({ success: true, status }))
-          .catch((err: unknown) => sendResponse({ success: false, error: errorMessage(err) }));
-        break;
-      }
-
-      case 'AUTH_LOGOUT':
-        clearCredentials(message.providerId)
-          .then(() => sendResponse({ success: true }))
-          .catch((err: unknown) => sendResponse({ success: false, error: errorMessage(err) }));
-        break;
-
-      case 'AUTH_STATUS_ALL':
-        handleAuthStatusAll()
-          .then((statuses) => sendResponse({ success: true, statuses }))
-          .catch((err: unknown) => sendResponse({ success: false, error: errorMessage(err) }));
-        break;
 
       case 'QUESTION_PAGE_READY':
         sendResponse({ success: true });
         break;
 
-      case 'TEST_PROVIDER': {
-        const testProviderId = message.providerId;
-        const testQuestion = message.question;
-        handleTestProvider(testProviderId, testQuestion)
-          .then((result) => sendResponse(result))
+      case 'PROBE_MODELS': {
+        const sourceId = createSourceId();
+        probeApiSource(message.baseUrl, message.apiKey, sourceId)
+          .then((result: ProbeResult) => sendResponse(result as unknown as Record<string, unknown>))
           .catch((err: unknown) =>
-            sendResponse({
-              success: false,
-              providerId: testProviderId,
-              error: errorMessage(err),
-              elapsed: 0,
-            }),
+            sendResponse({ success: false, error: errorMessage(err), errorKind: 'unknown' }),
           );
         break;
       }
 
-      case 'DEBUG_COOKIES': {
-        const debugId = message.providerId;
-        const cfg = getProviderConfig(debugId);
-        if (!cfg) {
-          sendResponse({ success: false, error: `Unknown provider: ${debugId}` });
-          break;
-        }
-        Promise.all([
-          captureAllCookies(debugId, cfg.domain),
-          import('../auth/token-manager').then((m) => m.getCredentials(debugId)),
-        ])
-          .then(([cookies, storedCreds]) => {
-            const names = Object.keys(cookies);
-            console.log(`[DEBUG] ${debugId}: found ${names.length} cookies:`, names.join(', '));
-            sendResponse({
-              success: true,
-              providerId: debugId,
-              cookieCount: names.length,
-              cookieNames: names,
-              cookies,
-              storedBearer: storedCreds?.bearerToken ? `${storedCreds.bearerToken.slice(0, 20)}...` : null,
-              storedCookieKeys: storedCreds ? Object.keys(storedCreds.cookies) : [],
-            });
-          })
-          .catch((err: unknown) =>
-            sendResponse({ success: false, error: errorMessage(err) }),
-          );
-        break;
-      }
-
-      case 'CLEAR_ALL_CREDENTIALS':
-        Promise.all(AI_PROVIDERS.map((p) => clearCredentials(p.id)))
-          .then(() => sendResponse({ success: true }))
-          .catch((err: unknown) =>
-            sendResponse({ success: false, error: errorMessage(err) }),
-          );
+      case 'GET_API_SOURCES':
+        getApiSources()
+          .then((sources) => sendResponse({ success: true, sources }))
+          .catch((err: unknown) => sendResponse({ success: false, error: errorMessage(err) }));
         break;
 
-      case 'STORAGE_CAPTURED':
-        console.log(`[SW] Storage captured for ${message.providerId}:`, Object.keys(message.storage).join(', '));
-        mergeCredentials(message.providerId, { cookies: message.storage })
+      case 'SAVE_API_SOURCE':
+        saveApiSource(message.source)
           .then(() => sendResponse({ success: true }))
           .catch((err: unknown) => sendResponse({ success: false, error: errorMessage(err) }));
         break;
 
-      case 'BEARER_CAPTURED':
-        console.log(`[SW] Bearer captured for ${message.providerId} (${message.bearerToken.length} chars)`);
-        mergeCredentials(message.providerId, { bearerToken: message.bearerToken })
+      case 'DELETE_API_SOURCE':
+        deleteApiSource(message.sourceId)
           .then(() => sendResponse({ success: true }))
           .catch((err: unknown) => sendResponse({ success: false, error: errorMessage(err) }));
         break;
 
-      case 'EXEC_PAGE_FUNC': {
-        const tabId = sender.tab?.id;
-        if (tabId === undefined) {
-          sendResponse({ success: false, error: 'No sender tab' });
-          break;
-        }
-        const { funcName, args } = message;
-        chrome.scripting
-          .executeScript({
-            target: { tabId },
-            world: 'MAIN',
-            func: (fn: string, fnArgs: string[]) => {
-              const w = window as unknown as Record<string, unknown>;
-              const func = w[fn];
-              if (typeof func === 'function') {
-                (func as (...a: string[]) => void)(...fnArgs);
-              }
-            },
-            args: [funcName, args],
-          })
-          .then(() => sendResponse({ success: true }))
-          .catch((err: unknown) =>
-            sendResponse({ success: false, error: errorMessage(err) }),
-          );
-        break;
-      }
-
-      case 'SAVE_CUSTOM_PROVIDER':
-        saveCustomProvider(message.config)
-          .then(() => sendResponse({ success: true }))
+      case 'GET_ENABLED_MODELS':
+        getEnabledModels()
+          .then((models) => sendResponse({ success: true, models }))
           .catch((err: unknown) => sendResponse({ success: false, error: errorMessage(err) }));
         break;
 
-      case 'DELETE_CUSTOM_PROVIDER':
-        deleteCustomProvider(message.providerId)
-          .then(() => sendResponse({ success: true }))
+      case 'GET_CATALOG_STATUS':
+        sendResponse({ success: true, status: getCatalogStatus() });
+        break;
+
+      case 'GET_AGGREGATION_CONFIG':
+        getAggregationConfig()
+          .then((config) => sendResponse({ success: true, config }))
           .catch((err: unknown) => sendResponse({ success: false, error: errorMessage(err) }));
         break;
 
-      case 'GET_CUSTOM_PROVIDERS':
-        getCustomProviders()
-          .then((providers) => sendResponse({ success: true, providers }))
+      case 'SET_AGGREGATION_CONFIG':
+        saveAggregationConfig(message.config)
+          .then(() => sendResponse({ success: true }))
           .catch((err: unknown) => sendResponse({ success: false, error: errorMessage(err) }));
         break;
 
@@ -289,30 +174,9 @@ chrome.runtime.onMessage.addListener(
 async function safeSendToTab(tabId: number, message: Record<string, unknown>): Promise<void> {
   try {
     await chrome.tabs.sendMessage(tabId, message);
-  } catch {}
-}
-
-async function handleAuthStatusAll(): Promise<Record<string, string>> {
-  const statuses: Record<string, string> = {};
-  await Promise.all(
-    AI_PROVIDERS.map(async (config) => {
-      const provider = getProviderById(config.id);
-      if (provider) {
-        try {
-          statuses[config.id] = await provider.checkAuth();
-        } catch {
-          statuses[config.id] = 'error';
-        }
-      } else {
-        statuses[config.id] = 'error';
-      }
-    }),
-  );
-  const customConfigs = await getCustomProviders();
-  for (const config of customConfigs) {
-    statuses[config.id] = 'authenticated';
+  } catch {
+    // tab may have been closed
   }
-  return statuses;
 }
 
 async function handleQueryAllAI(
@@ -331,53 +195,56 @@ async function handleQueryAllAI(
   const ids = providers.map((p) => p.config.id);
   console.log(`[SW] QUERY_ALL_AI: querying ${ids.join(', ')} (${batch ? 'batch' : 'single'})`);
 
+  const aggregation = await getAggregationConfig();
+  const weightProviderId = ids.includes(aggregation.weightProviderId ?? '')
+    ? aggregation.weightProviderId
+    : null;
+
   await safeSendToTab(senderTabId, {
     type: 'QUERY_START' as const,
     providerIds: ids,
+    weightProviderId,
   });
 
   const start = performance.now();
+  startKeepalive();
 
-  await Promise.allSettled(
-    providers.map(async (provider) => {
-      const pid = provider.config.id;
-      console.log(`[SW] ${pid}: starting query (${batch ? 'batch' : 'single'})...`);
-      (provider as BaseProvider).promptMode = promptMode ?? 'standard';
-      (provider as BaseProvider).sessionCleanupMode = sessionCleanupMode ?? 'on_success';
+  try {
+    await Promise.allSettled(
+      providers.map(async (provider) => {
+        const pid = provider.config.id;
+        console.log(`[SW] ${pid}: starting query (${batch ? 'batch' : 'single'})...`);
+        (provider as BaseProvider).promptMode = promptMode ?? 'standard';
+        (provider as BaseProvider).sessionCleanupMode = sessionCleanupMode ?? 'on_success';
 
-      try {
-        if (batch) {
-          const response = await provider.query(questions);
-          logAndSendResponse(pid, response, senderTabId);
-        } else {
-          for (const q of questions) {
-            const response = await provider.query([q]);
+        try {
+          if (batch) {
+            const response = await provider.query(questions);
             await logAndSendResponse(pid, response, senderTabId);
+          } else {
+            for (const q of questions) {
+              const response = await provider.query([q]);
+              await logAndSendResponse(pid, response, senderTabId);
+            }
           }
-        }
-      } catch (err: unknown) {
-        const errMsg = err instanceof Error ? err.message : String(err);
-        console.error(`[SW] ${pid}: EXCEPTION -`, errMsg);
-        await safeSendToTab(senderTabId, {
-          type: 'SHOW_ANSWER' as const,
-          providerId: pid,
-          response: {
+        } catch (err: unknown) {
+          const errMsg = errorMessage(err);
+          console.error(`[SW] ${pid}: EXCEPTION -`, errMsg);
+          await safeSendToTab(senderTabId, {
+            type: 'SHOW_ANSWER' as const,
             providerId: pid,
-            answers: [],
-            rawText: '',
-            error: errMsg,
-          },
-        });
-      }
-    }),
-  );
+            response: { providerId: pid, answers: [], rawText: '', error: errMsg },
+          });
+        }
+      }),
+    );
+  } finally {
+    stopKeepalive();
+  }
 
   const durationMs = Math.round(performance.now() - start);
   console.log(`[SW] QUERY_ALL_AI: done in ${durationMs}ms`);
-  await safeSendToTab(senderTabId, {
-    type: 'QUERY_COMPLETE' as const,
-    durationMs,
-  });
+  await safeSendToTab(senderTabId, { type: 'QUERY_COMPLETE' as const, durationMs });
 }
 
 async function logAndSendResponse(
@@ -385,11 +252,8 @@ async function logAndSendResponse(
   response: import('../types').ProviderResponse,
   senderTabId: number,
 ): Promise<void> {
-  if (response.error) {
-    console.error(`[SW] ${pid}: FAIL -`, response.error);
-  } else {
-    console.log(`[SW] ${pid}: OK, ${response.answers.length} answers, rawText ${response.rawText.length} chars`);
-  }
+  if (response.error) console.error(`[SW] ${pid}: FAIL -`, response.error);
+  else console.log(`[SW] ${pid}: OK, ${response.answers.length} answers`);
 
   await safeSendToTab(senderTabId, {
     type: 'SHOW_ANSWER' as const,
@@ -405,13 +269,15 @@ async function handleQuerySingleAI(
   sessionCleanupMode?: SessionCleanupMode,
 ): Promise<void> {
   const provider = await getProviderByIdAsync(providerId);
-  if (!provider) {
-    throw new Error(`Unknown provider: ${providerId}`);
-  }
-
+  if (!provider) throw new Error(`Unknown provider: ${providerId}`);
   (provider as BaseProvider).sessionCleanupMode = sessionCleanupMode ?? 'on_success';
-  const response = await provider.query(questions);
-
+  startKeepalive();
+  let response: import('../types').ProviderResponse;
+  try {
+    response = await provider.query(questions);
+  } finally {
+    stopKeepalive();
+  }
   await safeSendToTab(senderTabId, {
     type: 'SHOW_ANSWER' as const,
     providerId,
@@ -419,49 +285,3 @@ async function handleQuerySingleAI(
   });
 }
 
-async function handleTestProvider(
-  providerId: string,
-  questionText: string,
-): Promise<Record<string, unknown>> {
-  const provider = getProviderById(providerId);
-  if (!provider) {
-    return { success: false, providerId, error: `Unknown provider: ${providerId}`, elapsed: 0 };
-  }
-
-  const testQuestion: Question = {
-    id: 'test-1',
-    number: '1',
-    displayNumber: '1',
-    type: QuestionType.SINGLE_CHOICE,
-    content: questionText,
-    options: [
-      { label: 'A', text: '1' },
-      { label: 'B', text: '2' },
-      { label: 'C', text: '3' },
-      { label: 'D', text: '4' },
-    ],
-    blankCount: 0,
-  };
-
-  const start = performance.now();
-  try {
-    const resp = await provider.query([testQuestion]);
-    const elapsed = Math.round(performance.now() - start);
-    return {
-      success: true,
-      providerId,
-      answers: resp.answers,
-      rawText: resp.rawText,
-      error: resp.error ?? null,
-      elapsed,
-    };
-  } catch (err: unknown) {
-    const elapsed = Math.round(performance.now() - start);
-    return {
-      success: false,
-      providerId,
-      error: errorMessage(err),
-      elapsed,
-    };
-  }
-}
