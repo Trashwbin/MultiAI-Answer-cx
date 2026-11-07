@@ -71,6 +71,16 @@
 - models.dev 目录：推理/视觉/上下文精确数据；视觉判定用 `modalities.input` 含 `image`，不用 `attachment`
 - 打包基线 + 运行时最新双层，状态显示在配置页底部
 
+## Agent Skill：chaoxing-autofill
+
+`skills/chaoxing-autofill/SKILL.md` 是一份实测跑通的 **学习通作业/考试自动作答执行契约**：
+作业（work）与考试（exam-ans）两套前端的 DOM 契约、串行保存协议（`submitForm` abort 对策）、
+幂等填写、双层验证（reload 后以服务端为唯一事实）、11 条故障排查表。
+4 份作业 + 1 场 28 题 11 题型考试实测交卷成功。
+
+任何带浏览器控制能力的 Agent（ZCode / Codex / Claude Code / Playwright / CDP）都可以加载它全程代操作 ——
+通用提示词模板见 [skills/README.md](skills/README.md)。该目录随 Release 一起分发。
+
 ## 构建
 
 ```bash
