@@ -29,6 +29,39 @@
 - **自动填写** — 一键将最终答案填入页面
 - **页面增强** — 去水印、解除复制粘贴限制、题目快速复制按钮
 
+## Agent Skill：chaoxing-autofill
+
+除了浏览器扩展，仓库还内置一份可直接加载的 Agent Skill —— 让任意带浏览器控制能力的 AI
+（ZCode / Codex / Claude Code / Playwright / CDP 均可）**全程代你完成学习通的作业与考试**：
+
+```text
+识别页面类型 → 整卷提取 → 离线作答 → 答案表交你确认 → 串行填写
+→ 双层验证（reload 后以服务端为准）→ 提交/交卷 → 结果页反查错题
+```
+
+**实测战绩**：4 份作业（20 题/份，批量验证 + 提交）+ 1 场考试（28 题 11 种题型），交卷成功页确认。
+
+**里面沉淀了什么**（每一条都是踩坑换的）：
+
+- 作业（work）与考试（exam-ans）两套前端的完整 DOM 契约、URL 识别与题型差异
+- `submitForm` 全局单把手 + 主动 abort 的对策：串行逐动作 + `waitSave` 握手 + 间隔
+- 幂等填写（`addChoice` toggle 反选防护）、UEditor 写入回读、复合题 / 共用选项 / 拖拽选词全覆盖
+- 双层验证协议：客户端回读只算参考，reload 后服务端渲染值才是唯一事实
+- 11 条「症状 → 根因 → 处置」故障排查表
+
+**怎么用** —— 把下面这段发给你的 Agent（替换 `<...>`），它就会自己读 skill、开浏览器、按 SOP 走：
+
+```text
+阅读并加载 skill：<本仓库>/skills/chaoxing-autofill/SKILL.md，严格按它执行。
+任务：完成我在超星学习通的 <作业 | 考试 | 章节测验>。
+入口 URL：<粘贴作业/考试链接（含 enc 参数，不能自己拼）>
+浏览器：用你的浏览器控制能力操作页面，能在页面上下文执行 JS 即可
+（skill 里的 page.evaluate 对应到你媒介的 API，选择器与流程不变）。
+先给我「答案表 + 风险题清单」过目；我确认后再填写；「提交/交卷」前再确认一次。
+```
+
+完整提示词模板、启动协议与执行媒介适配说明见 [skills/README.md](skills/README.md)。
+
 ## 安装
 
 1. 下载最新 Release 的 `.zip` 文件
@@ -70,16 +103,6 @@
 - 端点内联：网关返回的 `reasoning`/`modalities`/`context_window`/`supported_reasoning_levels`、OpenRouter 的 `architecture`/`supported_parameters`、Ollama `/api/tags` 的 `capabilities` 等
 - models.dev 目录：推理/视觉/上下文精确数据；视觉判定用 `modalities.input` 含 `image`，不用 `attachment`
 - 打包基线 + 运行时最新双层，状态显示在配置页底部
-
-## Agent Skill：chaoxing-autofill
-
-`skills/chaoxing-autofill/SKILL.md` 是一份实测跑通的 **学习通作业/考试自动作答执行契约**：
-作业（work）与考试（exam-ans）两套前端的 DOM 契约、串行保存协议（`submitForm` abort 对策）、
-幂等填写、双层验证（reload 后以服务端为唯一事实）、11 条故障排查表。
-4 份作业 + 1 场 28 题 11 题型考试实测交卷成功。
-
-任何带浏览器控制能力的 Agent（ZCode / Codex / Claude Code / Playwright / CDP）都可以加载它全程代操作 ——
-通用提示词模板见 [skills/README.md](skills/README.md)。该目录随 Release 一起分发。
 
 ## 构建
 
